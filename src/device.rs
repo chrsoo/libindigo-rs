@@ -1,8 +1,8 @@
 use std::ffi::CStr;
 
-use libindigo_sys::{self, *};
-use enum_primitive::*;
 use super::*;
+use enum_primitive::*;
+use libindigo_sys::{self, *};
 
 pub struct Device {
     sys: indigo_device,
@@ -44,7 +44,6 @@ pub struct IndigoGLock {
 }
 
 impl Device {
-
     // -- getters
 
     /// device name
@@ -52,7 +51,7 @@ impl Device {
         let ptr = self.sys.name.as_ptr();
         let p = unsafe { CStr::from_ptr(ptr) };
         // let p = p.to_owned();
-        p.to_str().unwrap()     // name must be set
+        p.to_str().unwrap() // name must be set
     }
 
     /// `true` if the device is remote
@@ -62,36 +61,34 @@ impl Device {
 
     /// return the device lock
     pub fn lock(&self) -> IndigoGLock {
-        IndigoGLock {
-            tok: self.sys.lock
-        }
+        IndigoGLock { tok: self.sys.lock }
     }
 
     /// return the device lock
-    pub fn last_result(&self) -> Option<IndigoResult> {
-        IndigoResult::from_u32(self.sys.last_result)
+    pub fn last_result(&self) -> Option<BusError> {
+        BusError::from_u32(self.sys.last_result)
     }
 
     /// return an AccessToken for synchronized property change
     pub fn access_token(&self) -> AccessToken {
-        AccessToken{ tok: self.sys.access_token }
+        AccessToken {
+            tok: self.sys.access_token,
+        }
     }
 
     // -- methods
 
-    pub fn change_property<'a>(&self) -> Result<(),IndigoError<'a>> {
+    pub fn change_property<'a>(&self) -> Result<(),IndigoError> {
         // self.sys.change_property();
         todo!()
     }
 }
 
 impl TryFrom<indigo_device> for Device {
-    type Error = IndigoError<'static>; // TODO constrain the lifetime...
+    type Error = IndigoError; // TODO constrain the lifetime...
 
     fn try_from(device: indigo_device) -> Result<Self, Self::Error> {
-        Ok(Device {
-            sys: device,
-        })
+        Ok(Device { sys: device })
     }
 }
 
@@ -100,6 +97,9 @@ mod tests {
     use super::*;
     #[test]
     fn interface() {
-        assert_eq!(Interface::Mount as u32, indigo_device_interface_INDIGO_INTERFACE_MOUNT);
+        assert_eq!(
+            Interface::Mount as u32,
+            indigo_device_interface_INDIGO_INTERFACE_MOUNT
+        );
     }
 }

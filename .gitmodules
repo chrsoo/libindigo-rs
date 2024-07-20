@@ -1,0 +1,3 @@
+[submodule "sys/externals/indigo"]
+	path = sys/externals/indigo
+	url = https://github.com/indigo-astronomy/indigo.git

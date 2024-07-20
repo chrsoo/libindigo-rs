@@ -1,8 +1,8 @@
 [package]
 name = "libindigo"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 [dependencies]
-libindigo-sys = { path = "../libindigo-sys" }
+libindigo-sys = { path = "sys" }
 enum_primitive = "0.1.1"

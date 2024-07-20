@@ -1,8 +1,12 @@
-use std::{ffi::{c_int, CStr, CString}, ptr};
+use std::{
+    ffi::{c_int, CStr, CString},
+    ptr,
+};
 
-use libindigo_sys::{self, *};
-use enum_primitive::*;
 use super::*;
+use super::bus::*;
+use enum_primitive::*;
+use libindigo_sys::{self, *};
 
 pub struct ServerConnection {
     sys: indigo_server_entry,
@@ -12,7 +16,11 @@ pub struct ServerConnection {
 /// Connection to a remote INDIGO server.
 impl ServerConnection {
     /// Create a new, unconnected server.
-    pub fn new<'a>(name: &'a str, host: &'a str, port: c_int) -> Result<ServerConnection,IndigoError<'a>> {
+    pub fn new<'a>(
+        name: &'a str,
+        host: &'a str,
+        port: c_int,
+    ) -> Result<ServerConnection, IndigoError> {
         let name = str_to_buf(name)?;
         let host = str_to_buf(host)?;
 
@@ -29,28 +37,29 @@ impl ServerConnection {
             shutdown: false,
         };
 
-        Ok(ServerConnection {
-            sys: entry
-        })
+        Ok(ServerConnection { sys: entry })
     }
 
-    pub fn connect(&mut self) -> Result<IndigoResult,IndigoError> {
+    pub fn connect(&mut self) -> Result<(), IndigoError> {
         let mut srv_ptr = ptr::addr_of_mut!(self.sys);
         let srv_ptr_ptr = ptr::addr_of_mut!(srv_ptr);
 
         bus::start()?; // TODO should we return an error if not started?
 
         let result = unsafe {
-            indigo_connect_server(self.sys.name.as_ptr(), self.sys.host.as_ptr(), self.sys.port, srv_ptr_ptr)
+            indigo_connect_server(
+                self.sys.name.as_ptr(),
+                self.sys.host.as_ptr(),
+                self.sys.port,
+                srv_ptr_ptr,
+            )
         };
-        IndigoResult::sys(result)
+        map_indigo_result(result)
     }
 
-    pub fn dicsonnect(&mut self) -> Result<IndigoResult, IndigoError> {
-        let result = unsafe {
-            indigo_disconnect_server(ptr::addr_of_mut!(self.sys))
-        };
-        IndigoResult::sys(result)
+    pub fn dicsonnect(&mut self) -> Result<(), IndigoError> {
+        let result = unsafe { indigo_disconnect_server(ptr::addr_of_mut!(self.sys)) };
+        map_indigo_result(result)
     }
 
     /// Return `true` if the server's thread is started.

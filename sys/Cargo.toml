@@ -1,0 +1,11 @@
+[package]
+name = "libindigo-sys"
+version = "2.0.289"
+edition = "2021"
+
+[dependencies]
+
+[build-dependencies]
+bindgen = "0.69.4"
+semver = "1.0.23"
+regex = "1.10.5"
