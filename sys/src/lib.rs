@@ -1,6 +1,9 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
+
+use std::hash::Hash;
+
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 #[cfg(test)]
@@ -41,9 +44,9 @@ mod tests {
 
         if message != ptr::null() {
             let m = CStr::from_ptr(message).to_str().unwrap();
-            print!("; message: {m}");
+            println!("; message: {m}");
         } else {
-            print!("null message");
+            println!("; null message");
         }
 
         // println!("d: {d}; p: {p}; m: {m}");
@@ -69,8 +72,16 @@ mod tests {
         return indigo_result_INDIGO_OK;
     }
 
+    fn map_indigo_result(code: u32) -> Result<(),u32> {
+        if code == indigo_result_INDIGO_OK {
+            Ok(())
+        } else {
+            Err(code)
+        }
+    }
+
     #[test]
-    fn client_test() {
+    fn client_test() -> Result<(),u32> {
         // let name = std::ffi::CString::new("MyClient").unwrap();
         // let bytes: [i8; name.len() + 1] = name.as_bytes_with_nul().iter().map(|b| *b as i8).collect();
         // let buf = [0i8;128];
@@ -96,11 +107,11 @@ mod tests {
             detach: Some(my_detach)
         };
         unsafe {
-            indigo_start();
+            map_indigo_result(indigo_start())?;
 
             /* We want to see debug messages on the screen */
             indigo_set_log_level(indigo_log_levels_INDIGO_LOG_DEBUG);
-            indigo_attach_client(std::ptr::addr_of_mut!(indigo_client));
+            map_indigo_result(indigo_attach_client(std::ptr::addr_of_mut!(indigo_client)))?;
 
             /* We want to connect to a remote indigo host indigosky.local:7624 */
             let mut server = indigo_server_entry {
@@ -122,7 +133,7 @@ mod tests {
             let mut srv_ptr = ptr::addr_of_mut!(server);
             let srv_ptr_ptr = ptr::addr_of_mut!(srv_ptr);
 
-            indigo_connect_server(server_name.as_ptr(), host.as_ptr(), 7624, srv_ptr_ptr);
+            map_indigo_result(indigo_connect_server(server_name.as_ptr(), host.as_ptr(), 7624, srv_ptr_ptr))?;
 
             /* We can do whatever we want here while we are waiting for
             the client to complete. For example we can call some GUI
@@ -131,9 +142,26 @@ mod tests {
             */
             indigo_usleep(10 * ONE_SECOND_DELAY);
 
-            indigo_disconnect_server(srv_ptr);
-            indigo_detach_client(ptr::addr_of_mut!(indigo_client));
-            indigo_stop();
+            map_indigo_result(indigo_disconnect_server(srv_ptr))?;
+            map_indigo_result(indigo_detach_client(ptr::addr_of_mut!(indigo_client)))?;
+            map_indigo_result(indigo_stop())
         }
     }
 }
+
+impl PartialEq for indigo_client {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Hash for indigo_client {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+    }
+}
+
+impl Eq for indigo_client { }
+
+unsafe impl Sync for indigo_client { }
+unsafe impl Send for indigo_client { }

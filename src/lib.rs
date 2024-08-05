@@ -1,14 +1,25 @@
+#![allow(dead_code, unused_variables)]
 mod bus;
 mod client;
 mod device;
+mod model;
+mod property;
 mod server;
 
-pub use bus::discover;
-pub use bus::log;
-pub use bus::start;
-pub use bus::stop;
+pub use bus::Bus;
+pub use client::CallbackHandler;
+pub use client::Client;
+pub use device::Device;
+pub use model::IndigoElement;
+pub use model::IndigoModel;
+pub use property::Property;
 pub use server::ServerConnection;
 
+use std::ffi::c_char;
+use std::ffi::c_uint;
+use std::ffi::CStr;
+use std::ptr;
+use std::sync::PoisonError;
 use std::{
     error::Error,
     ffi::{CString, NulError},
@@ -27,6 +38,9 @@ pub enum IndigoError {
     /// Other errors.
     Other(String),
 }
+
+unsafe impl Sync for IndigoError {}
+unsafe impl Send for IndigoError {}
 
 impl Display for IndigoError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -60,6 +74,12 @@ impl From<NulError> for IndigoError {
     }
 }
 
+impl<T: 'static> From<PoisonError<T>> for IndigoError {
+    fn from(value: PoisonError<T>) -> Self {
+        IndigoError::Sys(Box::new(value))
+    }
+}
+
 /// opaque wrapper for the INDIGO access token
 pub struct AccessToken {
     tok: u64,
@@ -67,7 +87,7 @@ pub struct AccessToken {
 
 enum_from_primitive! {
 #[derive(Debug, Copy, Clone, PartialEq)]
-#[repr(u32)]
+#[repr(u32)]  // this really should be `c_uint` to safeguard agains platform specifics.
 /// Bus operation return status.
 pub enum BusError {
     /// unspecified error
@@ -93,6 +113,12 @@ pub enum BusError {
 }
 }
 
+impl Into<c_uint> for BusError {
+    fn into(self) -> c_uint {
+        self as c_uint
+    }
+}
+
 impl Display for BusError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Debug::fmt(self, f)
@@ -113,7 +139,7 @@ pub enum LogLevel {
 }
 
 impl BusError {
-    fn from_indigo_result(result: indigo_result) -> Result<Self,String> {
+    fn from_indigo_result(result: indigo_result) -> Result<Self, String> {
         if let Some(result) = BusError::from_u32(result) {
             Ok(result)
         } else {
@@ -122,28 +148,48 @@ impl BusError {
     }
 }
 
-pub struct Property {
-    sys: indigo_property,
-}
-
-impl Property {
-    pub fn name(&self) -> &str {
-        todo!();
+fn str_to_buf<const N: usize>(s: &str) -> Result<[c_char; N], IndigoError> {
+    let s = CString::new(s).expect("a string without \\0 bytes");
+    let mut buf = [0; N];
+    let bytes = s.as_bytes_with_nul();
+    if bytes.len() > N {
+        Err(IndigoError::Other(format!(
+            "The string's byte length + 1 must be less or equal to {}",
+            N
+        )))
+    } else {
+        for (i, b) in bytes.iter().enumerate() {
+            buf[i] = *b as i8;
+        }
+        Ok(buf)
     }
 }
 
-pub struct Item {
-    sys: indigo_item,
+fn buf_to_str<const N: usize>(buf: [c_char; N]) -> String {
+    let ptr = buf.as_ptr();
+    let cstr = unsafe { CStr::from_ptr(ptr) };
+    String::from_utf8_lossy(cstr.to_bytes()).to_string()
 }
 
-impl Item {
-    pub fn name(&self) -> &str {
-        todo!();
+fn buf_to_str2<'a,const N: usize>(buf: [c_char; N]) -> &'a str {
+    let ptr = buf.as_ptr();
+    let p = unsafe { CStr::from_ptr(ptr) };
+    p.to_str().unwrap()
+}
+
+fn ptr_to_string(message: *const c_char) -> Option<String> {
+    if message == ptr::null() {
+        None
+    } else {
+        let cstr = unsafe { CStr::from_ptr(message) };
+        let s = String::from_utf8_lossy(cstr.to_bytes()).to_string();
+        Some(s)
     }
 }
 
-fn str_to_buf<'a>(value: &'a str) -> Result<[i8; 128], IndigoError> {
-    let mut buf = [0i8; 128];
+/*
+fn str_to_buf<'a,T>(value: &'a str, _len: u16) -> Result<[i8; 128], IndigoError> {
+    let mut buf = [T; 128];
     let binding = CString::new(value)?;
     let bytes = binding.as_bytes_with_nul();
     for (i, b) in bytes.iter().enumerate() {
@@ -155,6 +201,7 @@ fn str_to_buf<'a>(value: &'a str) -> Result<[i8; 128], IndigoError> {
     }
     Ok(buf)
 }
+*/
 
 #[cfg(test)]
 mod tests {
@@ -162,26 +209,53 @@ mod tests {
 
     #[test]
     fn bus_error() {
-        assert_eq!(BusError::from_indigo_result(indigo_result_INDIGO_FAILED).unwrap(), BusError::Failed);
-        assert_eq!(BusError::from_indigo_result(indigo_result_INDIGO_BUSY).unwrap(), BusError::Busy);
-        assert_eq!(BusError::from_indigo_result(indigo_result_INDIGO_DUPLICATED).unwrap(), BusError::Duplicated);
-        assert_eq!(BusError::from_indigo_result(indigo_result_INDIGO_GUIDE_ERROR).unwrap(), BusError::GuideError);
-        assert_eq!(BusError::from_indigo_result(indigo_result_INDIGO_LOCK_ERROR).unwrap(), BusError::LockError);
-        assert_eq!(BusError::from_indigo_result(indigo_result_INDIGO_NOT_FOUND).unwrap(), BusError::NotFound);
-        assert_eq!(BusError::from_indigo_result(
-            indigo_result_INDIGO_UNRESOLVED_DEPS).unwrap(), BusError::UnresolvedDependency);
-        assert_eq!(BusError::from_indigo_result(
-            indigo_result_INDIGO_UNSUPPORTED_ARCH).unwrap(), BusError::UnsupportedArchitecture);
-        assert_eq!(BusError::from_indigo_result(
-            indigo_result_INDIGO_CANT_START_SERVER).unwrap(), BusError::CantStartServer);
-        assert_eq!(BusError::from_indigo_result(
-            indigo_result_INDIGO_TOO_MANY_ELEMENTS).unwrap(), BusError::TooManyElements);
+        assert_eq!(
+            BusError::from_indigo_result(indigo_result_INDIGO_FAILED).unwrap(),
+            BusError::Failed
+        );
+        assert_eq!(
+            BusError::from_indigo_result(indigo_result_INDIGO_BUSY).unwrap(),
+            BusError::Busy
+        );
+        assert_eq!(
+            BusError::from_indigo_result(indigo_result_INDIGO_DUPLICATED).unwrap(),
+            BusError::Duplicated
+        );
+        assert_eq!(
+            BusError::from_indigo_result(indigo_result_INDIGO_GUIDE_ERROR).unwrap(),
+            BusError::GuideError
+        );
+        assert_eq!(
+            BusError::from_indigo_result(indigo_result_INDIGO_LOCK_ERROR).unwrap(),
+            BusError::LockError
+        );
+        assert_eq!(
+            BusError::from_indigo_result(indigo_result_INDIGO_NOT_FOUND).unwrap(),
+            BusError::NotFound
+        );
+        assert_eq!(
+            BusError::from_indigo_result(indigo_result_INDIGO_UNRESOLVED_DEPS).unwrap(),
+            BusError::UnresolvedDependency
+        );
+        assert_eq!(
+            BusError::from_indigo_result(indigo_result_INDIGO_UNSUPPORTED_ARCH).unwrap(),
+            BusError::UnsupportedArchitecture
+        );
+        assert_eq!(
+            BusError::from_indigo_result(indigo_result_INDIGO_CANT_START_SERVER).unwrap(),
+            BusError::CantStartServer
+        );
+        assert_eq!(
+            BusError::from_indigo_result(indigo_result_INDIGO_TOO_MANY_ELEMENTS).unwrap(),
+            BusError::TooManyElements
+        );
     }
 
     #[test]
     fn bus_error_unknown_code() {
         assert_eq!(
             BusError::from_indigo_result(indigo_result_INDIGO_OK).err(),
-            Some("Unknown INDIGO error result: 0".to_string()));
+            Some("Unknown INDIGO error result: 0".to_string())
+        );
     }
 }

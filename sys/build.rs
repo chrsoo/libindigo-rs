@@ -4,6 +4,7 @@ use std::io::{BufReader, Error, ErrorKind};
 use std::path::PathBuf;
 use semver::Version;
 use regex::Regex;
+use bindgen::Builder;
 
 fn join_paths(base: &PathBuf, path: &str) -> String {
     let p = base.join(path);
@@ -136,6 +137,7 @@ fn main() -> std::io::Result<()> {
         .header(join_paths(&indigo_libs, "indigo/indigo_config.h"))
         .header(join_paths(&indigo_libs, "indigo/indigo_timer.h"))
         .header(join_paths(&indigo_libs, "indigo/indigo_token.h"))
+        .no_copy(".*")
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))

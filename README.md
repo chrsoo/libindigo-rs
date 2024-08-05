@@ -1,7 +1,7 @@
 # File Structure
 ```bash
 ➜  libindigo git:(master) ✗ tree --gitignore
-# files elided for clarity
+# files elided for brevity
 ...
 ├── Cargo.toml                  # `libindigo` crate definition
 ...
