@@ -1,8 +1,7 @@
 use std::{
-    collections::HashMap, hash::Hash, os::raw::c_void, ptr::{self, addr_of, addr_of_mut}, slice::Iter, sync::RwLock
+    collections::HashMap, mem::forget, os::raw::c_void, ptr::{self, addr_of_mut}, sync::RwLock
 };
 
-use super::bus::Bus;
 use crate::*;
 use bus::map_indigo_result;
 use device::Device;
@@ -96,24 +95,9 @@ pub trait CallbackHandler<'a> {
 /// Client to manage devices attached to the INDIGO bus.
 pub struct Client<'a, T: CallbackHandler<'a>> {
     /// System record for INDIGO clients.
-    sys: indigo_client,
+    sys: *mut indigo_client,
     devices: RwLock<HashMap<String,Device<'a>>>,
     pub handler: &'a mut T,
-    /*
-    /// `true`` if the _client_ is a remote object
-    remote: bool,
-
-    /// Result of last bus operation.
-    error: Option<IndigoError>,
-
-    /// Client version.
-    version: indigo_version,
-
-    #[doc = "< any client specific data"]
-    pub client_context: *mut ::std::os::raw::c_void,
-    #[doc = "< enable blob mode"]
-    pub enable_blob_mode_records: *mut indigo_enable_blob_mode_record,
-     */
 }
 
 impl<'a,T> Client<'a, T>
@@ -121,7 +105,9 @@ where T: CallbackHandler<'a> {
 
     /// Create a new, detached client.
     pub fn new(name: &str, handler: &'a mut T) -> Result<Box<Self>, IndigoError> {
-        let indigo_client = indigo_client {
+        // https://users.rust-lang.org/t/unwanted-copies-of-values-when-using-unsafe-pointers-for-ffi-bindings/115443
+        // put the indigo_client in a Box to ensure a stable reference.
+        let mut indigo_client = Box::new(indigo_client {
             name: str_to_buf(name)?,              // client name
             is_remote: false,                     // is this a remote client "no" - this is us
             client_context: std::ptr::null_mut(), // points to the client, initially null pointer...
@@ -137,48 +123,50 @@ where T: CallbackHandler<'a> {
             delete_property: Some(Self::on_delete_property),
             send_message: Some(Self::on_send_message),
             detach: Some(Self::on_detach),
-        };
+        });
 
         // https://users.rust-lang.org/t/unwanted-copies-of-values-when-using-unsafe-pointers-for-ffi-bindings/115443
-        // Put the Client in a Box to ensure a stable reference.
+        // put the Client in a Box to ensure a stable reference.
         let mut client = Box::new(Client {
-            sys: indigo_client,
+            // dereference the Box
+            sys: (&mut *indigo_client) as *mut _ as *mut indigo_client,
+            // sys: addr_of_mut!(indigo_client),
             devices: RwLock::new(HashMap::new()),
             handler: handler,
         });
         // store a raw pointer to the safe Client on the unsafe indigo_client's context.
-        client.sys.client_context = (&mut *client) as *mut _ as *mut c_void;
+        indigo_client.client_context = (&mut *client) as *mut _ as *mut c_void;
+
+        // prevent rust from reclaiming the memory of indigo_client when dropping the reference on exit.
+        forget(indigo_client);
 
         Ok(client)
     }
 
     /// Attach the client to the INDIGO bus.
-    pub fn attach(&mut self) -> Result<(), IndigoError> {
-        info!("Attaching client '{}'...", buf_to_string(self.sys.name));
-        let c = addr_of_mut!(self.sys);
-        let result = unsafe { indigo_attach_client(c) };
+    pub fn attach(&self) -> Result<(), IndigoError> {
+        let name =  buf_to_str(unsafe { &*self.sys }.name);
+        info!("Attaching client '{}'...", name);
+        let result = unsafe { indigo_attach_client(self.sys) };
         map_indigo_result(result, "indigo_attach_client")
     }
 
     /// Detach the client from the INDIGO bus.
     pub fn detach(&mut self) -> Result<(), IndigoError> {
-        info!("Detaching client '{}'...", buf_to_string(self.sys.name));
-        let c = addr_of_mut!(self.sys);
-        let result = unsafe { indigo_detach_client(c) };
+        let name =  buf_to_str(unsafe { &*self.sys }.name);
+        info!("Detaching client '{}'...", name);
+        let result = unsafe { indigo_detach_client(self.sys) };
         map_indigo_result(result, "indigo_detach_client")
     }
 
     /// Get all properties from the devices attached to the INDIGO bus.
     pub fn get_all_properties(&mut self) -> Result<(), IndigoError> {
-        debug!(
-            "Getting all properties for '{}'...",
-            buf_to_string(self.sys.name)
-        );
+        let name =  buf_to_str(unsafe { &*self.sys }.name);
+        debug!("Getting all properties for '{}'...", name );
         unsafe {
-            let c = addr_of_mut!(self.sys);
             let p = std::ptr::addr_of!(INDIGO_ALL_PROPERTIES) as *const _ as *mut indigo_property;
             //let p = &mut INDIGO_ALL_PROPERTIES as &mut indigo_property;
-            let result = indigo_enumerate_properties(c, p);
+            let result = indigo_enumerate_properties(self.sys, p);
             map_indigo_result(result, "indigo_enumerate_properties")
         }
     }
@@ -186,13 +174,13 @@ where T: CallbackHandler<'a> {
     // -- getters
 
     pub fn name(self) -> &'a str {
-        buf_to_str(self.sys.name)
+        buf_to_str(unsafe { &*self.sys }.name)
     }
 
     pub fn blobs(&self) -> Result<Vec<Blob>, IndigoError> {
         let mut blobs = Vec::new();
         unsafe{
-            let mut b = self.sys.enable_blob_mode_records;
+            let mut b = (*self.sys).enable_blob_mode_records;
             while !b.is_null() {
                 let p = PropertyKey {
                     dev: buf_to_string((*b).device),
@@ -234,7 +222,7 @@ where T: CallbackHandler<'a> {
     ) -> indigo_result {
         let c1: &mut Client<T> = get_client(client);
         let c2: &mut Client<T> = get_client(client);
-        let d = Device::new(&mut c1.sys, device);
+        let d = Device::new(c1.sys, device);
         let p = Property::new(property);
         let msg = ptr_to_string(message);
 
@@ -266,7 +254,7 @@ where T: CallbackHandler<'a> {
         let c1: &mut Client<T> = get_client(client);
         let c2: &mut Client<T> = get_client(client);
         let d = c1.upsert_device(device);
-        let d = Device::new(&mut c1.sys, device);
+        let d = Device::new(c1.sys, device);
         let p = Property::new(property);
         let msg = ptr_to_string(message);
 
@@ -289,7 +277,7 @@ where T: CallbackHandler<'a> {
     ) -> indigo_result {
         let c1: &mut Client<T> = get_client(client);
         let c2: &mut Client<T> = get_client(client);
-        let d = Device::new(&mut c1.sys, device);
+        let d = Device::new(c1.sys, device);
         let p = Property::new(property);
         let msg = ptr_to_string(message);
 
@@ -311,7 +299,7 @@ where T: CallbackHandler<'a> {
     ) -> indigo_result {
         let c1: &mut Client<T> = get_client(client);
         let c2: &mut Client<T> = get_client(client);
-        let d = Device::new(&mut c1.sys, device);
+        let d = Device::new(c1.sys, device);
         let msg = ptr_to_string(message).unwrap();
 
         if let Err(e) = c1.handler.on_send_message(c2, d, msg) {
@@ -354,13 +342,11 @@ where
 
 // /// Ensure that Client is detached from the INDIGO bus and free any resources associated with the client.
 // // TODO find out if detaching is a good idea and add any missing resources that needs to be cleaned up.
-// impl<T:CallbackHandler> Drop for Client<T> {
-//     fn drop(&mut self) {
-//         if let Err(e) = self.detach() {
-//             warn!("Could not drop Client: {}.", e)
-//         }
-//     }
-// }
+impl<'a,T:CallbackHandler<'a>> Drop for Client<'a,T> {
+    fn drop(&mut self) {
+        unsafe { free(self.sys as *mut c_void) };
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -382,10 +368,10 @@ mod tests {
     #[test]
     fn test_callback() -> Result<(), IndigoError> {
         let handler = &mut Test { visited: false };
-        let mut client = Client::new("test", handler)?;
+        let client = Client::new("test", handler)?;
         // client.attach()?;
 
-        let ptr = core::ptr::addr_of_mut!(client.sys);
+        let ptr = client.sys;
         unsafe {
             let r = Client::<Test>::on_attach(ptr);
             map_indigo_result(r, "on_attach")?;

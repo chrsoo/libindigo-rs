@@ -10,6 +10,7 @@ pub use bus::Bus;
 pub use client::CallbackHandler;
 pub use client::Client;
 pub use device::Device;
+use log::warn;
 pub use model::IndigoModel;
 pub use property::Property;
 pub use property::PropertyKey;
@@ -192,8 +193,8 @@ fn buf_to_string<const N: usize>(buf: [c_char; N]) -> String {
 
 fn buf_to_str<'a, const N: usize>(buf: [c_char; N]) -> &'a str {
     let ptr = buf.as_ptr();
-    let p = unsafe { CStr::from_ptr(ptr) };
-    p.to_str().unwrap()
+    let cstr = unsafe { CStr::from_ptr(ptr) };
+    cstr.to_str().inspect_err(|e| warn!("{}", e)).unwrap_or("<invalid>")
 }
 
 fn const_to_string(name: &[u8]) -> Cow<str> {
