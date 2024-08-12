@@ -1,11 +1,13 @@
-use std::{ffi::{c_int, c_long}, fmt::Display};
+use std::{
+    borrow::Cow, ffi::{c_char, c_long, CStr, CString}, fmt::Display, ptr
+};
 
 use enum_primitive::*;
 use libindigo_sys::{self, *};
 use log::warn;
 use url::Url;
 
-use crate::{buf_to_str, buf_to_str2};
+use crate::{buf_to_str, buf_to_string, IndigoError};
 
 enum_from_primitive! {
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -51,6 +53,9 @@ pub enum PropertyType  {
     Blob = indigo_property_type_INDIGO_BLOB_VECTOR,
 }
 }
+
+// TODO use #[derive(strum_macros::Display)], cf https://docs.rs/strum/latest/strum/derive.Display.html
+#[derive(PartialEq, Debug, Clone)]
 pub enum PropertyValue {
     Text(String),
     Number {
@@ -80,33 +85,56 @@ pub enum PropertyValue {
         size: c_long,
         /// < item value (for blob properties)
         value: Option<Vec<u8>>,
+    },
+}
+
+impl Display for PropertyValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PropertyValue::Text(s) => write!(f, "{s}"),
+            PropertyValue::Number { format, min, max, step, value, target } => {
+                write!(f, "format: '{format}'; min: {min}; max: {max}; \
+                step: {step}; value: {value}; target: {target}")
+            },
+            PropertyValue::Switch(v) => write!(f, "{v}"),
+            PropertyValue::Light(n) => write!(f, "{n}"),
+            PropertyValue::Blob { format, url, size, value } => {
+                write!(f, "format: '{format}'; size: {size}; value: {}; url: '{}'", value.is_some(), "todo")
+            },
+        }
     }
 }
 
 impl PropertyValue {
-
     fn item_to_text(item: &indigo_item) -> PropertyValue {
-        let value = unsafe { item.__bindgen_anon_1.text.as_ref()};
-        let text: String = if value.long_value.is_null() {
-            buf_to_str(value.value)
+        let v = unsafe { item.__bindgen_anon_1.text.as_ref() };
+        let text: String = if v.long_value.is_null() {
+            buf_to_string(v.value)
         } else {
-            todo!("read long text value")
-            // let buf = [0u8;value.long_value];
-            // buf_to_str(value.long_value)
+            let buf = unsafe { ptr::slice_from_raw_parts(v.long_value as *const u8, v.length as usize).as_ref() };
+            let buf = buf.unwrap();
+            CStr::from_bytes_until_nul(buf).unwrap().to_string_lossy().to_string()
         };
         PropertyValue::Text(text)
     }
 
     fn item_to_number(item: &indigo_item) -> PropertyValue {
         let num = unsafe { item.__bindgen_anon_1.number.as_ref() };
-        let format = buf_to_str(num.format);
+        let format = buf_to_string(num.format);
         let min = num.min;
         let max = num.max;
         let step = num.step;
         let target = num.target;
         let value = num.value;
 
-        PropertyValue::Number { format, min, max, step, value, target }
+        PropertyValue::Number {
+            format,
+            min,
+            max,
+            step,
+            value,
+            target,
+        }
     }
 
     fn item_to_switch(item: &indigo_item) -> PropertyValue {
@@ -119,9 +147,9 @@ impl PropertyValue {
 
     fn item_to_blob(item: &indigo_item) -> PropertyValue {
         let blob = unsafe { item.__bindgen_anon_1.blob.as_ref() };
-        let format = buf_to_str(blob.format);
+        let format = buf_to_string(blob.format);
         let size = blob.size;
-        let url = match Url::parse(buf_to_str2(blob.url)) {
+        let url = match Url::parse(buf_to_str(blob.url)) {
             Ok(url) => Some(url),
             Err(e) => {
                 warn!("could not parse url: {}", e);
@@ -134,10 +162,15 @@ impl PropertyValue {
             // TODO read blob byte vector from blob value
             Some(Vec::new())
         };
-        PropertyValue::Blob { format, size, url, value }
+        PropertyValue::Blob {
+            format,
+            size,
+            url,
+            value,
+        }
     }
 
-    fn new(property_type: PropertyType, item: &indigo_item) -> PropertyValue {
+    fn new(property_type: &PropertyType, item: &indigo_item) -> PropertyValue {
         match property_type {
             PropertyType::Text => PropertyValue::item_to_text(item),
             PropertyType::Number => PropertyValue::item_to_number(item),
@@ -162,33 +195,107 @@ pub enum SwitchRule  {
 }
 }
 
+#[derive(Clone)]
 pub struct PropertyItem {
-    name: String,
-    label: String,
-    hints: String,
-    value: PropertyValue,
+    pub name: String,
+    pub label: String,
+    pub hints: String,
+    pub value: PropertyValue,
 }
 
-impl PropertyItem {
-    fn new(property_type: PropertyType, item: &indigo_item) -> PropertyItem {
-        let name = buf_to_str(item.name);
-        let label = buf_to_str(item.label);
-        let hints = buf_to_str(item.hints);
-        let value = PropertyValue::new(property_type, item);
+impl<'a> Display for PropertyItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,"{}({}): '{}'", self.label, self.name, self.value)
+    }
+}
+
+impl<'a> PropertyItem {
+    fn new(prop: &'a PropertyType, item: &indigo_item) -> PropertyItem {
+        let name = buf_to_string(item.name);
+        let label = buf_to_string(item.label);
+        let hints = buf_to_string(item.hints);
+        let value = PropertyValue::new(prop, item);
 
         PropertyItem {
-            name, label, hints, value
+            name,
+            label,
+            hints,
+            value,
         }
     }
 }
 
+/// Defines [items](PropertyItem) holding the [values](PropertyValue) of the property for
+/// an INDIGO [device](crate::Device).
+///
+/// From the [INDIGO cleint documentation](https://github.com/indigo-astronomy/indigo/blob/master/indigo_docs/CLIENT_DEVELOPMENT_BASICS.md#properties):
+/// > In case the client needs to check the values of some property item of a
+/// > specified device it is always a good idea to check if the property is in OK state:
+/// > ```rust
+/// > if (!strcmp(device->name, "CCD Imager Simulator @ indigosky") &&
+/// >     !strcmp(property->name, CCD_IMAGE_PROPERTY_NAME) &&
+/// >     property->state == INDIGO_OK_STATE) {
+/// > 			...
+/// > }
+/// > ```
+/// > And if the client needs to change some item value this code may help:
+/// > ```
+/// > static const char * items[] = { CCD_IMAGE_FORMAT_FITS_ITEM_NAME };
+/// > static bool values[] = { true };
+/// > indigo_change_switch_property(
+/// > 	client,
+/// > 	CCD_SIMULATOR,
+/// > 	CCD_IMAGE_FORMAT_PROPERTY_NAME,
+/// > 	1,
+/// > 	items,
+/// > 	values
+/// > );
+/// > ```
+#[derive(Clone)]
 pub struct Property<'a> {
     sys: &'a indigo_property,
 }
 
+#[derive(Debug, Eq, PartialEq, Clone, Hash)]
+pub struct PropertyKey {
+    pub dev: String,
+    pub name: String,
+}
+
+impl Display for PropertyKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}", self.dev, self.name)
+    }
+}
+
+enum_from_primitive! {
+#[derive(Debug, Copy, Clone, PartialEq)]
+#[repr(u32)]  // this really should be `c_uint` to safeguard agains platform specifics.
+/// Bus operation return status.
+pub enum BlobMode {
+    Also = indigo_enable_blob_mode_INDIGO_ENABLE_BLOB_ALSO,
+    Never = indigo_enable_blob_mode_INDIGO_ENABLE_BLOB_NEVER,
+    URL = indigo_enable_blob_mode_INDIGO_ENABLE_BLOB_URL,
+}
+}
+
+#[derive(Debug)]
+pub struct Blob {
+    prop: PropertyKey,
+    mode: BlobMode,
+}
+
+impl Blob {
+    pub fn new(prop: PropertyKey, mode: BlobMode) -> Blob {
+        Blob { prop, mode }
+    }
+}
+
 impl Display for Property<'static> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Property[Name: {}; Device: {}; Group: {}; Label: {}; Hints: {}]",
+        write!(
+            f,
+            "Property[Name: {}; Device: {}; Group: {}; Label: {}; Hints: {}]",
             self.name(),
             self.device(),
             self.group(),
@@ -199,31 +306,39 @@ impl Display for Property<'static> {
 }
 
 impl<'a> Property<'a> {
-
     pub(crate) fn new(property: *mut indigo_property) -> Self {
-        Self { sys: unsafe { &*property } }
+        Self {
+            sys: unsafe { &*property },
+        }
     }
 
     // -- getters
 
+    pub fn key(&self) -> PropertyKey {
+        PropertyKey {
+            dev: self.device(),
+            name: self.name(),
+        }
+    }
+
     pub fn name(&self) -> String {
-        buf_to_str(self.sys.name)
+        buf_to_string(self.sys.name)
     }
 
     pub fn device(&self) -> String {
-        buf_to_str(self.sys.device)
+        buf_to_string(self.sys.device)
     }
 
     pub fn group(&self) -> String {
-        buf_to_str(self.sys.group)
+        buf_to_string(self.sys.group)
     }
 
     pub fn label(&self) -> String {
-        buf_to_str(self.sys.label)
+        buf_to_string(self.sys.label)
     }
 
     pub fn hints(&self) -> String {
-        buf_to_str(self.sys.hints)
+        buf_to_string(self.sys.hints)
     }
 
     pub fn state(&self) -> PropertyState {
@@ -254,20 +369,26 @@ impl<'a> Property<'a> {
     }
 
     /// Number of allocated property items.
-    pub fn items_allocated(&self) -> c_int {
-        self.sys.allocated_count
+    pub fn items_allocated(&self) -> usize {
+        self.sys.allocated_count as usize
     }
 
     /// Number of used property items.
-    pub fn items_used(&self) -> c_int {
-        self.sys.count
+    pub fn items_used(&self) -> usize {
+        self.sys.count as usize
     }
 
-    pub fn items(&self) -> Vec<PropertyItem> {
-        let items = unsafe { self.sys.items.as_slice(self.sys.count as usize) };
-        items.iter()
-            .map(|i| PropertyItem::new(self.property_type(), i))
-            .collect()
+    pub fn update(&mut self, p: Property<'a>) -> Result<(), IndigoError> {
+        self.sys = p.sys;
+        Ok(())
+    }
+
+    pub fn items(&self) -> PropertyIterator<'a> {
+        PropertyIterator {
+            property_type: self.property_type(),
+            items: unsafe { self.sys.items.as_slice(self.sys.count as usize) },
+            index: 0,
+        }
     }
 
     /*
@@ -279,4 +400,33 @@ impl<'a> Property<'a> {
     #[doc = "< property items"]
     pub items: __IncompleteArrayField<indigo_item>,
     */
+}
+
+impl<'a> IntoIterator for &'a Property<'a> {
+    type Item = PropertyItem;
+    type IntoIter = PropertyIterator<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let items = unsafe { self.sys.items.as_slice(self.sys.count as usize) };
+        let property_type = self.property_type();
+        Self::IntoIter {
+            property_type, items, index: 0,
+        }
+    }
+}
+
+/// Iterator for all `PropertyItem` items of this `Property`.
+pub struct PropertyIterator<'a> {
+    property_type: PropertyType,
+    items: &'a [indigo_item],
+    index: usize,
+}
+
+impl<'a> Iterator for PropertyIterator<'a> {
+    type Item = PropertyItem;
+    fn next(&mut self) -> Option<Self::Item> {
+        let result = PropertyItem::new(&self.property_type, &self.items[self.index]);
+        self.index += 1;
+        Some(result)
+    }
 }

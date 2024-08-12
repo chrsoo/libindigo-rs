@@ -10,6 +10,8 @@ enum_primitive = "0.1.1"
 lazy_static = "1.5.0"
 once_cell = "1.19.0"
 log = "0.4.22"
+strum = "0.26.3"
+strum_macros = "0.26"
 
 [dev-dependencies]
 test-log = "0.2.16"

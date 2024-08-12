@@ -10,15 +10,22 @@ pub use bus::Bus;
 pub use client::CallbackHandler;
 pub use client::Client;
 pub use device::Device;
-pub use model::IndigoElement;
 pub use model::IndigoModel;
 pub use property::Property;
+pub use property::PropertyKey;
+pub use property::PropertyItem;
+pub use property::PropertyType;
+pub use property::PropertyState;
+pub use property::PropertyValue;
 pub use server::ServerConnection;
 
+use std::borrow::Cow;
 use std::ffi::c_char;
 use std::ffi::c_uint;
 use std::ffi::CStr;
+use std::ffi::FromBytesUntilNulError;
 use std::ptr;
+use std::str::Utf8Error;
 use std::sync::PoisonError;
 use std::{
     error::Error,
@@ -70,6 +77,18 @@ impl Error for IndigoError {
 
 impl From<NulError> for IndigoError {
     fn from(e: NulError) -> Self {
+        IndigoError::Sys(Box::new(e))
+    }
+}
+
+impl From<FromBytesUntilNulError> for IndigoError {
+    fn from(e: FromBytesUntilNulError) -> Self {
+        IndigoError::Sys(Box::new(e))
+    }
+}
+
+impl From<Utf8Error> for IndigoError {
+    fn from(e: Utf8Error) -> Self {
         IndigoError::Sys(Box::new(e))
     }
 }
@@ -165,16 +184,22 @@ fn str_to_buf<const N: usize>(s: &str) -> Result<[c_char; N], IndigoError> {
     }
 }
 
-fn buf_to_str<const N: usize>(buf: [c_char; N]) -> String {
+fn buf_to_string<const N: usize>(buf: [c_char; N]) -> String {
     let ptr = buf.as_ptr();
     let cstr = unsafe { CStr::from_ptr(ptr) };
     String::from_utf8_lossy(cstr.to_bytes()).to_string()
 }
 
-fn buf_to_str2<'a,const N: usize>(buf: [c_char; N]) -> &'a str {
+fn buf_to_str<'a, const N: usize>(buf: [c_char; N]) -> &'a str {
     let ptr = buf.as_ptr();
     let p = unsafe { CStr::from_ptr(ptr) };
     p.to_str().unwrap()
+}
+
+fn const_to_string(name: &[u8]) -> Cow<str> {
+    // if the unwrap panics we are calling it with a faulty argument and it is a bug...
+    let name = CStr::from_bytes_with_nul(name).unwrap();
+    name.to_string_lossy()
 }
 
 fn ptr_to_string(message: *const c_char) -> Option<String> {

@@ -1,20 +1,21 @@
 use std::{
-    os::raw::c_void,
-    ptr::{self, addr_of_mut},
+    collections::HashMap, hash::Hash, os::raw::c_void, ptr::{self, addr_of, addr_of_mut}, slice::Iter, sync::RwLock
 };
 
 use super::bus::Bus;
 use crate::*;
+use bus::map_indigo_result;
 use device::Device;
 use libindigo_sys::{self, *};
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
+use property::{Blob, BlobMode};
 
 /// Callback methods to handle INDIGO bus events.
-pub trait CallbackHandler {
+pub trait CallbackHandler<'a> {
     /// Called when the client is attached.
     fn on_client_attach(
         &mut self,
-        c: &mut Client<impl CallbackHandler>,
+        c: &mut Client<'a, impl CallbackHandler<'a>>,
     ) -> Result<(), IndigoError> {
         debug!("... client attached.");
         Ok(())
@@ -23,7 +24,7 @@ pub trait CallbackHandler {
     /// Called each time the client has been detached.
     fn on_client_detach(
         &mut self,
-        c: &mut Client<impl CallbackHandler>,
+        c: &mut Client<'a, impl CallbackHandler<'a>>,
     ) -> Result<(), IndigoError> {
         debug!("... client detached.");
         Ok(())
@@ -31,29 +32,34 @@ pub trait CallbackHandler {
 
     /// Called each time the property of a device is defined or its definition requested.
     fn on_define_property(
-        &mut self,
-        c: &mut Client<impl CallbackHandler>,
-        d: Device,
-        p: Property,
+        &'a mut self,
+        c: &mut Client<'a, impl CallbackHandler<'a>>,
+        d: Device<'a>,
+        p: Property<'a>,
         msg: Option<String>,
     ) -> Result<(), IndigoError> {
         debug!(
             "Device: '{}'; Property '{}'; DEFINED with message '{:?}' defined for ",
-            d.name(), p.name(), msg);
+            d.name(),
+            p.name(),
+            msg
+        );
         Ok(())
     }
 
     /// Called each time a property is updated for a device.
     fn on_update_property(
         &mut self,
-        c: &mut Client<impl CallbackHandler>,
-        d: &Device,
-        p: &Property,
+        c: &mut Client<'a, impl CallbackHandler<'a>>,
+        d: Device,
+        p: Property,
         msg: Option<String>,
     ) -> Result<(), IndigoError> {
-
         debug!(
-            "Device: '{}'; Property '{}'; UPDATED with message '{:?}' defined for ", d.name(), p.name(), msg
+            "Device: '{}'; Property '{}'; UPDATED with message '{:?}' defined for ",
+            d.name(),
+            p.name(),
+            msg
         );
         Ok(())
     }
@@ -61,13 +67,16 @@ pub trait CallbackHandler {
     /// Called each time a property is deleted.
     fn on_delete_property(
         &mut self,
-        c: &mut Client<impl CallbackHandler>,
-        d: &Device,
-        p: &Property,
+        c: &mut Client<'a, impl CallbackHandler<'a>>,
+        d: Device,
+        p: Property,
         msg: Option<String>,
     ) -> Result<(), IndigoError> {
         debug!(
-            "Device: '{}'; Property '{}'; DELETED with message '{:?}' defined for ", d.name(), p.name(), msg
+            "Device: '{}'; Property '{}'; DELETED with message '{:?}' defined for ",
+            d.name(),
+            p.name(),
+            msg
         );
         Ok(())
     }
@@ -75,8 +84,8 @@ pub trait CallbackHandler {
     /// Called each time message has been sent.
     fn on_send_message(
         &mut self,
-        c: &mut Client<impl CallbackHandler>,
-        d: &Device,
+        c: &mut Client<'a, impl CallbackHandler<'a>>,
+        d: Device,
         msg: String,
     ) -> Result<(), IndigoError> {
         debug!("Message '{:?}' SENT", msg);
@@ -85,13 +94,12 @@ pub trait CallbackHandler {
 }
 
 /// Client to manage devices attached to the INDIGO bus.
-pub struct Client<T: CallbackHandler> {
+pub struct Client<'a, T: CallbackHandler<'a>> {
     /// System record for INDIGO clients.
     sys: indigo_client,
-    pub handler: T,
+    devices: RwLock<HashMap<String,Device<'a>>>,
+    pub handler: &'a mut T,
     /*
-    /// Client name, also serving as the unique identifier of the client.
-    name: String,
     /// `true`` if the _client_ is a remote object
     remote: bool,
 
@@ -108,9 +116,11 @@ pub struct Client<T: CallbackHandler> {
      */
 }
 
-impl<T: CallbackHandler> Client<T> {
+impl<'a,T> Client<'a, T>
+where T: CallbackHandler<'a> {
+
     /// Create a new, detached client.
-    pub fn new(name: &str, handler: T) -> Result<Box<Self>, IndigoError> {
+    pub fn new(name: &str, handler: &'a mut T) -> Result<Box<Self>, IndigoError> {
         let indigo_client = indigo_client {
             name: str_to_buf(name)?,              // client name
             is_remote: false,                     // is this a remote client "no" - this is us
@@ -133,7 +143,8 @@ impl<T: CallbackHandler> Client<T> {
         // Put the Client in a Box to ensure a stable reference.
         let mut client = Box::new(Client {
             sys: indigo_client,
-            handler,
+            devices: RwLock::new(HashMap::new()),
+            handler: handler,
         });
         // store a raw pointer to the safe Client on the unsafe indigo_client's context.
         client.sys.client_context = (&mut *client) as *mut _ as *mut c_void;
@@ -141,41 +152,61 @@ impl<T: CallbackHandler> Client<T> {
         Ok(client)
     }
 
-    /// Attach the client to the INDIGO bus and invoke the `attach()` callback function with the result.
+    /// Attach the client to the INDIGO bus.
     pub fn attach(&mut self) -> Result<(), IndigoError> {
-        info!("Attaching client '{}'...", buf_to_str(self.sys.name));
+        info!("Attaching client '{}'...", buf_to_string(self.sys.name));
         let c = addr_of_mut!(self.sys);
         let result = unsafe { indigo_attach_client(c) };
-        Bus::map_indigo_result(result, "indigo_attach_client")
+        map_indigo_result(result, "indigo_attach_client")
     }
 
-    /// Detach the client from the INDIGO bus and invoke the `detach()` callback function with the result.
+    /// Detach the client from the INDIGO bus.
     pub fn detach(&mut self) -> Result<(), IndigoError> {
-        info!("Detaching client '{}'...", buf_to_str(self.sys.name));
+        info!("Detaching client '{}'...", buf_to_string(self.sys.name));
         let c = addr_of_mut!(self.sys);
         let result = unsafe { indigo_detach_client(c) };
-        Bus::map_indigo_result(result, "indigo_detach_client")
+        map_indigo_result(result, "indigo_detach_client")
     }
 
     /// Get all properties from the devices attached to the INDIGO bus.
     pub fn get_all_properties(&mut self) -> Result<(), IndigoError> {
         debug!(
             "Getting all properties for '{}'...",
-            buf_to_str(self.sys.name)
+            buf_to_string(self.sys.name)
         );
         unsafe {
             let c = addr_of_mut!(self.sys);
             let p = std::ptr::addr_of!(INDIGO_ALL_PROPERTIES) as *const _ as *mut indigo_property;
             //let p = &mut INDIGO_ALL_PROPERTIES as &mut indigo_property;
             let result = indigo_enumerate_properties(c, p);
-            Bus::map_indigo_result(result, "indigo_enumerate_properties")
+            map_indigo_result(result, "indigo_enumerate_properties")
         }
     }
 
     // -- getters
 
-    pub fn name<'a>(self) -> String {
+    pub fn name(self) -> &'a str {
         buf_to_str(self.sys.name)
+    }
+
+    pub fn blobs(&self) -> Result<Vec<Blob>, IndigoError> {
+        let mut blobs = Vec::new();
+        unsafe{
+            let mut b = self.sys.enable_blob_mode_records;
+            while !b.is_null() {
+                let p = PropertyKey {
+                    dev: buf_to_string((*b).device),
+                    name: buf_to_string((*b).name),
+
+                };
+                match BlobMode::from_u32((*b).mode) {
+                    Some(blob) => blobs.push(Blob::new(p, blob)),
+                    None => return Err(IndigoError::Other(format!("Unknown BlobMode: {}", (*b).mode)))
+                };
+                b = (*b).next;
+            }
+        }
+        Ok(blobs)
     }
 
     // -- libindigo-sys unsafe callback methods that delegate to the CallbackHandler implementation.
@@ -203,7 +234,7 @@ impl<T: CallbackHandler> Client<T> {
     ) -> indigo_result {
         let c1: &mut Client<T> = get_client(client);
         let c2: &mut Client<T> = get_client(client);
-        let d = Device::new(device);
+        let d = Device::new(&mut c1.sys, device);
         let p = Property::new(property);
         let msg = ptr_to_string(message);
 
@@ -218,6 +249,14 @@ impl<T: CallbackHandler> Client<T> {
         indigo_result_INDIGO_OK
     }
 
+    fn upsert_device(&self, d: *mut indigo_device) -> Option<&'a Device<'a>> {
+        let mut devices = self.devices.write().unwrap();
+        let name = buf_to_string((unsafe { &*d }).name);
+        let entry = devices.entry(name).or_insert(Device::new(self.sys, d));
+
+        todo!()
+    }
+
     unsafe extern "C" fn on_update_property(
         client: *mut indigo_client,
         device: *mut indigo_device,
@@ -226,8 +265,9 @@ impl<T: CallbackHandler> Client<T> {
     ) -> indigo_result {
         let c1: &mut Client<T> = get_client(client);
         let c2: &mut Client<T> = get_client(client);
-        let d = &mut Device::new(device);
-        let p = &mut Property::new(property);
+        let d = c1.upsert_device(device);
+        let d = Device::new(&mut c1.sys, device);
+        let p = Property::new(property);
         let msg = ptr_to_string(message);
 
         if let Err(e) = c1.handler.on_update_property(c2, d, p, msg) {
@@ -249,8 +289,8 @@ impl<T: CallbackHandler> Client<T> {
     ) -> indigo_result {
         let c1: &mut Client<T> = get_client(client);
         let c2: &mut Client<T> = get_client(client);
-        let d = &mut Device::new(device);
-        let p = &mut Property::new(property);
+        let d = Device::new(&mut c1.sys, device);
+        let p = Property::new(property);
         let msg = ptr_to_string(message);
 
         if let Err(e) = c1.handler.on_delete_property(c2, d, p, msg) {
@@ -271,7 +311,7 @@ impl<T: CallbackHandler> Client<T> {
     ) -> indigo_result {
         let c1: &mut Client<T> = get_client(client);
         let c2: &mut Client<T> = get_client(client);
-        let d = &mut Device::new(device);
+        let d = Device::new(&mut c1.sys, device);
         let msg = ptr_to_string(message).unwrap();
 
         if let Err(e) = c1.handler.on_send_message(c2, d, msg) {
@@ -302,9 +342,9 @@ impl<T: CallbackHandler> Client<T> {
 }
 
 /// Return a mutable reference to `Client` from the pointer stored in the `context` field of `indigo_client`.
-unsafe fn get_client<'a, T>(client: *mut indigo_client) -> &'a mut Client<T>
+unsafe fn get_client<'a, T>(client: *mut indigo_client) -> &'a mut Client<'a, T>
 where
-    T: CallbackHandler,
+    T: CallbackHandler<'a>,
 {
     // https://stackoverflow.com/a/24191977/51016
     let ptr = (*client).client_context;
@@ -329,10 +369,10 @@ mod tests {
     struct Test {
         visited: bool,
     }
-    impl CallbackHandler for Test {
+    impl<'a> CallbackHandler<'a> for Test {
         fn on_client_attach(
             &mut self,
-            c: &mut Client<impl CallbackHandler>,
+            c: &mut Client<'a, impl CallbackHandler<'a>>,
         ) -> Result<(), IndigoError> {
             self.visited = true;
             Ok(())
@@ -341,14 +381,14 @@ mod tests {
 
     #[test]
     fn test_callback() -> Result<(), IndigoError> {
-        let handler = Test { visited: false };
+        let handler = &mut Test { visited: false };
         let mut client = Client::new("test", handler)?;
         // client.attach()?;
 
         let ptr = core::ptr::addr_of_mut!(client.sys);
         unsafe {
             let r = Client::<Test>::on_attach(ptr);
-            Bus::map_indigo_result(r, "on_attach")?;
+            map_indigo_result(r, "on_attach")?;
         };
 
         assert!(client.handler.visited);

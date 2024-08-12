@@ -16,8 +16,8 @@ pub struct ServerConnection {
 
 impl Display for ServerConnection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = buf_to_str(self.sys.name);
-        let host = buf_to_str(self.sys.host);
+        let name = buf_to_string(self.sys.name);
+        let host = buf_to_string(self.sys.host);
         let port = self.sys.port;
         write!(f, "{}@{}:{}", name, host, port)
     }
@@ -64,7 +64,7 @@ impl ServerConnection {
                 srv_ptr_ptr,
             )
         };
-        Bus::map_indigo_result(result, "indigo_connect_server")
+        map_indigo_result(result, "indigo_connect_server")
     }
 
     /*
@@ -94,7 +94,7 @@ impl ServerConnection {
     pub fn dicsonnect(&mut self) -> Result<(), IndigoError> {
         info!("Disconncting from {}...", self);
         let result = unsafe { indigo_disconnect_server(ptr::addr_of_mut!(self.sys)) };
-        Bus::map_indigo_result(result, "indigo_disconnect_server")
+        map_indigo_result(result, "indigo_disconnect_server")
     }
 
     /// Return `true` if the server's thread is started.

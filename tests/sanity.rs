@@ -1,7 +1,7 @@
 #![allow(dead_code, unused_variables)]
 
 use std::{
-    net::Shutdown, sync::{Arc, Condvar, Mutex}, thread::sleep, time::Duration
+    iter, net::Shutdown, path::Iter, sync::{Arc, Condvar, Mutex, RwLock}, thread::sleep, time::Duration
 };
 use test_log::test;
 
@@ -29,118 +29,46 @@ fn server_connection() -> Result<(), IndigoError> {
     Bus::stop()
 }
 
-struct TestHandler<'a> {
-    pub visited: Arc<(Mutex<bool>, Condvar)>,
-    props: Vec<Property<'a>>,
-}
-
-impl<'a> TestHandler<'a> {
-    fn new() -> TestHandler<'a> {
-        let visited = Arc::new((Mutex::new(false), Condvar::new()));
-        let props = Vec::new();
-        TestHandler { visited, props }
-    }
-
-    fn visit(&self) {
-        let (lock, cvar) = &*self.visited;
-        let mut visited = lock.lock().unwrap();
-        *visited = true; // set
-        cvar.notify_one();
-    }
-
-    fn wait_until_visited(&mut self) {
-        let (lock, cvar) = &*self.visited;
-        let mut visited = lock.lock().unwrap();
-        while !*visited {
-            visited = cvar.wait(visited).unwrap();
-        }
-        *visited = false; // reset
-    }
-}
-
-impl<'a> CallbackHandler for TestHandler<'a> {
-    fn on_client_attach(
-        &mut self,
-        c: &mut Client<impl CallbackHandler>,
-    ) -> Result<(), IndigoError> {
-        debug!("... client attached");
-        self.visit();
-        Ok(())
-    }
-
-    fn on_client_detach(
-        &mut self,
-        c: &mut Client<impl CallbackHandler>,
-    ) -> Result<(), IndigoError> {
-        self.visit();
-        Ok(())
-    }
-
-    fn on_define_property(
-        &mut self,
-        c: &mut Client<impl CallbackHandler>,
-        d: Device,
-        p: Property,
-        msg: Option<String>,
-    ) -> Result<(), IndigoError> {
-
-        // self.props.push(p);
-        Ok(())
-    }
-
-    fn on_update_property(
-        &mut self,
-        c: &mut Client<impl CallbackHandler>,
-        d: &Device,
-        p: &Property,
-        msg: Option<String>,
-    ) -> Result<(), IndigoError> {
-        Ok(())
-    }
-
-    fn on_delete_property(
-        &mut self,
-        c: &mut Client<impl CallbackHandler>,
-        d: &Device,
-        p: &Property,
-        msg: Option<String>,
-    ) -> Result<(), IndigoError> {
-        Ok(())
-    }
-
-    fn on_send_message(
-        &mut self,
-        c: &mut Client<impl CallbackHandler>,
-        d: &Device,
-        msg: String,
-    ) -> Result<(), IndigoError> {
-        Ok(())
-    }
-}
-
 #[test]
 fn client_callbacks() -> Result<(), IndigoError> {
     Bus::set_log_level(LogLevel::Debug);
     Bus::start()?;
 
-    let mut client = Client::new("TestClient", TestHandler::new())?;
+    let mut model = IndigoModel::new();
+    let mut client = Client::new("TestClient", &mut model)?;
 
     let mut server = ServerConnection::new("INDIGO", "localhost", 7624)?;
     server.connect()?;
-    // client.get_all_properties()?;
 
     client.attach()?;
     client.handler.wait_until_visited();
 
     client.get_all_properties()?;
 
-    sleep(Duration::from_secs(1));
+    sleep(Duration::from_secs(3));
+
+    {
+        let props = client.handler.props.read().unwrap();
+        props.iter()
+            //.filter(|p| matches!(p.property_type(), PropertyType::Blob))
+            // create an iterator of type tuple (PropertyKey,PropertyItem)
+            .map(|(k,p)| iter::repeat(k).take(p.items_used()).zip(p.items()))
+            .flatten()
+            .for_each(|(k,i)| debug!("{k}, {i}"));
+
+        debug!("----------------");
+        client.handler.devices.read().unwrap().iter()
+            .for_each(|(_,d)| debug!("{}", d));
+        client.blobs().iter().for_each(|b| debug!("{:?}", b));
+        client.handler.devices.read().unwrap().iter().for_each(|(k,d)| debug!("Interfaces: {:?}", d.interfaces()));
+
+    }
 
     client.detach()?;
     client.handler.wait_until_visited();
 
-    // server.dicsonnect(true)?;
-    server.shutdown()?;
+    server.dicsonnect()?;
+    // server.shutdown()?;
 
     sleep(Duration::from_secs(5));
     Bus::stop()
