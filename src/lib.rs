@@ -229,6 +229,11 @@ fn str_to_buf<'a,T>(value: &'a str, _len: u16) -> Result<[i8; 128], IndigoError>
 }
 */
 
+#[derive(Debug, strum_macros::Display)]
+enum IndigoRequest {
+    Connect, Disconnect, Attach, Detach
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

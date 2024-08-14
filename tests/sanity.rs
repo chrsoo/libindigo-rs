@@ -1,13 +1,13 @@
 #![allow(dead_code, unused_variables)]
 
 use std::{
-    iter, net::Shutdown, path::Iter, sync::{Arc, Condvar, Mutex, RwLock}, thread::sleep, time::Duration
+    iter, sync::{Arc, Condvar, Mutex}, thread::sleep, time::Duration
 };
 use test_log::test;
 
 // TODO run indigio sky in Docker as test harness
 use libindigo::*;
-use log::{debug, error, info, warn};
+use log::debug;
 
 #[test]
 fn start_stop_bus() -> Result<(), IndigoError> {
@@ -29,6 +29,29 @@ fn server_connection() -> Result<(), IndigoError> {
     Bus::stop()
 }
 
+struct Monitor {
+    pub visited: Arc<(Mutex<bool>, Condvar)>,
+}
+
+impl Monitor {
+    fn visit(&self) -> Result<(),IndigoError> {
+        let (lock, cvar) = &*self.visited;
+        let mut visited = lock.lock().unwrap();
+        *visited = true; // set
+        cvar.notify_one();
+        Ok(())
+    }
+    pub fn wait(&self) -> Result<(),IndigoError> {
+        let (lock, cvar) = &*self.visited;
+        let mut visited = lock.lock().unwrap();
+        while !*visited {
+            visited = cvar.wait(visited).unwrap();
+        }
+        *visited = false; // reset
+        Ok(())
+    }
+}
+
 #[test]
 fn client_callbacks() -> Result<(), IndigoError> {
     Bus::set_log_level(LogLevel::Debug);
@@ -36,14 +59,24 @@ fn client_callbacks() -> Result<(), IndigoError> {
 
     let mut model = IndigoModel::new();
     let mut client = Client::new("TestClient", &mut model)?;
-
     let mut server = ServerConnection::new("INDIGO", "localhost", 7624)?;
+    let mut monitor = Arc::new(Monitor {
+        visited: Arc::new((Mutex::new(false), Condvar::new())),
+    });
+
+    let m2 = monitor.clone();
+
+    let visited = Arc::new((Mutex::new(false), Condvar::new()));
+
     server.connect()?;
 
-    client.attach()?;
-    client.handler.wait_until_visited();
-
-    client.get_all_properties()?;
+    let m = monitor.clone();
+    client.attach(move |c| {
+        debug!("detach callback closure called");
+        // c.attach(|c| c.get_all_properties())?;
+        m.visit()
+    })?;
+    monitor.wait()?;
 
     sleep(Duration::from_secs(3));
 
@@ -64,8 +97,12 @@ fn client_callbacks() -> Result<(), IndigoError> {
 
     }
 
-    client.detach()?;
-    client.handler.wait_until_visited();
+    let m = monitor.clone();
+    client.detach(move |c|{
+        debug!("detach callback closure called");
+        m.visit()
+    })?;
+    monitor.wait()?;
 
     server.dicsonnect()?;
     // server.shutdown()?;

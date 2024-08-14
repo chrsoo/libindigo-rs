@@ -1,8 +1,6 @@
-use std::{collections::HashMap, sync::Mutex};
-
 use super::*;
 use libindigo_sys::*;
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 
 pub struct Bus {}
 
@@ -13,15 +11,25 @@ impl Bus {
     }
 
     pub fn start() -> Result<(), IndigoError> {
-        info!("Starting bus...");
+        trace!("Starting bus...");
         let r = unsafe { indigo_start() };
-        map_indigo_result(r, "indigo_start")
+        map_indigo_result(r, "indigo_start").inspect_err(|e|
+            error!("Error starting INDIGO Bus: {}", e)
+        ).and_then(|()|{
+            info!("Started the INDIGO Bus.");
+            Ok(())
+        })
     }
 
     pub fn stop() -> Result<(), IndigoError> {
-        info!("Stopping bus...");
+        trace!("Stopping bus...");
         let r = unsafe { indigo_stop() };
-        map_indigo_result(r, "indigo_stop")
+        map_indigo_result(r, "indigo_stop").inspect_err(|e|
+            error!("Error stopping INDIGO Bus: {}", e)
+        ).and_then(|()| {
+            info!("Stopped the INDIGO Bus.");
+            Ok(())
+        })
     }
 
     pub fn log(msg: &str) -> Result<(),IndigoError>{
@@ -37,7 +45,7 @@ impl Bus {
 /// a known error, and to `Err(IndigoError::Other)` if the result code is not a well-known result.
 pub fn map_indigo_result<'a>(result: indigo_result, operation: &str) -> Result<(), IndigoError> {
     if result == indigo_result_INDIGO_OK {
-        debug!("... {} OK.", operation);
+        trace!("OK {}.", operation);
         return Ok(());
     }
     if let Some(result) = BusError::from_u32(result) {

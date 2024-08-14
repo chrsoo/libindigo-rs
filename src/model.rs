@@ -11,57 +11,20 @@ use crate::{CallbackHandler, Client, Device, IndigoError, Property, PropertyKey}
 /// the set of all enumerated devices and their properties that are defined on the INDIGO
 /// bus.
 pub struct IndigoModel<'a> {
-    pub visited: Arc<(Mutex<bool>, Condvar)>,
     pub props: RwLock<HashMap<PropertyKey, Property<'a>>>,
     pub devices: RwLock<HashMap<String, Device<'a>>>,
 }
 
 impl<'a> IndigoModel<'a> {
     pub fn new() -> IndigoModel<'a> {
-        let visited = Arc::new((Mutex::new(false), Condvar::new()));
-        let props = RwLock::new(HashMap::new());
-        let devices = RwLock::new(HashMap::new());
         IndigoModel {
-            visited,
-            props,
-            devices,
+            props: RwLock::new(HashMap::new()),
+            devices: RwLock::new(HashMap::new()),
         }
-    }
-
-    fn visit(&self) {
-        let (lock, cvar) = &*self.visited;
-        let mut visited = lock.lock().unwrap();
-        *visited = true; // set
-        cvar.notify_one();
-    }
-
-    pub fn wait_until_visited(&mut self) {
-        let (lock, cvar) = &*self.visited;
-        let mut visited = lock.lock().unwrap();
-        while !*visited {
-            visited = cvar.wait(visited).unwrap();
-        }
-        *visited = false; // reset
     }
 }
 
 impl<'a> CallbackHandler<'a> for IndigoModel<'a> {
-    fn on_client_attach(
-        &mut self,
-        c: &mut Client<'a, impl CallbackHandler<'a>>,
-    ) -> Result<(), IndigoError> {
-        debug!("... client attached");
-        self.visit();
-        Ok(())
-    }
-
-    fn on_client_detach(
-        &mut self,
-        c: &mut Client<'a, impl CallbackHandler<'a>>,
-    ) -> Result<(), IndigoError> {
-        self.visit();
-        Ok(())
-    }
 
     fn on_define_property(
         &'a mut self,
@@ -88,7 +51,7 @@ impl<'a> CallbackHandler<'a> for IndigoModel<'a> {
     fn on_update_property(
         &mut self,
         c: &mut Client<'a, impl CallbackHandler<'a>>,
-        d: Device,
+        d: Arc<Device>,
         p: Property,
         msg: Option<String>,
     ) -> Result<(), IndigoError> {

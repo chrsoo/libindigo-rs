@@ -1,5 +1,12 @@
-use std::{any::Any, borrow::Borrow, collections::HashMap, ops::Deref, ptr::{self, addr_of, addr_of_mut}, sync::{Mutex, MutexGuard, RwLock}};
 use bus::map_indigo_result;
+use std::{
+    any::Any,
+    borrow::Borrow,
+    collections::HashMap,
+    ops::Deref,
+    ptr::{self, addr_of, addr_of_mut},
+    sync::{Mutex, MutexGuard, RwLock},
+};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
@@ -13,14 +20,8 @@ pub struct Device<'a> {
     sys: &'a indigo_device,
     client: *mut indigo_client,
     props: HashMap<String, Property<'a>>,
-    request: Mutex<Option<Request>>,
-    callback: Option<&'a dyn Fn(Result<(),IndigoError>)>
-}
-
-// TODO move to lib?
-#[derive(Debug, strum_macros::Display)]
-enum Request {
-    Connect, Disconnect, Attach, Detach
+    request: Mutex<Option<IndigoRequest>>,
+    callback: Option<&'a dyn Fn(Result<(), IndigoError>)>,
 }
 
 enum_from_primitive! {
@@ -76,7 +77,6 @@ impl Interface {
     }
 }
 
-
 pub struct GlobalLock {
     tok: indigo_glock,
 }
@@ -128,9 +128,10 @@ impl<'a> Device<'a> {
     }
 
     pub fn property(&self, name: &str) -> Result<&Property, IndigoError> {
-        self.props.get(name).ok_or(
-            IndigoError::Other(format!("Property '{}' not found.", name))
-        )
+        self.props.get(name).ok_or(IndigoError::Other(format!(
+            "Property '{}' not found.",
+            name
+        )))
     }
 
     /// Return a propety using an libindigo-sys constant property name, e.g. [CONNECTION_PROPERTY_NAME].
@@ -141,7 +142,7 @@ impl<'a> Device<'a> {
 
     /// Returns `Ok(true)` or `Ok(false)` if the device is [Ok](PropertyState::Ok),
     /// else the corresponding [PropertyState] is returned as an error.
-    pub fn connected(&self) -> Result<bool,IndigoError> {
+    pub fn connected(&self) -> Result<bool, IndigoError> {
         let property_name = const_to_string(CONNECTION_PROPERTY_NAME);
         let connection = self.property(property_name.as_ref())?;
         if connection.state() != PropertyState::Ok {
@@ -156,23 +157,24 @@ impl<'a> Device<'a> {
                     PropertyValue::Switch(b) => {
                         //
                         Ok(if i.name == connected_item { b } else { !b })
-                    },
+                    }
                     _ => {
                         let msg = format!(
                             "Illegal '{}' property value, expected a switch for item '{}' and not '{:?}'",
                             property_name, i.name, i.value
                         );
                         warn!("{}", msg);
-                        return Err(IndigoError::Other(msg))
+                        return Err(IndigoError::Other(msg));
                     }
-                }
+                };
             }
         }
         let msg = format!(
-            "Illegal '{}' property definition, could not find a '{}' or '{}' item", property_name, connected_item, disconnected_item
+            "Illegal '{}' property definition, could not find a '{}' or '{}' item",
+            property_name, connected_item, disconnected_item
         );
         warn!("{}", msg);
-        return Err(IndigoError::Other(msg))
+        return Err(IndigoError::Other(msg));
     }
 
     pub(crate) fn addr_of_name(&self) -> *mut c_char {
@@ -188,12 +190,19 @@ impl<'a> Device<'a> {
     }
     */
     /// Connect the device
-    pub(crate) fn connect(&mut self, f: &'a dyn Fn(Result<(),IndigoError>)) -> Result<(),IndigoError> {
+    pub(crate) fn connect(
+        &mut self,
+        f: &'a dyn Fn(Result<(), IndigoError>),
+    ) -> Result<(), IndigoError> {
         let mut r = self.request.lock().unwrap();
         if let Some(request) = &mut *r {
-            return Err(IndigoError::Other(format!("{} request in progress for device '{}'", request, self.name())))
+            return Err(IndigoError::Other(format!(
+                "{} request in progress for device '{}'",
+                request,
+                self.name()
+            )));
         }
-        *r = Some(Request::Connect);
+        *r = Some(IndigoRequest::Connect);
         self.callback = Some(f);
 
         let d = self.addr_of_name();
@@ -204,20 +213,24 @@ impl<'a> Device<'a> {
     pub fn interfaces(&self) -> Vec<Interface> {
         let info = const_to_string(INFO_PROPERTY_NAME); // TODO make this a constant
         if let Some(p) = self.props.get(info.as_ref()) {
-            if let Some(ifs) = p.items().filter_map(|i| {
-                // only look for info device driver items
-                if i.name == const_to_string(INFO_DEVICE_DRIVER_ITEM_NAME) {
-                    // ensure that a text property value
-                    if let PropertyValue::Text(v) = i.value.clone() {
-                        Some(v) // heureka!
+            if let Some(ifs) = p
+                .items()
+                .filter_map(|i| {
+                    // only look for info device driver items
+                    if i.name == const_to_string(INFO_DEVICE_DRIVER_ITEM_NAME) {
+                        // ensure that a text property value
+                        if let PropertyValue::Text(v) = i.value.clone() {
+                            Some(v) // heureka!
+                        } else {
+                            warn!("INFO_DEVICE_DRIVER_ITEM does not contain a text property value");
+                            None
+                        }
                     } else {
-                        warn!("INFO_DEVICE_DRIVER_ITEM does not contain a text property value");
-                        None
+                        None // not an info device driver item
                     }
-                } else {
-                    None // not an info device driver item
-                }
-            }).nth(0) {
+                })
+                .nth(0)
+            {
                 // map the info device driver string to a list of interfaces
                 return Interface::map(ifs);
             }
