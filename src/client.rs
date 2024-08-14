@@ -83,7 +83,6 @@ pub struct Client<'a, T: CallbackHandler<'a>> {
     /// System record for INDIGO clients.
     sys: *mut indigo_client,
     request: Mutex<Option<IndigoRequest>>,
-    // callback: Box<Callback<'a,T>>,
     callback: Box<dyn FnMut(&mut Client<'a,T>) -> Result<(),IndigoError> + 'a>,
     devices: RwLock<HashMap<String, Arc<Device<'a>>>>,
     pub handler: &'a mut T,
@@ -126,7 +125,7 @@ where
                 // If this callback is invoked it means that we received an INDIGO callback
                 // without having called invoke or connect on the client, or that the code
                 // has failed to store the callback on the right client object.
-                Err(IndigoError::Other(format!("initial callback placeholder should never be called!")))
+                Err(IndigoError::Other(format!("Initial callback placeholder should never be called!")))
             ),
             // sys: addr_of_mut!(indigo_client),
             devices: RwLock::new(HashMap::new()),
@@ -159,7 +158,7 @@ where
         let mut r = self.request.lock().unwrap();
         if let Some(request) = &mut *r {
             return Err(IndigoError::Other(format!(
-                "{} request in progress for client '{}'", request, self,
+                "{} request in progress for client '{}'.", request, self,
             )));
         }
         *r = Some(IndigoRequest::Attach);
@@ -180,7 +179,7 @@ where
         let mut r = self.request.lock().unwrap();
         if let Some(request) = &mut *r {
             return Err(IndigoError::Other(format!(
-                "{} request in progress for client '{}'", request, self,
+                "{} request in progress for client '{}'.", request, self,
             )));
         }
         *r = Some(IndigoRequest::Detach);
@@ -222,7 +221,7 @@ where
                     Some(blob) => blobs.push(Blob::new(p, blob)),
                     None => {
                         return Err(IndigoError::Other(format!(
-                            "Unknown BlobMode: {}",
+                            "Unknown BlobMode: {}.",
                             (*b).mode
                         )))
                     }
@@ -236,7 +235,7 @@ where
     // -- libindigo-sys unsafe callback methods that delegate to the CallbackHandler implementation.
 
     unsafe extern "C" fn on_attach(client: *mut indigo_client) -> indigo_result {
-        trace!("INDIGO 'on_attach' callback");
+        trace!("INDIGO 'on_attach' callback.");
 
         let c1: &mut Client<T> = get_client(client);
         let c2: &mut Client<T> = get_client(client);
@@ -250,17 +249,17 @@ where
         if let Some(r) = request.deref() {
             match r {
                 IndigoRequest::Attach => (),
-                _ => warn!("Indigo callback 'on_attach' called for {} request; expected {}", r, IndigoRequest::Attach),
+                _ => warn!("Indigo callback 'on_attach' called for {} request; expected {}.", r, IndigoRequest::Attach),
             }
             // Reset the request.
             *request = None;
         } else {
-            warn!("INDIGO 'on_attach' called without an active request");
+            warn!("INDIGO 'on_attach' called without an active request.");
         }
 
         trace!("Notifying the client attach requestor...");
         if let Err(e) = (c1.callback)(c2) {
-            error!("Callback notification error: '{}'", e);
+            error!("Callback notification error: '{}'.", e);
             if let IndigoError::Bus(b) = e {
                 return b.into();
             }
@@ -278,7 +277,7 @@ where
     }
 
     unsafe extern "C" fn on_detach(client: *mut indigo_client) -> indigo_result {
-        trace!("INDIGO 'on_detach' callback");
+        trace!("INDIGO 'on_detach' callback.");
 
         let c1: &mut Client<T> = get_client(client);
         let c2: &mut Client<T> = get_client(client);
@@ -292,7 +291,7 @@ where
         if let Some(r) = request.deref() {
             match r {
                 IndigoRequest::Detach => (),
-                _ => warn!("Indigo callback 'on_detach' called for {} request; expected {}", r, IndigoRequest::Detach),
+                _ => warn!("Indigo callback 'on_detach' called for {} request; expected {}.", r, IndigoRequest::Detach),
             }
             // Reset the request.
             *request = None;
@@ -302,7 +301,7 @@ where
 
         trace!("Notifying the client detach requestor...");
         if let Err(e) = (c1.callback)(c2) {
-            error!("Callback notification error: '{}'", e);
+            error!("Callback notification error: '{}'.", e);
             if let IndigoError::Bus(b) = e {
                 return b.into();
             }
@@ -326,7 +325,7 @@ where
         property: *mut indigo_property,
         message: *const i8,
     ) -> indigo_result {
-        trace!("INDIGO 'on_define_property' callback");
+        trace!("INDIGO 'on_define_property' callback.");
 
         let c1: &mut Client<T> = get_client(client);
         let c2: &mut Client<T> = get_client(client);
@@ -335,7 +334,7 @@ where
         let msg = ptr_to_string(message);
 
         if let Err(e) = c1.handler.on_define_property(c2, d, p, msg) {
-            error!("Handler error: '{}'", e);
+            error!("Handler error: '{}'.", e);
             if let IndigoError::Bus(b) = e {
                 return b.into();
             }
@@ -357,7 +356,7 @@ where
         property: *mut indigo_property,
         message: *const i8,
     ) -> indigo_result {
-        trace!("INDIGO 'on_update_property' callback");
+        trace!("INDIGO 'on_update_property' callback.");
 
         let c1: &mut Client<T> = get_client(client);
         let c2: &mut Client<T> = get_client(client);
@@ -366,7 +365,7 @@ where
         let msg = ptr_to_string(message);
 
         if let Err(e) = c1.handler.on_update_property(c2, d, p, msg) {
-            error!("Handler error: '{}'", e);
+            error!("Handler error: '{}'.", e);
             if let IndigoError::Bus(b) = e {
                 return b.into();
             }
@@ -382,7 +381,7 @@ where
         property: *mut indigo_property,
         message: *const ::std::os::raw::c_char,
     ) -> indigo_result {
-        trace!("INDIGO 'on_delete_property' callback");
+        trace!("INDIGO 'on_delete_property' callback.");
 
         let c1: &mut Client<T> = get_client(client);
         let c2: &mut Client<T> = get_client(client);
@@ -391,7 +390,7 @@ where
         let msg = ptr_to_string(message);
 
         if let Err(e) = c1.handler.on_delete_property(c2, d, p, msg) {
-            error!("Handler error: '{}'", e);
+            error!("Handler error: '{}'.", e);
             if let IndigoError::Bus(b) = e {
                 return b.into();
             }
@@ -406,7 +405,7 @@ where
         device: *mut indigo_device,
         message: *const ::std::os::raw::c_char,
     ) -> indigo_result {
-        trace!("INDIGO 'on_send_message' callback");
+        trace!("INDIGO 'on_send_message' callback.");
 
         let c1: &mut Client<T> = get_client(client);
         let c2: &mut Client<T> = get_client(client);
@@ -414,7 +413,7 @@ where
         let msg = ptr_to_string(message).unwrap();
 
         if let Err(e) = c1.handler.on_send_message(c2, d, msg) {
-            error!("Handler error: '{}'", e);
+            error!("Handler error: '{}'.", e);
             if let IndigoError::Bus(b) = e {
                 return b.into();
             }
@@ -432,12 +431,12 @@ where
         if let Some(r) = request.deref() {
             match r {
                 IndigoRequest::Detach => (),
-                _ => warn!("Indigo callback 'on_detach' called for {} request; expected {}", r, IndigoRequest::Detach),
+                _ => warn!("Indigo callback 'on_detach' called for {} request; expected {}.", r, IndigoRequest::Detach),
             }
             // Reset the request.
             *request = None;
         } else {
-            warn!("INDIGO 'on_attach' called without an active request");
+            warn!("INDIGO 'on_attach' called without an active request.");
         }
         request
     }

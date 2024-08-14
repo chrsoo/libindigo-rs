@@ -5,10 +5,6 @@ use log::{debug, error, info, trace, warn};
 pub struct Bus {}
 
 impl Bus {
-    pub fn set_log_level(level: LogLevel) {
-        debug!("Setting log level '{:?}'.", level);
-        unsafe { indigo_set_log_level(level as i32) };
-    }
 
     pub fn start() -> Result<(), IndigoError> {
         trace!("Starting bus...");
@@ -32,12 +28,27 @@ impl Bus {
         })
     }
 
+    pub fn connect<'a>(name: &str, host: &str, port: i32) -> Result<ServerConnection, IndigoError> {
+        let mut con = ServerConnection::new(name, host, port)?;
+        if let Err(e) = con.connect() {
+            Err(e)
+        } else {
+            Ok(con)
+        }
+    }
+
     pub fn log(msg: &str) -> Result<(),IndigoError>{
         debug!("Bus log message: '{}'.", msg);
         let buf: [c_char;256] = str_to_buf(msg)?;
         unsafe { indigo_log(buf.as_ptr()) };
         Ok(())
     }
+
+    pub fn set_log_level(level: LogLevel) {
+        debug!("Setting log level '{:?}'.", level);
+        unsafe { indigo_set_log_level(level as i32) };
+    }
+
 }
 
 

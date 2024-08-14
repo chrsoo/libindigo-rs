@@ -7,7 +7,7 @@ use std::{
 use super::bus::*;
 use super::*;
 use libindigo_sys::{self, *};
-use log::{debug, info};
+use log::{debug, info, trace};
 
 #[derive(Debug)]
 pub struct ServerConnection {
@@ -51,8 +51,9 @@ impl ServerConnection {
         Ok(ServerConnection { sys: entry })
     }
 
-    pub fn connect(&mut self) -> Result<(), IndigoError> {
-        info!("Connecting to {}...", self);
+    pub fn connect(&mut self)
+    -> Result<(), IndigoError> {
+        trace!("Connecting to {}...", self);
         let mut srv_ptr = ptr::addr_of_mut!(self.sys);
         let srv_ptr_ptr = ptr::addr_of_mut!(srv_ptr);
 
@@ -64,37 +65,17 @@ impl ServerConnection {
                 srv_ptr_ptr,
             )
         };
-        map_indigo_result(result, "indigo_connect_server")
-    }
+        map_indigo_result(result, "indigo_connect_server").inspect(|()|
+        info!("Connected to {}.", self)
+    )
+}
 
-    /*
-    pub(crate) fn new_default_client() -> Result<indigo_client,IndigoError> {
-        Ok(indigo_client {
-            name: str_to_buf("@ Indigo")?,
-            is_remote: false,
-            client_context: std::ptr::null_mut(),
-            last_result: indigo_result_INDIGO_OK,
-            version: indigo_version_INDIGO_VERSION_CURRENT,
-            enable_blob_mode_records: ptr::null_mut(),
-            attach: None,
-            define_property: None,
-            update_property: None,
-            delete_property: None,
-            send_message: None,
-            detach: None,
-        })
-    }
-
-    pub fn detach(&mut self) ->  Result<(), IndigoError> {
-        let mut default = ServerConnection::new_default_client().unwrap();
-        let result = unsafe { indigo_detach_client(ptr::addr_of_mut!(default)) };
-        Bus::map_indigo_result(result)
-    }
-    */
     pub fn dicsonnect(&mut self) -> Result<(), IndigoError> {
-        info!("Disconncting from {}...", self);
+        trace!("Disconncting from {}...", self);
         let result = unsafe { indigo_disconnect_server(ptr::addr_of_mut!(self.sys)) };
-        map_indigo_result(result, "indigo_disconnect_server")
+        map_indigo_result(result, "indigo_disconnect_server").inspect(|()|
+            info!("Disconnected from {}.", self)
+        )
     }
 
     /// Return `true` if the server's thread is started.

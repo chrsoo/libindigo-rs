@@ -1,7 +1,10 @@
 #![allow(dead_code, unused_variables)]
 
 use std::{
-    iter, sync::{Arc, Condvar, Mutex}, thread::sleep, time::Duration
+    iter,
+    sync::{Arc, Condvar, Mutex},
+    thread::sleep,
+    time::Duration,
 };
 use test_log::test;
 
@@ -29,19 +32,19 @@ fn server_connection() -> Result<(), IndigoError> {
     Bus::stop()
 }
 
-struct Monitor {
+struct TestMonitor {
     pub visited: Arc<(Mutex<bool>, Condvar)>,
 }
 
-impl Monitor {
-    fn visit(&self) -> Result<(),IndigoError> {
+impl TestMonitor {
+    fn visit(&self) -> Result<(), IndigoError> {
         let (lock, cvar) = &*self.visited;
         let mut visited = lock.lock().unwrap();
         *visited = true; // set
         cvar.notify_one();
         Ok(())
     }
-    pub fn wait(&self) -> Result<(),IndigoError> {
+    pub fn wait(&self) -> Result<(), IndigoError> {
         let (lock, cvar) = &*self.visited;
         let mut visited = lock.lock().unwrap();
         while !*visited {
@@ -57,18 +60,12 @@ fn client_callbacks() -> Result<(), IndigoError> {
     Bus::set_log_level(LogLevel::Debug);
     Bus::start()?;
 
+    let mut server = Bus::connect("INDIGO", "localhost", 7624)?;
     let mut model = IndigoModel::new();
     let mut client = Client::new("TestClient", &mut model)?;
-    let mut server = ServerConnection::new("INDIGO", "localhost", 7624)?;
-    let mut monitor = Arc::new(Monitor {
+    let monitor = Arc::new(TestMonitor {
         visited: Arc::new((Mutex::new(false), Condvar::new())),
     });
-
-    let m2 = monitor.clone();
-
-    let visited = Arc::new((Mutex::new(false), Condvar::new()));
-
-    server.connect()?;
 
     let m = monitor.clone();
     client.attach(move |c| {
@@ -82,23 +79,34 @@ fn client_callbacks() -> Result<(), IndigoError> {
 
     {
         let props = client.handler.props.read().unwrap();
-        props.iter()
+        props
+            .iter()
             //.filter(|p| matches!(p.property_type(), PropertyType::Blob))
             // create an iterator of type tuple (PropertyKey,PropertyItem)
-            .map(|(k,p)| iter::repeat(k).take(p.items_used()).zip(p.items()))
+            .map(|(k, p)| iter::repeat(k).take(p.items_used()).zip(p.items()))
             .flatten()
-            .for_each(|(k,i)| debug!("{k}, {i}"));
+            .for_each(|(k, i)| debug!("{k}, {i}"));
 
         debug!("----------------");
-        client.handler.devices.read().unwrap().iter()
-            .for_each(|(_,d)| debug!("{}", d));
+        client
+            .handler
+            .devices
+            .read()
+            .unwrap()
+            .iter()
+            .for_each(|(_, d)| debug!("{}", d));
         client.blobs().iter().for_each(|b| debug!("{:?}", b));
-        client.handler.devices.read().unwrap().iter().for_each(|(k,d)| debug!("Interfaces: {:?}", d.interfaces()));
-
+        client
+            .handler
+            .devices
+            .read()
+            .unwrap()
+            .iter()
+            .for_each(|(k, d)| debug!("Interfaces: {:?}", d.interfaces()));
     }
 
     let m = monitor.clone();
-    client.detach(move |c|{
+    client.detach(move |c| {
         debug!("detach callback closure called");
         m.visit()
     })?;
