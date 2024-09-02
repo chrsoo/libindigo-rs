@@ -1,5 +1,7 @@
 use std::{
-    borrow::Cow, ffi::{c_char, c_long, CStr, CString}, fmt::Display, ptr
+    ffi::{c_long, CStr},
+    fmt::Display,
+    ptr,
 };
 
 use enum_primitive::*;
@@ -7,7 +9,7 @@ use libindigo_sys::{self, *};
 use log::warn;
 use url::Url;
 
-use crate::{buf_to_str, buf_to_string, IndigoError};
+use crate::{buf_to_str, buf_to_string};
 
 enum_from_primitive! {
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -54,7 +56,6 @@ pub enum PropertyType  {
 }
 }
 
-// TODO use #[derive(strum_macros::Display)], cf https://docs.rs/strum/latest/strum/derive.Display.html
 #[derive(PartialEq, Debug, Clone)]
 pub enum PropertyValue {
     Text(String),
@@ -92,15 +93,35 @@ impl Display for PropertyValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PropertyValue::Text(s) => write!(f, "{s}"),
-            PropertyValue::Number { format, min, max, step, value, target } => {
-                write!(f, "format: '{format}'; min: {min}; max: {max}; \
-                step: {step}; value: {value}; target: {target}")
-            },
+            PropertyValue::Number {
+                format,
+                min,
+                max,
+                step,
+                value,
+                target,
+            } => {
+                write!(
+                    f,
+                    "format: '{format}'; min: {min}; max: {max}; \
+                step: {step}; value: {value}; target: {target}"
+                )
+            }
             PropertyValue::Switch(v) => write!(f, "{v}"),
             PropertyValue::Light(n) => write!(f, "{n}"),
-            PropertyValue::Blob { format, url, size, value } => {
-                write!(f, "format: '{format}'; size: {size}; value: {}; url: '{}'", value.is_some(), "todo")
-            },
+            PropertyValue::Blob {
+                format,
+                url,
+                size,
+                value,
+            } => {
+                write!(
+                    f,
+                    "format: '{format}'; size: {size}; value: {}; url: '{}'",
+                    value.is_some(),
+                    "todo"
+                )
+            }
         }
     }
 }
@@ -111,9 +132,14 @@ impl PropertyValue {
         let text: String = if v.long_value.is_null() {
             buf_to_string(v.value)
         } else {
-            let buf = unsafe { ptr::slice_from_raw_parts(v.long_value as *const u8, v.length as usize).as_ref() };
+            let buf = unsafe {
+                ptr::slice_from_raw_parts(v.long_value as *const u8, v.length as usize).as_ref()
+            };
             let buf = buf.unwrap();
-            CStr::from_bytes_until_nul(buf).unwrap().to_string_lossy().to_string()
+            CStr::from_bytes_until_nul(buf)
+                .unwrap()
+                .to_string_lossy()
+                .to_string()
         };
         PropertyValue::Text(text)
     }
@@ -170,7 +196,8 @@ impl PropertyValue {
         }
     }
 
-    fn new(property_type: &PropertyType, item: &indigo_item) -> PropertyValue {
+    /// Create a new [PropertyValue] from an [indigo_item] struct.
+    fn sys(property_type: &PropertyType, item: &indigo_item) -> PropertyValue {
         match property_type {
             PropertyType::Text => PropertyValue::item_to_text(item),
             PropertyType::Number => PropertyValue::item_to_number(item),
@@ -205,16 +232,17 @@ pub struct PropertyItem {
 
 impl<'a> Display for PropertyItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f,"{}({}): '{}'", self.label, self.name, self.value)
+        write!(f, "{}({}): '{}'", self.label, self.name, self.value)
     }
 }
 
 impl<'a> PropertyItem {
-    fn new(prop: &'a PropertyType, item: &indigo_item) -> PropertyItem {
+    /// Create a new [PropertyItem] from an [indigo_item].
+    fn sys(prop: &'a PropertyType, item: &indigo_item) -> PropertyItem {
         let name = buf_to_string(item.name);
         let label = buf_to_string(item.label);
         let hints = buf_to_string(item.hints);
-        let value = PropertyValue::new(prop, item);
+        let value = PropertyValue::sys(prop, item);
 
         PropertyItem {
             name,
@@ -251,9 +279,8 @@ impl<'a> PropertyItem {
 /// > 	values
 /// > );
 /// > ```
-#[derive(Clone)]
-pub struct Property<'a> {
-    sys: &'a indigo_property,
+pub struct Property {
+    sys: *mut indigo_property,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
@@ -291,7 +318,7 @@ impl Blob {
     }
 }
 
-impl Display for Property<'static> {
+impl Display for Property {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -305,11 +332,9 @@ impl Display for Property<'static> {
     }
 }
 
-impl<'a> Property<'a> {
+impl Property {
     pub(crate) fn new(property: *mut indigo_property) -> Self {
-        Self {
-            sys: unsafe { &*property },
-        }
+        Self { sys: property }
     }
 
     // -- getters
@@ -322,71 +347,71 @@ impl<'a> Property<'a> {
     }
 
     pub fn name(&self) -> String {
-        buf_to_string(self.sys.name)
+        buf_to_string((unsafe { &*self.sys }).name)
     }
 
     pub fn device(&self) -> String {
-        buf_to_string(self.sys.device)
+        buf_to_string((unsafe { &*self.sys }).device)
     }
 
     pub fn group(&self) -> String {
-        buf_to_string(self.sys.group)
+        buf_to_string((unsafe { &*self.sys }).group)
     }
 
     pub fn label(&self) -> String {
-        buf_to_string(self.sys.label)
+        buf_to_string((unsafe { &*self.sys }).label)
     }
 
     pub fn hints(&self) -> String {
-        buf_to_string(self.sys.hints)
+        buf_to_string((unsafe { &*self.sys }).hints)
     }
 
     pub fn state(&self) -> PropertyState {
-        PropertyState::from_u32(self.sys.state).unwrap()
+        PropertyState::from_u32((unsafe { &*self.sys }).state).unwrap()
     }
 
     pub fn property_type(&self) -> PropertyType {
-        PropertyType::from_u32(self.sys.type_).unwrap()
+        PropertyType::from_u32((unsafe { &*self.sys }).type_).unwrap()
     }
 
     pub fn perm(&self) -> PropertyPermission {
-        PropertyPermission::from_u32(self.sys.perm).unwrap()
+        PropertyPermission::from_u32((unsafe { &*self.sys }).perm).unwrap()
     }
 
     /// Switch behaviour rule (for switch properties).
     pub fn rule(&self) -> SwitchRule {
-        SwitchRule::from_u32(self.sys.rule).unwrap()
+        SwitchRule::from_u32((unsafe { &*self.sys }).rule).unwrap()
     }
 
     /// `true`if `Property` is hidden/unused by  driver (for optional properties).
     pub fn hidden(&self) -> bool {
-        self.sys.hidden
+        (unsafe { &*self.sys }).hidden
     }
 
     /// `true` if `Property` is defined.
     pub fn defined(&self) -> bool {
-        self.sys.defined
+        (unsafe { &*self.sys }).defined
     }
 
     /// Number of allocated property items.
     pub fn items_allocated(&self) -> usize {
-        self.sys.allocated_count as usize
+        (unsafe { &*self.sys }).allocated_count as usize
     }
 
     /// Number of used property items.
     pub fn items_used(&self) -> usize {
-        self.sys.count as usize
+        (unsafe { &*self.sys }).count as usize
     }
 
-    pub fn update(&mut self, p: Property<'a>) -> Result<(), IndigoError> {
+    #[deprecated]
+    pub fn update(&mut self, p: Property) {
         self.sys = p.sys;
-        Ok(())
     }
 
-    pub fn items(&self) -> PropertyIterator<'a> {
-        PropertyIterator {
+    pub fn items(&self) -> PropertyItemIterator {
+        PropertyItemIterator {
             property_type: self.property_type(),
-            items: unsafe { self.sys.items.as_slice(self.sys.count as usize) },
+            items: unsafe { (&*self.sys).items.as_slice((&*self.sys).count as usize) },
             index: 0,
         }
     }
@@ -402,30 +427,32 @@ impl<'a> Property<'a> {
     */
 }
 
-impl<'a> IntoIterator for &'a Property<'a> {
+impl<'a> IntoIterator for &'a Property {
     type Item = PropertyItem;
-    type IntoIter = PropertyIterator<'a>;
+    type IntoIter = PropertyItemIterator<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        let items = unsafe { self.sys.items.as_slice(self.sys.count as usize) };
+        let items = unsafe { (&*self.sys).items.as_slice((&*self.sys).count as usize) };
         let property_type = self.property_type();
         Self::IntoIter {
-            property_type, items, index: 0,
+            property_type,
+            items,
+            index: 0,
         }
     }
 }
 
 /// Iterator for all `PropertyItem` items of this `Property`.
-pub struct PropertyIterator<'a> {
+pub struct PropertyItemIterator<'a> {
     property_type: PropertyType,
     items: &'a [indigo_item],
     index: usize,
 }
 
-impl<'a> Iterator for PropertyIterator<'a> {
+impl<'a> Iterator for PropertyItemIterator<'a> {
     type Item = PropertyItem;
     fn next(&mut self) -> Option<Self::Item> {
-        let result = PropertyItem::new(&self.property_type, &self.items[self.index]);
+        let result = PropertyItem::sys(&self.property_type, &self.items[self.index]);
         self.index += 1;
         Some(result)
     }

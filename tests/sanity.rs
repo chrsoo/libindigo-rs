@@ -1,7 +1,6 @@
 #![allow(dead_code, unused_variables)]
 
 use std::{
-    iter,
     sync::{Arc, Condvar, Mutex},
     thread::sleep,
     time::Duration,
@@ -23,12 +22,11 @@ fn start_stop_bus() -> Result<(), IndigoError> {
 }
 
 #[test]
-fn server_connection() -> Result<(), IndigoError> {
+fn bus_connect() -> Result<(), IndigoError> {
     Bus::set_log_level(LogLevel::Debug);
-    let mut server = ServerConnection::new("Indigo", "localhost", 7624)?;
-    server.connect()?;
+    let mut con = Bus::connect("INDIGO", "localhost", 7624)?;
     sleep(Duration::from_secs(1));
-    server.shutdown()?;
+    con.shutdown()?;
     Bus::stop()
 }
 
@@ -61,15 +59,15 @@ fn client_callbacks() -> Result<(), IndigoError> {
     Bus::start()?;
 
     let mut server = Bus::connect("INDIGO", "localhost", 7624)?;
-    let mut model = IndigoModel::new();
-    let mut client = Client::new("TestClient", &mut model)?;
+    let model = DefaultModel::new();
+    let mut client = Client::new("TestClient", model, false);
     let monitor = Arc::new(TestMonitor {
         visited: Arc::new((Mutex::new(false), Condvar::new())),
     });
 
     let m = monitor.clone();
     client.attach(move |c| {
-        debug!("detach callback closure called");
+        debug!("Attach callback closure called.");
         // c.attach(|c| c.get_all_properties())?;
         m.visit()
     })?;
@@ -78,36 +76,39 @@ fn client_callbacks() -> Result<(), IndigoError> {
     sleep(Duration::from_secs(3));
 
     {
-        let props = client.handler.props.read().unwrap();
-        props
-            .iter()
-            //.filter(|p| matches!(p.property_type(), PropertyType::Blob))
-            // create an iterator of type tuple (PropertyKey,PropertyItem)
-            .map(|(k, p)| iter::repeat(k).take(p.items_used()).zip(p.items()))
+        /*
+        let props = client
+            .model()
+            .devices()
+            .into_iter()
             .flatten()
-            .for_each(|(k, i)| debug!("{k}, {i}"));
+            .filter(|p| matches!(p.property_type(), PropertyType::Blob))
+            // create an iterator of type tuple (PropertyKey,PropertyItem)
+            //.map(|(k, p)| iter::repeat(k).take(p.items_used()).zip(p.items()))
+            //.flatten()
+            //.for_each(|(k, i)| debug!("{k}, {i}"));
+            .for_each(|p| debug!("{p}"));
 
         debug!("----------------");
-        client
-            .handler
-            .devices
-            .read()
-            .unwrap()
+        */
+        client.model(|m| Ok(
+            m.device_map()
             .iter()
-            .for_each(|(_, d)| debug!("{}", d));
+            .for_each(|(_, d)| debug!("{}", d))
+        ))?;
+
         client.blobs().iter().for_each(|b| debug!("{:?}", b));
-        client
-            .handler
-            .devices
-            .read()
-            .unwrap()
+
+        client.model(|m| Ok(
+            m.device_map()
             .iter()
-            .for_each(|(k, d)| debug!("Interfaces: {:?}", d.interfaces()));
+            .for_each(|(k, d)| debug!("Interfaces: {:?}", d.interfaces()))
+        ))?;
     }
 
     let m = monitor.clone();
     client.detach(move |c| {
-        debug!("detach callback closure called");
+        debug!("Detach callback closure called.");
         m.visit()
     })?;
     monitor.wait()?;

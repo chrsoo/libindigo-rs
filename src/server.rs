@@ -1,6 +1,5 @@
 use std::{
-    default,
-    ffi::{c_int, CStr, CString},
+    ffi::c_int,
     ptr, thread::sleep, time::Duration,
 };
 

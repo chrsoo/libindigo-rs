@@ -1,4 +1,6 @@
 #![allow(dead_code, unused_variables)]
+#![cfg_attr(feature = "nightly", feature(mapped_lock_guards))]
+
 mod bus;
 mod client;
 mod device;
@@ -7,20 +9,23 @@ mod property;
 mod server;
 
 pub use bus::Bus;
-pub use client::CallbackHandler;
 pub use client::Client;
 pub use device::Device;
-use log::warn;
-pub use model::IndigoModel;
+pub use model::DefaultModel;
+pub use model::Model;
+use parking_lot::RwLockWriteGuard;
 pub use property::Property;
-pub use property::PropertyKey;
 pub use property::PropertyItem;
-pub use property::PropertyType;
+pub use property::PropertyKey;
 pub use property::PropertyState;
+pub use property::PropertyType;
 pub use property::PropertyValue;
 pub use server::ServerConnection;
 
-use std::borrow::Cow;
+use log::warn;
+use std::collections::hash_map::Values;
+use std::collections::hash_map::ValuesMut;
+use std::collections::HashMap;
 use std::ffi::c_char;
 use std::ffi::c_uint;
 use std::ffi::CStr;
@@ -36,6 +41,30 @@ use std::{
 
 use enum_primitive::*;
 use libindigo_sys::{self, *};
+
+pub type StringMap<'a, T> = HashMap<String, T>;
+
+pub struct GuardedStringMap<'a, T> {
+    lock: RwLockWriteGuard<'a, StringMap<'a, T>>,
+}
+
+impl<'a, 'b: 'a, T: 'a> IntoIterator for &'b mut GuardedStringMap<'a, T> {
+    type Item = &'a mut T;
+    type IntoIter = ValuesMut<'a, String, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.lock.values_mut()
+    }
+}
+
+impl<'a, 'b: 'a, T: 'a> IntoIterator for &'b GuardedStringMap<'a, T> {
+    type Item = &'a T;
+    type IntoIter = Values<'a, String, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.lock.values()
+    }
+}
 
 #[derive(Debug)]
 pub enum IndigoError {
@@ -168,14 +197,14 @@ impl BusError {
     }
 }
 
+// TODO create version that always succeeds and does not return Result..
 fn str_to_buf<const N: usize>(s: &str) -> Result<[c_char; N], IndigoError> {
     let s = CString::new(s).expect("a string without \\0 bytes");
     let mut buf = [0; N];
     let bytes = s.as_bytes_with_nul();
     if bytes.len() > N {
         Err(IndigoError::Other(format!(
-            "The string's byte length + 1 must be less or equal to {}",
-            N
+            "The string's byte length + 1 must be less or equal to {N}"
         )))
     } else {
         for (i, b) in bytes.iter().enumerate() {
@@ -194,13 +223,15 @@ fn buf_to_string<const N: usize>(buf: [c_char; N]) -> String {
 fn buf_to_str<'a, const N: usize>(buf: [c_char; N]) -> &'a str {
     let ptr = buf.as_ptr();
     let cstr = unsafe { CStr::from_ptr(ptr) };
-    cstr.to_str().inspect_err(|e| warn!("{}", e)).unwrap_or("<invalid>")
+    cstr.to_str()
+        .inspect_err(|e| warn!("{}", e))
+        .unwrap_or("<invalid>")
 }
 
-fn const_to_string(name: &[u8]) -> Cow<str> {
+fn const_to_string(name: &[u8]) -> String {
     // if the unwrap panics we are calling it with a faulty argument and it is a bug...
     let name = CStr::from_bytes_with_nul(name).unwrap();
-    name.to_string_lossy()
+    name.to_string_lossy().into_owned()
 }
 
 fn ptr_to_string(message: *const c_char) -> Option<String> {
@@ -229,9 +260,13 @@ fn str_to_buf<'a,T>(value: &'a str, _len: u16) -> Result<[i8; 128], IndigoError>
 }
 */
 
-#[derive(Debug, strum_macros::Display)]
+/// Types of request for [Client], [ServerConnection], or [Device].
+#[derive(Debug, PartialEq, Eq, Clone, strum_macros::Display)]
 enum IndigoRequest {
-    Connect, Disconnect, Attach, Detach
+    Connect,
+    Disconnect,
+    Attach,
+    Detach,
 }
 
 #[cfg(test)]

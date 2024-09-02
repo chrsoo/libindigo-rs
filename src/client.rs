@@ -1,107 +1,61 @@
 use std::{
-    collections::HashMap, mem::forget, ops::Deref, os::raw::c_void, ptr::{self}, sync::{Arc, Mutex, MutexGuard, RwLock}
+    marker::PhantomData, os::raw::c_void, ptr
 };
 
 use crate::*;
 use bus::map_indigo_result;
-use device::Device;
+use function_name::named;
 use libindigo_sys::{self, *};
 use log::{debug, error, info, trace};
+use parking_lot::{lock_api::RwLockWriteGuard, RawRwLock, RwLock};
 use property::{Blob, BlobMode};
 
-/// Callback methods to handle INDIGO bus events.
-pub trait CallbackHandler<'a> {
-    /// Called each time the property of a device is defined or its definition requested.
-    fn on_define_property(
-        &'a mut self,
-        c: &mut Client<'a, impl CallbackHandler<'a>>,
-        d: Device<'a>,
-        p: Property<'a>,
-        msg: Option<String>,
-    ) -> Result<(), IndigoError> {
-        debug!(
-            "Device: '{}'; Property '{}'; DEFINED with message '{:?}' defined for ",
-            d.name(),
-            p.name(),
-            msg
-        );
-        Ok(())
-    }
-
-    /// Called each time a property is updated for a device.
-    fn on_update_property(
-        &mut self,
-        c: &mut Client<'a, impl CallbackHandler<'a>>,
-        d: Arc<Device>,
-        p: Property,
-        msg: Option<String>,
-    ) -> Result<(), IndigoError> {
-        debug!(
-            "Device: '{}'; Property '{}'; UPDATED with message '{:?}' defined for ",
-            d.name(),
-            p.name(),
-            msg
-        );
-        Ok(())
-    }
-
-    /// Called each time a property is deleted.
-    fn on_delete_property(
-        &mut self,
-        c: &mut Client<'a, impl CallbackHandler<'a>>,
-        d: Device,
-        p: Property,
-        msg: Option<String>,
-    ) -> Result<(), IndigoError> {
-        debug!(
-            "Device: '{}'; Property '{}'; DELETED with message '{:?}' defined for ",
-            d.name(),
-            p.name(),
-            msg
-        );
-        Ok(())
-    }
-
-    /// Called each time message has been sent.
-    // TODO Move to client and use closure instead.
-    fn on_send_message(
-        &mut self,
-        c: &mut Client<'a, impl CallbackHandler<'a>>,
-        d: Device,
-        msg: String,
-    ) -> Result<(), IndigoError> {
-        debug!("Message '{:?}' SENT", msg);
-        Ok(())
-    }
+struct ClientState <'a, T>
+where
+    T: Model<'a>,
+{
+    model: T,
+    request: Option<IndigoRequest>,
+    callback: Box<dyn FnMut(&mut Client<'a, T>) -> Result<(), IndigoError> + 'a>,
+    ref_count: u32,
 }
 
-
-type Callback<'a,T> = Box<dyn FnMut(&mut Client<'a,T>) -> Result<(),IndigoError> + 'a>;
-
-/// Client to manage devices attached to the INDIGO bus.
-pub struct Client<'a, T: CallbackHandler<'a>> {
+/// Client to manage devices attached to the INDIGO [Bus].
+pub struct Client<'a, T>
+where
+    T: Model<'a>,
+{
     /// System record for INDIGO clients.
-    sys: *mut indigo_client,
-    request: Mutex<Option<IndigoRequest>>,
-    callback: Box<dyn FnMut(&mut Client<'a,T>) -> Result<(),IndigoError> + 'a>,
-    devices: RwLock<HashMap<String, Arc<Device<'a>>>>,
-    pub handler: &'a mut T,
+    sys: &'a indigo_client,
+    model: &'a PhantomData<T>
 }
 
 impl<'a, T> Client<'a, T>
 where
-    T: CallbackHandler<'a>,
+    T: Model<'a, M = T> + 'a,
 {
-    /// Create a new, detached client.
-    pub fn new(name: &str, handler: &'a mut T) -> Result<Box<Self>, IndigoError> {
-        // Put the indigo_client in a Box to ensure a stable reference, cf.
-        // https://users.rust-lang.org/t/unwanted-copies-of-values-when-using-unsafe-pointers-for-ffi-bindings/115443
-        let mut indigo_client = Box::new(indigo_client {
-            name: str_to_buf(name)?,
-            // this client is running locally
-            is_remote: false,
-            // initially null pointer to handle the circular reference
-            client_context: std::ptr::null_mut(),
+    /// Create new client for a model. Clients running locally in the same process
+    /// as the INDIGO [Bus] should set remote to `false` and clients running in a
+    /// remote process should set remote to `true`.
+    pub fn new(name: &str, model: T, remote: bool) -> Self {
+
+        let state = Box::new(RwLock::new(ClientState {
+            model,
+            request: None,
+            callback: Box::new(|c|
+                // If this callback is invoked it means that we received an INDIGO callback
+                // without having called invoke or connect on the client, or that the code
+                // has failed to store the callback on the right client object.
+                Err(IndigoError::Other(format!("Initial callback placeholder that should never be called!")))),
+            ref_count: 1,
+        }));
+
+        let indigo_client = Box::new(indigo_client {
+            name: str_to_buf(name).unwrap(), // TODO remove ult
+            is_remote: remote,
+            // unbox the mutex state and create a raw ptr to the state mutex
+            //client_context: (&mut *state) as *mut _ as *mut c_void,
+            client_context: Box::into_raw(state) as *mut c_void,
             // last result of a bus operation, assume all is OK from the beginning
             last_result: indigo_result_INDIGO_OK,
             version: indigo_version_INDIGO_VERSION_CURRENT,
@@ -115,97 +69,150 @@ where
             detach: Some(Self::on_detach),
         });
 
-        // https://users.rust-lang.org/t/unwanted-copies-of-values-when-using-unsafe-pointers-for-ffi-bindings/115443
-        // put the Client in a Box to ensure a stable reference.
-        let mut client = Box::new(Client {
-            // dereference the Box
-            sys: (&mut *indigo_client) as *mut _ as *mut indigo_client,
-            request: Mutex::new(None),
-            callback: Box::new(|c|
-                // If this callback is invoked it means that we received an INDIGO callback
-                // without having called invoke or connect on the client, or that the code
-                // has failed to store the callback on the right client object.
-                Err(IndigoError::Other(format!("Initial callback placeholder should never be called!")))
-            ),
-            // sys: addr_of_mut!(indigo_client),
-            devices: RwLock::new(HashMap::new()),
-            handler: handler,
-        });
-        // store a raw pointer to the safe Client on the unsafe indigo_client's context.
-        indigo_client.client_context = (&mut *client) as *mut _ as *mut c_void;
+        // get ptr reference to the indigo_client by dereferencing the Box
+        let ptr = Box::into_raw(indigo_client);
+        trace!("indigo_client ptr: {:?}", ptr);
+        unsafe {
+            trace!("indigo_client ptr: {:p}", &*ptr);
+        }
 
-        // prevent rust from reclaiming the memory of indigo_client when dropping the reference on exit.
-        forget(indigo_client);
-
-        Ok(client)
+        Client {
+            sys: unsafe { &*ptr },
+            model: &PhantomData,
+        }
     }
 
-    /// Attach the client to the INDIGO bus.
-    // pub fn attach(&self) -> Result<(), IndigoError> {
-    //     let name =  buf_to_str(unsafe { &*self.sys }.name);
-    //     info!("Attaching client '{}'...", name);
-    //     let result = unsafe { indigo_attach_client(self.sys) };
-    //     map_indigo_result(result, "indigo_attach_client")
-    // }
+    /// Convenience function for acquiring a write lock on the client state that traces before and
+    /// after acquiring the lock - helps with debugging.
+    fn aquire_write_lock(&mut self) -> RwLockWriteGuard<RawRwLock, ClientState<'a, T>> {
+        let name = self.name();
+        trace!("'{}' - acquiring model write lock...", name);
+        let lock = self.state().write();
+        trace!("'{}' - model write lock acquired.", name);
+        lock
+    }
 
-    /// Attach the client to the INDIGO bus and invoke the callback closure when done. In case
-    /// of a callback error, the result will be logged.
-    // TODO Define what happens if an error is returned to the INDIGO bus and adapt the code.
-    pub fn attach(&mut self, f: impl FnMut(&mut Client<'a,T>) -> Result<(),IndigoError> + 'a)
-    -> Result<(), IndigoError> {
-        trace!("Attaching client '{}'...", self);
+    fn register_request<F>(&mut self, request: IndigoRequest, f: F) -> Result<(), IndigoError>
+    where F: FnMut(&mut Client<'a, T>) -> Result<(), IndigoError> + 'a {
+        trace!("'{self}' - registering {request} request.");
+        let name = self.name();
+        // let name = buf_to_str(self.sys.name);
+        let mut lock = self.aquire_write_lock();
 
-        let mut r = self.request.lock().unwrap();
-        if let Some(request) = &mut *r {
-            return Err(IndigoError::Other(format!(
-                "{} request in progress for client '{}'.", request, self,
-            )));
+        // check if a request is already in progress
+        if let Some(request) = &lock.request {
+            return Err(IndigoError::Other(format!("'{name}' - {request} request already in progress.")));
         }
-        *r = Some(IndigoRequest::Attach);
-        self.callback = Box::new(f);
-        drop(r);
 
-        let result = unsafe { indigo_attach_client(self.sys) };
+        // signal that a request is ongoing
+        lock.request = Some(request.clone());
+        // store the closure in a Box to create a stable reference
+        lock.callback = Box::new(f);
+        debug!("'{name}' - {request} request registered.");
+        Ok(())
+    }
+
+    /// Attach the client to the INDIGO bus and invoke the callback closure when done.
+    pub fn attach(
+        &mut self,
+        f: impl FnMut(&mut Client<'a, T>) -> Result<(), IndigoError> + 'a,
+    ) -> Result<(), IndigoError> {
+
+        self.register_request(IndigoRequest::Attach, f)?;
+
+        trace!("'{}' - attaching client...", self);
+        // request that the client is attached to the bus
+        let ptr = ptr::addr_of!(*self.sys) as *mut indigo_client;
+        let result = unsafe { indigo_attach_client(ptr) };
         map_indigo_result(result, "indigo_attach_client")
     }
 
-    /// Detach the client from the INDIGO bus.
-    pub fn detach(&mut self, f: impl FnMut(&mut Client<'a,T>) -> Result<(),IndigoError> + 'a)
-    -> Result<(), IndigoError> {
-        trace!("Detaching all devices '{}'...", self);
-        // TODO detach all attached devices
+    /// Detach the client from the INDIGO bus and invoke the callback closure when done.
+    pub fn detach(
+        &mut self,
+        f: impl FnMut(&mut Client<'a, T>) -> Result<(), IndigoError> + 'a,
+    ) -> Result<(), IndigoError> {
 
-        trace!("Detaching client '{}'...", self);
-        let mut r = self.request.lock().unwrap();
-        if let Some(request) = &mut *r {
-            return Err(IndigoError::Other(format!(
-                "{} request in progress for client '{}'.", request, self,
-            )));
+        if let Err(e) = self.detach_all_devices() {
+            warn!("'{}' - could not deatch all devices: {e}", self);
         }
-        *r = Some(IndigoRequest::Detach);
-        self.callback = Box::new(f);
-        drop(r);
 
-        let result = unsafe { indigo_detach_client(self.sys) };
+        self.register_request(IndigoRequest::Detach, f)?;
+
+        trace!("'{}' - detaching client...", self);
+        let ptr = ptr::addr_of!(*self.sys) as *mut indigo_client;
+        let result = unsafe { indigo_detach_client(ptr) };
         map_indigo_result(result, "indigo_detach_client")
     }
 
-    /// Get all properties from the devices attached to the INDIGO bus.
-    pub fn get_all_properties(&mut self) -> Result<(), IndigoError> {
-        let name = buf_to_str(unsafe { &*self.sys }.name);
-        debug!("Getting all properties for '{}'...", name);
+    /// Define all properties for devices attached to the INDIGO bus.
+    pub fn define_properties(&mut self) -> Result<(), IndigoError> {
+        debug!("Requesting all properties for '{}'...", buf_to_str(self.sys.name));
         unsafe {
-            let p = std::ptr::addr_of!(INDIGO_ALL_PROPERTIES) as *const _ as *mut indigo_property;
+            let p = ptr::addr_of!(INDIGO_ALL_PROPERTIES) as *const _ as *mut indigo_property;
             //let p = &mut INDIGO_ALL_PROPERTIES as &mut indigo_property;
-            let result = indigo_enumerate_properties(self.sys, p);
+            let ptr = ptr::addr_of!(*self.sys) as *mut indigo_client;
+            let result = indigo_enumerate_properties(ptr, p);
             map_indigo_result(result, "indigo_enumerate_properties")
         }
     }
 
+    /*
+    pub fn connect(&mut self, d: &mut Device, f: &dyn Fn(Result<(),IndigoError>) ) -> Result<(),IndigoError> {
+        let c = addr_of_mut!(self.sys);
+        let d = d.addr_of_name();
+        let result = unsafe { indigo_device_connect(c, d) };
+        map_indigo_result(result, "indigo_device_connect")
+    }
+    */
+
+    // TODO refactor connect and disconnect in client
+    /// Connect a device from the INDIGO bus.
+    pub fn connect(
+        &mut self,
+        d: &mut Device<'a>,
+        f: impl FnOnce(Result<(), IndigoError>) + 'a,
+    ) -> Result<(), IndigoError> {
+        let r = d.request(IndigoRequest::Connect, f)?;
+        trace!("Connecting device '{}'...", d);
+        let n = d.addr_of_name();
+        let ptr = ptr::addr_of!(*self.sys) as *mut indigo_client;
+        let result = unsafe { indigo_device_connect(ptr, n) };
+        map_indigo_result(result, "indigo_device_connect")
+    }
+
+
+    /// Disconnect a device from the INDIGO bus.
+    pub fn disconnect(
+        &mut self,
+        d: &mut Device<'a>,
+        f: impl FnOnce(Result<(), IndigoError>) + 'a,
+    ) -> Result<(), IndigoError> {
+        let r = d.request(IndigoRequest::Disconnect, f)?;
+        trace!("Disconnecting device '{}'...", d);
+        let n = d.addr_of_name();
+        let ptr = ptr::addr_of!(*self.sys) as *mut indigo_client;
+        let result = unsafe { indigo_device_connect(ptr, n) };
+        map_indigo_result(result, "indigo_device_connect")
+    }
+
     // -- getters
 
-    pub fn name(self) -> &'a str {
-        buf_to_str(unsafe { &*self.sys }.name)
+    fn state<'b>(&'b mut self) -> &'b mut RwLock<ClientState<'a,T>> {
+        unsafe {
+            &mut *(self.sys.client_context as *mut RwLock<ClientState<'a,T>>)
+        }
+    }
+
+    pub fn name(&self) -> String {
+        buf_to_string(self.sys.name)
+    }
+
+    pub fn model<F,R>(&mut self, f: F) -> Result<R, IndigoError>
+    where F: FnOnce(&mut T) -> Result<R, IndigoError> {
+        let mut lock = self.aquire_write_lock();
+        let model = &mut lock.model;
+        f(model)
     }
 
     pub fn blobs(&self) -> Result<Vec<Blob>, IndigoError> {
@@ -232,264 +239,299 @@ where
         Ok(blobs)
     }
 
-    // -- libindigo-sys unsafe callback methods that delegate to the CallbackHandler implementation.
+    unsafe fn callback(client: *mut indigo_client, expected: &IndigoRequest) -> indigo_result {
+        let name = buf_to_str((unsafe { &*client }).name);
+        let mut lock = Self::write_lock(client);
 
-    unsafe extern "C" fn on_attach(client: *mut indigo_client) -> indigo_result {
-        trace!("INDIGO 'on_attach' callback.");
-
-        let c1: &mut Client<T> = get_client(client);
-        let c2: &mut Client<T> = get_client(client);
-
-        info!("Client '{}' attached.", c1);
-
-        // Lock and unwrap the request object.
-        trace!("Obtaining request lock...");
-        let mut request = c1.request.lock().unwrap();
-        trace!("Request lock obtained.");
-        if let Some(r) = request.deref() {
-            match r {
-                IndigoRequest::Attach => (),
-                _ => warn!("Indigo callback 'on_attach' called for {} request; expected {}.", r, IndigoRequest::Attach),
+        if let Some(request) = &lock.request {
+            if request != expected {
+                warn!("Indigo callback called for a {request} request for '{name}'; expected {expected}.")
             }
             // Reset the request.
-            *request = None;
+            lock.request = None;
         } else {
-            warn!("INDIGO 'on_attach' called without an active request.");
+            warn!("INDIGO callback for '{name}' without an active request.");
         }
 
-        trace!("Notifying the client attach requestor...");
-        if let Err(e) = (c1.callback)(c2) {
+        let c = Self::try_from(client);
+        if let Err(e) = c {
+            error!("INDIGO {expected} callback for '{name}' failed as the client state could not be restored.");
+            return e.into();
+        }
+
+        trace!("Notifying the client requestor...");
+
+        if let Err(e) = (lock.callback)(&mut c.unwrap()) {
             error!("Callback notification error: '{}'.", e);
             if let IndigoError::Bus(b) = e {
                 return b.into();
             }
             return BusError::Failed.into();
         }
-        debug!("Client attach requestor notified.");
+        debug!("Client '{name}' notified for {expected}.");
 
-        // If this error is called we are receiving callbacks without first calling attach,
-        // i.e. we the callback from INDIGO happens more than once for any given attach request.
-        c1.callback = Box::new(|c1|
-            Err(IndigoError::Other(format!("Spurious callback notification!")))
-        );
+        lock.callback = Box::new(|c| {
+            // If this error is returned we are receiving callbacks without first calling attach,
+            // i.e. we the callback from INDIGO happens more than once for any given attach request.
+            Err(IndigoError::Other(format!(
+                "Spurious callback notification!"
+            )))
+        });
 
         indigo_result_INDIGO_OK
     }
 
+    // -- libindigo-sys unsafe callback methods that delegate to the CallbackHandler implementation.
+
+    #[named]
+    unsafe extern "C" fn on_attach(client: *mut indigo_client) -> indigo_result {
+        trace!("INDIGO '{}' callback.", function_name!());
+        info!("'{}' attached.", buf_to_str((*client).name));
+        Self::callback(client, &IndigoRequest::Attach)
+    }
+
+    #[named]
     unsafe extern "C" fn on_detach(client: *mut indigo_client) -> indigo_result {
-        trace!("INDIGO 'on_detach' callback.");
-
-        let c1: &mut Client<T> = get_client(client);
-        let c2: &mut Client<T> = get_client(client);
-
-        info!("Client '{}' detached.", &c1);
-
-        // Lock and unwrap the request object.
-        trace!("Obtaining request lock...");
-        let mut request = c1.request.lock().unwrap();
-        trace!("Request lock obtained.");
-        if let Some(r) = request.deref() {
-            match r {
-                IndigoRequest::Detach => (),
-                _ => warn!("Indigo callback 'on_detach' called for {} request; expected {}.", r, IndigoRequest::Detach),
-            }
-            // Reset the request.
-            *request = None;
-        } else {
-            warn!("INDIGO 'on_detach' called without an active request");
-        }
-
-        trace!("Notifying the client detach requestor...");
-        if let Err(e) = (c1.callback)(c2) {
-            error!("Callback notification error: '{}'.", e);
-            if let IndigoError::Bus(b) = e {
-                return b.into();
-            }
-            return BusError::Failed.into();
-        }
-        debug!("Client detach requestor notified.");
-
-        // If this error is called we are receiving callbacks without first calling attach,
-        // i.e. we the callback from INDIGO happens more than once for any given attach request.
-        c1.callback = Box::new(|c1|
-            Err(IndigoError::Other(format!("Spurious callback notification!")))
-        );
-
-        indigo_result_INDIGO_OK
+        trace!("INDIGO '{}' callback.", function_name!());
+        info!("'{}' detached.", buf_to_str((*client).name));
+        Self::callback(client, &IndigoRequest::Detach)
     }
 
     // TODO consolidate duplicate code for property define, update, and delete callbacks
+    #[named]
     unsafe extern "C" fn on_define_property(
         client: *mut indigo_client,
         device: *mut indigo_device,
         property: *mut indigo_property,
         message: *const i8,
     ) -> indigo_result {
-        trace!("INDIGO 'on_define_property' callback.");
+        trace!("INDIGO '{}' callback.", function_name!());
 
-        let c1: &mut Client<T> = get_client(client);
-        let c2: &mut Client<T> = get_client(client);
-        let d = Device::new(c1.sys, device);
-        let p = Property::new(property);
-        let msg = ptr_to_string(message);
+        let name = buf_to_str((unsafe { &*client }).name);
+        let lock = Self::write_lock(client);
 
-        if let Err(e) = c1.handler.on_define_property(c2, d, p, msg) {
-            error!("Handler error: '{}'.", e);
-            if let IndigoError::Bus(b) = e {
-                return b.into();
-            }
-            return BusError::Failed.into();
+        let c = Self::try_from(client);
+        if let Err(e) = c {
+            error!(
+                "INDIGO {} callback for '{name}' failed as the client state could not be restored.",
+                function_name!()
+            );
+            return e.into();
         }
+
+        // TODO upsert device
+
+        // TODO add property to device
+        let p = Property::new(property);
+
+        // TODO notify model
+
+        let msg = ptr_to_string(message);
 
         indigo_result_INDIGO_OK
     }
 
-    fn upsert_device(&self, d: *mut indigo_device) -> Arc<Device<'a>> {
-        let mut devices = self.devices.write().unwrap();
-        let name = buf_to_string((unsafe { &*d }).name);
-        devices.entry(name).or_insert(Arc::new(Device::new(self.sys, d))).clone()
-    }
+    // fn upsert_device(&self, d: *mut indigo_device) -> Arc<Device<'a>> {
+    //     let mut devices = self.devices.write().unwrap();
+    //     let name = buf_to_string((unsafe { &*d }).name);
+    //     devices
+    //         .entry(name)
+    //         .or_insert(Device::new(self.sys, d))
+    //         .clone()
+    // }
 
+    #[named]
     unsafe extern "C" fn on_update_property(
         client: *mut indigo_client,
         device: *mut indigo_device,
         property: *mut indigo_property,
         message: *const i8,
     ) -> indigo_result {
-        trace!("INDIGO 'on_update_property' callback.");
+        trace!("INDIGO '{}' callback.", function_name!());
 
-        let c1: &mut Client<T> = get_client(client);
-        let c2: &mut Client<T> = get_client(client);
-        let d = c1.upsert_device(device);
+        // TODO upsert device and log warning if it does not exist
+
+        // TODO upsert property to device and log warning if it does not exist
         let p = Property::new(property);
-        let msg = ptr_to_string(message);
 
-        if let Err(e) = c1.handler.on_update_property(c2, d, p, msg) {
-            error!("Handler error: '{}'.", e);
-            if let IndigoError::Bus(b) = e {
-                return b.into();
-            }
-            return BusError::Failed.into();
-        }
+        // TODO notify model
+
+        let msg = ptr_to_string(message);
 
         indigo_result_INDIGO_OK
     }
 
+    #[named]
     unsafe extern "C" fn on_delete_property(
         client: *mut indigo_client,
         device: *mut indigo_device,
         property: *mut indigo_property,
         message: *const ::std::os::raw::c_char,
     ) -> indigo_result {
-        trace!("INDIGO 'on_delete_property' callback.");
+        trace!("INDIGO '{}' callback.", function_name!());
 
-        let c1: &mut Client<T> = get_client(client);
-        let c2: &mut Client<T> = get_client(client);
-        let d = Device::new(c1.sys, device);
+        // TODO upsert device and log warning if it does not exist
+
+        // TODO upsert property to device and log warning if it does not exist
         let p = Property::new(property);
-        let msg = ptr_to_string(message);
 
-        if let Err(e) = c1.handler.on_delete_property(c2, d, p, msg) {
-            error!("Handler error: '{}'.", e);
-            if let IndigoError::Bus(b) = e {
-                return b.into();
-            }
-            return BusError::Failed.into();
-        }
+        // TODO notify model
+
+        let msg = ptr_to_string(message);
 
         indigo_result_INDIGO_OK
     }
 
+    #[named]
     unsafe extern "C" fn on_send_message(
         client: *mut indigo_client,
         device: *mut indigo_device,
         message: *const ::std::os::raw::c_char,
     ) -> indigo_result {
-        trace!("INDIGO 'on_send_message' callback.");
+        trace!("INDIGO '{}' callback.", function_name!());
 
-        let c1: &mut Client<T> = get_client(client);
-        let c2: &mut Client<T> = get_client(client);
-        let d = Device::new(c1.sys, device);
-        let msg = ptr_to_string(message).unwrap();
+        // TODO upsert device and log warning if it does not exist
+        let msg = ptr_to_string(message);
 
-        if let Err(e) = c1.handler.on_send_message(c2, d, msg) {
-            error!("Handler error: '{}'.", e);
-            if let IndigoError::Bus(b) = e {
-                return b.into();
-            }
-            return BusError::Failed.into();
-        }
+        // TODO notify model
 
         indigo_result_INDIGO_OK
     }
 
-    fn request(&self, request: IndigoRequest) -> MutexGuard<Option<IndigoRequest>>{
-        // Lock and unwrap the request object.
-        trace!("Obtaining request lock...");
-        let mut request = self.request.lock().unwrap();
-        trace!("Request lock obtained.");
-        if let Some(r) = request.deref() {
-            match r {
-                IndigoRequest::Detach => (),
-                _ => warn!("Indigo callback 'on_detach' called for {} request; expected {}.", r, IndigoRequest::Detach),
-            }
-            // Reset the request.
-            *request = None;
+    /*
+    fn get_client_state<'b>(client: *mut indigo_client) -> &'b mut RwLock<ClientState<'a, T>> {
+        // https://stackoverflow.com/a/24191977/51016
+        unsafe { &mut *((*client).client_context as *mut RwLock<ClientState<T>>) }
+    }
+    */
+
+    fn write_lock<'b>(client: *mut indigo_client) -> RwLockWriteGuard<'b,RawRwLock, ClientState<'a, T>> {
+        let c = unsafe { &*client };
+        let name = buf_to_str(c.name);
+        // https://stackoverflow.com/a/24191977/51016
+        let state = unsafe { &mut *(c.client_context as *mut RwLock<ClientState<T>>) };
+
+        trace!("'{}' - acquiring model write lock...", name);
+        let lock = state.write();
+        trace!("'{}' - model write lock acquired.", name);
+        lock
+    }
+
+    fn aquire_write_lock2<'b>(c: &'b mut Client<'a,T>) -> RwLockWriteGuard<'b,RawRwLock, ClientState<'a, T>> {
+        c.state().write()
+    }
+
+    /// Detach all Indigo Devices managed by the Model from the INDIGO bus.
+    fn detach_all_devices(&mut self) -> Result<(), IndigoError> {
+        //trace!("Detaching all devices '{}'...", self);
+        // TODO count and report the total of elements
+        // TODO report busy elements that are busy and connectivity cannot be decided, report as err
+
+        let state = unsafe { &mut *(self.sys.client_context as *mut RwLock<ClientState<'a,T>>) };
+        let lock = state.write();
+
+        let (con_ok, con_err, dis_ok, dis_err) = lock
+            .model
+            .device_map()
+            .values_mut()
+            // yields the result of (connection_result, disconnect_result)
+            .map(|d| match d.connection_status() {
+                Ok(connected) => {
+                    if connected {
+                        // conneted, disconnect and return the result
+                        (Ok(()), Some(self.disconnect(d, |r| ())))
+                    } else {
+                        // not connected, don't try to disconnect
+                        (Ok(()), None)
+                    }
+                }
+                // connection status is not ok, don't try to disconnect
+                Err(e) => (Err(e), None),
+            })
+            .fold(
+                (0, 0, 0, 0),
+                |(con_ok, con_err, dis_ok, dis_err), (c, d)| {
+                    match (c, d) {
+                        (Ok(_), None) => (con_ok + 1, con_err, dis_ok, dis_err), // device not connected
+                        (Err(_), None) => (con_ok, con_err + 1, dis_ok, dis_err), // connection not ok, so no attempt
+                        (Ok(_), Some(r)) => {
+                            // tried to disconnect
+                            if let Ok(_) = r {
+                                // successful disconnection
+                                (con_ok, con_err, dis_ok + 1, dis_err)
+                            } else {
+                                // failed disconnection
+                                (con_ok, con_err, dis_ok, dis_err + 1)
+                            }
+                        }
+                        // no attempt should have been made, this is a bug.
+                        (Err(_), Some(_)) => {
+                            panic!("Tried to disconnect a device with a connection that was not ok")
+                        }
+                    }
+                },
+            );
+
+        let total = con_ok + con_err;
+        info!(
+            "Devices: {}; Connection: [OK: {}; Error: {}]; Disconnect: [OK: {}; Err: {}]",
+            total, dis_ok, dis_err, con_ok, con_err
+        );
+
+        let failed = con_err + dis_err;
+        if failed == 0 {
+            Ok(())
         } else {
-            warn!("INDIGO 'on_attach' called without an active request.");
+            Err(IndigoError::Other(format!(
+                "Failed to disconnect {failed} devices"
+            )))
         }
-        request
+    }
+
+    fn dec_ref(&mut self) -> u32 {
+        let mut lock = self.aquire_write_lock();
+        lock.ref_count -= 1;
+        return lock.ref_count;
     }
 }
 
-/// Return a mutable reference to `Client` from the pointer stored in the `context` field of `indigo_client`.
-unsafe fn get_client<'a, T>(client: *mut indigo_client) -> &'a mut Client<'a, T>
-where
-    T: CallbackHandler<'a>,
-{
-    // https://stackoverflow.com/a/24191977/51016
-    let ptr = (*client).client_context;
-    let c: &mut Client<T> = &mut *(ptr as *mut Client<T>);
-    c
-}
-
-impl<'a,T: CallbackHandler<'a>> Display for Client<'a,T> {
+impl<'a, T: Model<'a>> Display for Client<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name =  buf_to_str(unsafe { &*self.sys }.name);
+        let name = buf_to_str(self.sys.name);
         write!(f, "{name}")
     }
 }
 
 // /// Ensure that Client is detached from the INDIGO bus and free any resources associated with the client.
-// // TODO find out if detaching is a good idea and add any missing resources that needs to be cleaned up.
-impl<'a, T: CallbackHandler<'a>> Drop for Client<'a, T> {
+// // TODO figure out how to clean up sys only after all clients are gone, somehow use Arc?
+/*
+impl<'a,T> Drop for Client<'a,T>
+where T: Model<'a> {
+
     fn drop(&mut self) {
-        unsafe { free(self.sys as *mut c_void) };
+        let ref_count = self.dec_ref();
+        drop(lock);
+        // TODO drop sys
+    }
+}
+*/
+
+impl<'a,T> TryFrom<*mut indigo_client> for Client<'a,T>
+where T: Model<'a> {
+    type Error = BusError;
+
+    fn try_from(value: *mut indigo_client) -> Result<Self, Self::Error> {
+        let sys = unsafe { &*value };
+        if sys.client_context == ptr::null_mut() {
+            warn!("Can not restore Client state as client_context is null");
+            Err(BusError::NotFound)
+        } else {
+            Ok(Client { sys, model: &PhantomData })
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
-    struct Test {
-        visited: bool,
-    }
-    impl<'a> CallbackHandler<'a> for Test { }
-
-    #[test]
-    fn test_callback() -> Result<(), IndigoError> {
-        let handler = &mut Test { visited: false };
-        let client = Client::new("test", handler)?;
-        // client.attach()?;
-
-        let ptr = client.sys;
-        unsafe {
-            let r = Client::<Test>::on_attach(ptr);
-            map_indigo_result(r, "on_attach")?;
-        };
-
-        assert!(client.handler.visited);
-        Ok(())
-    }
 }
