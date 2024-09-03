@@ -42,10 +42,10 @@ use std::{
 use enum_primitive::*;
 use libindigo_sys::{self, *};
 
-pub type StringMap<'a, T> = HashMap<String, T>;
+pub type StringMap<T> = HashMap<String, T>;
 
 pub struct GuardedStringMap<'a, T> {
-    lock: RwLockWriteGuard<'a, StringMap<'a, T>>,
+    lock: RwLockWriteGuard<'a, StringMap<T>>,
 }
 
 impl<'a, 'b: 'a, T: 'a> IntoIterator for &'b mut GuardedStringMap<'a, T> {
@@ -261,12 +261,25 @@ fn str_to_buf<'a,T>(value: &'a str, _len: u16) -> Result<[i8; 128], IndigoError>
 */
 
 /// Types of request for [Client], [ServerConnection], or [Device].
+// TODO refactor IndigoRequest so that it takes the callback function as a value
 #[derive(Debug, PartialEq, Eq, Clone, strum_macros::Display)]
 enum IndigoRequest {
     Connect,
     Disconnect,
     Attach,
     Detach,
+}
+
+pub type IndigoResult<T> = Result<T,IndigoError>;
+pub type Callback<T> = dyn FnOnce(IndigoResult<T>) -> IndigoResult<()>;
+
+/// Types of request for [Client], [ServerConnection], or [Device].
+#[derive(strum_macros::Display)]
+enum IndigoRequest2<T> {
+    Connect(Box<Callback<T>>),
+    Disconnect(Box<Callback<T>>),
+    Attach(Box<Callback<T>>),
+    Detach(Box<Callback<T>>),
 }
 
 #[cfg(test)]

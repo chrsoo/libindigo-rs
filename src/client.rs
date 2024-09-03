@@ -1,6 +1,4 @@
-use std::{
-    marker::PhantomData, os::raw::c_void, ptr
-};
+use std::{marker::PhantomData, os::raw::c_void, ptr, sync::Arc};
 
 use crate::*;
 use bus::map_indigo_result;
@@ -10,7 +8,7 @@ use log::{debug, error, info, trace};
 use parking_lot::{lock_api::RwLockWriteGuard, RawRwLock, RwLock};
 use property::{Blob, BlobMode};
 
-struct ClientState <'a, T>
+struct ClientState<'a, T>
 where
     T: Model<'a>,
 {
@@ -27,7 +25,7 @@ where
 {
     /// System record for INDIGO clients.
     sys: &'a indigo_client,
-    model: &'a PhantomData<T>
+    model: &'a PhantomData<T>,
 }
 
 impl<'a, T> Client<'a, T>
@@ -38,7 +36,6 @@ where
     /// as the INDIGO [Bus] should set remote to `false` and clients running in a
     /// remote process should set remote to `true`.
     pub fn new(name: &str, model: T, remote: bool) -> Self {
-
         let state = Box::new(RwLock::new(ClientState {
             model,
             request: None,
@@ -82,18 +79,15 @@ where
         }
     }
 
-    /// Convenience function for acquiring a write lock on the client state that traces before and
-    /// after acquiring the lock - helps with debugging.
+    /// Acquire a lock on the client state held in the `client_context` of sys.
     fn aquire_write_lock(&mut self) -> RwLockWriteGuard<RawRwLock, ClientState<'a, T>> {
-        let name = self.name();
-        trace!("'{}' - acquiring model write lock...", name);
-        let lock = self.state().write();
-        trace!("'{}' - model write lock acquired.", name);
-        lock
+        Self::write_lock(ptr::addr_of!(*self.sys) as *mut _)
     }
 
     fn register_request<F>(&mut self, request: IndigoRequest, f: F) -> Result<(), IndigoError>
-    where F: FnMut(&mut Client<'a, T>) -> Result<(), IndigoError> + 'a {
+    where
+        F: FnMut(&mut Client<'a, T>) -> Result<(), IndigoError> + 'a,
+    {
         trace!("'{self}' - registering {request} request.");
         let name = self.name();
         // let name = buf_to_str(self.sys.name);
@@ -101,7 +95,9 @@ where
 
         // check if a request is already in progress
         if let Some(request) = &lock.request {
-            return Err(IndigoError::Other(format!("'{name}' - {request} request already in progress.")));
+            return Err(IndigoError::Other(format!(
+                "'{name}' - {request} request already in progress."
+            )));
         }
 
         // signal that a request is ongoing
@@ -117,7 +113,6 @@ where
         &mut self,
         f: impl FnMut(&mut Client<'a, T>) -> Result<(), IndigoError> + 'a,
     ) -> Result<(), IndigoError> {
-
         self.register_request(IndigoRequest::Attach, f)?;
 
         trace!("'{}' - attaching client...", self);
@@ -132,8 +127,7 @@ where
         &mut self,
         f: impl FnMut(&mut Client<'a, T>) -> Result<(), IndigoError> + 'a,
     ) -> Result<(), IndigoError> {
-
-        if let Err(e) = self.detach_all_devices() {
+        if let Err(e) = self.disconnect_all_devices() {
             warn!("'{}' - could not deatch all devices: {e}", self);
         }
 
@@ -147,7 +141,10 @@ where
 
     /// Define all properties for devices attached to the INDIGO bus.
     pub fn define_properties(&mut self) -> Result<(), IndigoError> {
-        debug!("Requesting all properties for '{}'...", buf_to_str(self.sys.name));
+        debug!(
+            "Requesting all properties for '{}'...",
+            buf_to_str(self.sys.name)
+        );
         unsafe {
             let p = ptr::addr_of!(INDIGO_ALL_PROPERTIES) as *const _ as *mut indigo_property;
             //let p = &mut INDIGO_ALL_PROPERTIES as &mut indigo_property;
@@ -157,22 +154,14 @@ where
         }
     }
 
-    /*
-    pub fn connect(&mut self, d: &mut Device, f: &dyn Fn(Result<(),IndigoError>) ) -> Result<(),IndigoError> {
-        let c = addr_of_mut!(self.sys);
-        let d = d.addr_of_name();
-        let result = unsafe { indigo_device_connect(c, d) };
-        map_indigo_result(result, "indigo_device_connect")
-    }
-    */
-
-    // TODO refactor connect and disconnect in client
     /// Connect a device from the INDIGO bus.
-    pub fn connect(
+    #[named]
+    pub fn connect_device(
         &mut self,
-        d: &mut Device<'a>,
+        d: &mut Device,
         f: impl FnOnce(Result<(), IndigoError>) + 'a,
     ) -> Result<(), IndigoError> {
+        trace!("Enter '{}'", function_name!());
         let r = d.request(IndigoRequest::Connect, f)?;
         trace!("Connecting device '{}'...", d);
         let n = d.addr_of_name();
@@ -181,35 +170,36 @@ where
         map_indigo_result(result, "indigo_device_connect")
     }
 
-
     /// Disconnect a device from the INDIGO bus.
-    pub fn disconnect(
+    #[named]
+    pub fn disconnect_device(
         &mut self,
-        d: &mut Device<'a>,
+        d: &mut Device,
         f: impl FnOnce(Result<(), IndigoError>) + 'a,
     ) -> Result<(), IndigoError> {
-        let r = d.request(IndigoRequest::Disconnect, f)?;
+
+        trace!("Enter '{}'", function_name!());        let r = d.request(IndigoRequest::Disconnect, f)?;
         trace!("Disconnecting device '{}'...", d);
         let n = d.addr_of_name();
         let ptr = ptr::addr_of!(*self.sys) as *mut indigo_client;
-        let result = unsafe { indigo_device_connect(ptr, n) };
-        map_indigo_result(result, "indigo_device_connect")
+        let result = unsafe { indigo_device_disconnect(ptr, n) };
+        map_indigo_result(result, "indigo_device_disconnect")
     }
 
     // -- getters
 
-    fn state<'b>(&'b mut self) -> &'b mut RwLock<ClientState<'a,T>> {
-        unsafe {
-            &mut *(self.sys.client_context as *mut RwLock<ClientState<'a,T>>)
-        }
+    fn state<'b>(&'b mut self) -> &'b mut RwLock<ClientState<'a, T>> {
+        unsafe { &mut *(self.sys.client_context as *mut RwLock<ClientState<'a, T>>) }
     }
 
     pub fn name(&self) -> String {
         buf_to_string(self.sys.name)
     }
 
-    pub fn model<F,R>(&mut self, f: F) -> Result<R, IndigoError>
-    where F: FnOnce(&mut T) -> Result<R, IndigoError> {
+    pub fn model<F, R>(&mut self, f: F) -> Result<R, IndigoError>
+    where
+        F: FnOnce(&mut T) -> Result<R, IndigoError>,
+    {
         let mut lock = self.aquire_write_lock();
         let model = &mut lock.model;
         f(model)
@@ -239,6 +229,7 @@ where
         Ok(blobs)
     }
 
+    /// Make a callback to the `callback` method registered for this [Client].
     unsafe fn callback(client: *mut indigo_client, expected: &IndigoRequest) -> indigo_result {
         let name = buf_to_str((unsafe { &*client }).name);
         let mut lock = Self::write_lock(client);
@@ -319,26 +310,21 @@ where
             return e.into();
         }
 
-        // TODO upsert device
-
-        // TODO add property to device
         let p = Property::new(property);
+        let key = buf_to_string((unsafe { &*device }).name);
+        lock.model
+            .device_map()
+            .entry(key)
+            .or_insert(Device::try_from(device).unwrap()) // FIXME hadle Device::try_from errors
+            .define_property(p)
+            .inspect_err(|e| error!("{e}"))
+            .expect("could not define property");
 
         // TODO notify model
-
         let msg = ptr_to_string(message);
 
         indigo_result_INDIGO_OK
     }
-
-    // fn upsert_device(&self, d: *mut indigo_device) -> Arc<Device<'a>> {
-    //     let mut devices = self.devices.write().unwrap();
-    //     let name = buf_to_string((unsafe { &*d }).name);
-    //     devices
-    //         .entry(name)
-    //         .or_insert(Device::new(self.sys, d))
-    //         .clone()
-    // }
 
     #[named]
     unsafe extern "C" fn on_update_property(
@@ -398,14 +384,10 @@ where
         indigo_result_INDIGO_OK
     }
 
-    /*
-    fn get_client_state<'b>(client: *mut indigo_client) -> &'b mut RwLock<ClientState<'a, T>> {
-        // https://stackoverflow.com/a/24191977/51016
-        unsafe { &mut *((*client).client_context as *mut RwLock<ClientState<T>>) }
-    }
-    */
-
-    fn write_lock<'b>(client: *mut indigo_client) -> RwLockWriteGuard<'b,RawRwLock, ClientState<'a, T>> {
+    /// Acquire a lock on the client state held in the `client_context` of sys.
+    fn write_lock<'b>(
+        client: *mut indigo_client,
+    ) -> RwLockWriteGuard<'b, RawRwLock, ClientState<'a, T>> {
         let c = unsafe { &*client };
         let name = buf_to_str(c.name);
         // https://stackoverflow.com/a/24191977/51016
@@ -417,17 +399,83 @@ where
         lock
     }
 
-    fn aquire_write_lock2<'b>(c: &'b mut Client<'a,T>) -> RwLockWriteGuard<'b,RawRwLock, ClientState<'a, T>> {
+    fn aquire_write_lock2<'b>(
+        c: &'b mut Client<'a, T>,
+    ) -> RwLockWriteGuard<'b, RawRwLock, ClientState<'a, T>> {
         c.state().write()
     }
 
-    /// Detach all Indigo Devices managed by the Model from the INDIGO bus.
+    /// Detach all Devices managed by the Model from the INDIGO bus.
+    #[named]
     fn detach_all_devices(&mut self) -> Result<(), IndigoError> {
-        //trace!("Detaching all devices '{}'...", self);
-        // TODO count and report the total of elements
-        // TODO report busy elements that are busy and connectivity cannot be decided, report as err
+        trace!("Enter '{}'.", function_name!());
+        let state = unsafe { &mut *(self.sys.client_context as *mut RwLock<ClientState<'a, T>>) };
+        let lock = state.write();
 
-        let state = unsafe { &mut *(self.sys.client_context as *mut RwLock<ClientState<'a,T>>) };
+        let (con_ok, con_err, dis_ok, dis_err) = lock
+            .model
+            .device_map()
+            .values_mut()
+            // yields the result of (connection_result, disconnect_result)
+            .map(|d| match d.connection_status() {
+                Ok(connected) => {
+                    if connected {
+                        // conneted, detach and return the result
+                        (Ok(()), Some(d.detach(|r| ())))
+                    } else {
+                        // not connected, don't try to detach
+                        (Ok(()), None)
+                    }
+                }
+                // connection status is not ok, don't try to detach
+                Err(e) => (Err(e), None),
+            })
+            .fold(
+                (0, 0, 0, 0),
+                |(con_ok, con_err, dis_ok, dis_err), (c, d)| {
+                    match (c, d) {
+                        (Ok(_), None) => (con_ok + 1, con_err, dis_ok, dis_err), // device not connected
+                        (Err(_), None) => (con_ok, con_err + 1, dis_ok, dis_err), // connection not ok, so no attempt
+                        (Ok(_), Some(r)) => {
+                            // tried to detach
+                            if let Ok(_) = r {
+                                // successful detachment
+                                (con_ok, con_err, dis_ok + 1, dis_err)
+                            } else {
+                                // failed detachment
+                                (con_ok, con_err, dis_ok, dis_err + 1)
+                            }
+                        }
+                        // no attempt should have been made, this is a bug.
+                        (Err(_), Some(_)) => {
+                            panic!("Tried to disconnect a device with a connection that was not ok")
+                        }
+                    }
+                },
+            );
+
+        let total = con_ok + con_err;
+        info!(
+            "{} - devices: {}; Connection: [OK: {}; Err: {}]; Detach: [OK: {}; Err: {}]",
+            function_name!(), total, dis_ok, dis_err, con_ok, con_err
+        );
+
+        let failed = con_err + dis_err;
+        if failed == 0 {
+            Ok(())
+        } else {
+            Err(IndigoError::Other(format!(
+                "Failed to detach {failed} devices"
+            )))
+        }
+    }
+
+    /// Disconnect all Devices managed by the Model from the INDIGO bus.
+    #[named]
+    fn disconnect_all_devices(&mut self) -> Result<(), IndigoError> {
+        trace!("Enter '{}'.", function_name!());
+
+        let state = unsafe { &mut *(self.sys.client_context as *mut RwLock<ClientState<'a, T>>) };
         let lock = state.write();
 
         let (con_ok, con_err, dis_ok, dis_err) = lock
@@ -439,7 +487,7 @@ where
                 Ok(connected) => {
                     if connected {
                         // conneted, disconnect and return the result
-                        (Ok(()), Some(self.disconnect(d, |r| ())))
+                        (Ok(()), Some(self.disconnect_device(d, |r| ())))
                     } else {
                         // not connected, don't try to disconnect
                         (Ok(()), None)
@@ -474,8 +522,8 @@ where
 
         let total = con_ok + con_err;
         info!(
-            "Devices: {}; Connection: [OK: {}; Error: {}]; Disconnect: [OK: {}; Err: {}]",
-            total, dis_ok, dis_err, con_ok, con_err
+            "{} - devices: {}; Connection: [OK: {}; Err: {}]; Detach: [OK: {}; Err: {}]",
+            function_name!(), total, dis_ok, dis_err, con_ok, con_err
         );
 
         let failed = con_err + dis_err;
@@ -516,8 +564,10 @@ where T: Model<'a> {
 }
 */
 
-impl<'a,T> TryFrom<*mut indigo_client> for Client<'a,T>
-where T: Model<'a> {
+impl<'a, T> TryFrom<*mut indigo_client> for Client<'a, T>
+where
+    T: Model<'a>,
+{
     type Error = BusError;
 
     fn try_from(value: *mut indigo_client) -> Result<Self, Self::Error> {
@@ -526,12 +576,13 @@ where T: Model<'a> {
             warn!("Can not restore Client state as client_context is null");
             Err(BusError::NotFound)
         } else {
-            Ok(Client { sys, model: &PhantomData })
+            Ok(Client {
+                sys,
+                model: &PhantomData,
+            })
         }
     }
 }
 
 #[cfg(test)]
-mod tests {
-
-}
+mod tests {}

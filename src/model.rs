@@ -11,9 +11,9 @@ pub trait Model<'a> {
 
     fn device_map<'b>(
         &'b self,
-    ) -> RwLockWriteGuard<RawRwLock, HashMap<String, Device<'a>>>;
+    ) -> RwLockWriteGuard<RawRwLock, HashMap<String, Device>>;
 
-    fn devices<'b>(&'b self) -> GuardedStringMap<'b, Device<'a>> {
+    fn devices<'b>(&'b self) -> GuardedStringMap<'b, Device> {
         GuardedStringMap {
             lock: self.device_map(),
         }
@@ -23,7 +23,7 @@ pub trait Model<'a> {
     fn on_define_property(
         &mut self,
         c: &mut Client<'a, Self::M>,
-        d: Device<'a>,
+        d: Device,
         p: Property,
         msg: Option<String>,
     ) -> Result<(), IndigoError> {
@@ -40,7 +40,7 @@ pub trait Model<'a> {
     fn on_update_property(
         &mut self,
         c: &'a mut Client<'a, Self::M>,
-        d: Device<'a>,
+        d: Device,
         p: Property,
         msg: Option<String>,
     ) -> Result<(), IndigoError> {
@@ -57,7 +57,7 @@ pub trait Model<'a> {
     fn on_delete_property(
         &mut self,
         c: &mut Client<'a, Self::M>,
-        d: Device<'a>,
+        d: Device,
         p: Property,
         msg: Option<String>,
     ) -> Result<(), IndigoError> {
@@ -75,7 +75,7 @@ pub trait Model<'a> {
     fn on_send_message(
         &mut self,
         c: &mut Client<'a, Self::M>,
-        d: Device<'a>,
+        d: Device,
         msg: String,
     ) -> Result<(), IndigoError> {
         debug!("Message '{:?}' SENT", msg);
@@ -84,12 +84,12 @@ pub trait Model<'a> {
 }
 
 // struct DefaultModelIterator<'a> {
-//     // lock: RwLockReadGuard<'a,HashMap<String,Device<'a>>>,
-//     devices: Values<'a,String, Device<'a>>,
+//     // lock: RwLockReadGuard<'a,HashMap<String,Device>>,
+//     devices: Values<'a,String, Device>,
 // }
 
 // impl<'a> Iterator for DefaultModelIterator<'a> {
-//     type Item = &'a mut Device<'a>;
+//     type Item = &'a mut Device;
 
 //     fn next(&mut self) -> Option<Self::Item> {
 //         self.iter.next()
@@ -97,7 +97,7 @@ pub trait Model<'a> {
 // }
 
 // impl<'a> IntoIterator for DefaultModel<'a> {
-//     type Item = &'a mut Device<'a>;
+//     type Item = &'a mut Device;
 //     type IntoIter = DefaultModelIterator<'a>;
 
 //     fn into_iter(self) -> Self::IntoIter {
@@ -111,13 +111,13 @@ pub trait Model<'a> {
 
 /// A default implementation of [Model] that manages the set of all enumerated devices
 /// and their properties that are defined on the [Bus] .
-pub struct DefaultModel<'a> {
+pub struct DefaultModel {
     props: RwLock<HashMap<PropertyKey, Property>>,
-    devices: RwLock<HashMap<String, Device<'a>>>,
+    devices: RwLock<HashMap<String, Device>>,
 }
 
-impl<'a> DefaultModel<'a> {
-    pub fn new() -> DefaultModel<'a> {
+impl<'a> DefaultModel {
+    pub fn new() -> DefaultModel {
         DefaultModel {
             props: RwLock::new(HashMap::new()),
             devices: RwLock::new(HashMap::new()),
@@ -125,17 +125,17 @@ impl<'a> DefaultModel<'a> {
     }
 }
 
-impl<'a> Model<'a> for DefaultModel<'a> {
-    type M = DefaultModel<'a>;
+impl<'a> Model<'a> for DefaultModel {
+    type M = DefaultModel;
 
     fn device_map<'b>(
         &'b self,
-    ) -> RwLockWriteGuard<RawRwLock, HashMap<String, Device<'a>>> {
+    ) -> RwLockWriteGuard<RawRwLock, HashMap<String, Device>> {
         self.devices.write()
         //RwLockWriteGuard::map(self.devices.write(), |d| d)
     }
 
-    fn devices<'b>(&'b self) -> GuardedStringMap<'b, Device<'a>> {
+    fn devices<'b>(&'b self) -> GuardedStringMap<'b, Device> {
         GuardedStringMap {
             lock: self.devices.write(),
         }
@@ -144,7 +144,7 @@ impl<'a> Model<'a> for DefaultModel<'a> {
     fn on_define_property(
         &mut self,
         c: &mut Client<'a, Self::M>,
-        d: Device<'a>,
+        d: Device,
         p: Property,
         msg: Option<String>,
     ) -> Result<(), IndigoError> {
@@ -177,7 +177,7 @@ impl<'a> Model<'a> for DefaultModel<'a> {
     fn on_update_property(
         &mut self,
         c: &'a mut Client<'a, Self::M>,
-        d: Device<'a>,
+        d: Device,
         p: Property,
         msg: Option<String>,
     ) -> Result<(), IndigoError> {
@@ -187,7 +187,7 @@ impl<'a> Model<'a> for DefaultModel<'a> {
     fn on_delete_property(
         &mut self,
         c: &mut Client<'a, Self::M>,
-        d: Device<'a>,
+        d: Device,
         p: Property,
         msg: Option<String>,
     ) -> Result<(), IndigoError> {
@@ -197,7 +197,7 @@ impl<'a> Model<'a> for DefaultModel<'a> {
     fn on_send_message(
         &mut self,
         c: &mut Client<'a, Self::M>,
-        d: Device<'a>,
+        d: Device,
         msg: String,
     ) -> Result<(), IndigoError> {
         Ok(())
