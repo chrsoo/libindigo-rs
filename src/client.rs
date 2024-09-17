@@ -1,7 +1,6 @@
 use std::{marker::PhantomData, os::raw::c_void, ptr, sync::Arc};
 
 use crate::*;
-use bus::map_indigo_result;
 use function_name::named;
 use libindigo_sys::{self, *};
 use log::{debug, error, info, trace};
@@ -68,10 +67,6 @@ where
 
         // get ptr reference to the indigo_client by dereferencing the Box
         let ptr = Box::into_raw(indigo_client);
-        trace!("indigo_client ptr: {:?}", ptr);
-        unsafe {
-            trace!("indigo_client ptr: {:p}", &*ptr);
-        }
 
         Client {
             sys: unsafe { &*ptr },
@@ -119,7 +114,7 @@ where
         // request that the client is attached to the bus
         let ptr = ptr::addr_of!(*self.sys) as *mut indigo_client;
         let result = unsafe { indigo_attach_client(ptr) };
-        map_indigo_result(result, "indigo_attach_client")
+        Bus::map_indigo_result_to_lib((), result, "indigo_attach_client")
     }
 
     /// Detach the client from the INDIGO bus and invoke the callback closure when done.
@@ -127,7 +122,7 @@ where
         &mut self,
         f: impl FnMut(&mut Client<'a, T>) -> Result<(), IndigoError> + 'a,
     ) -> Result<(), IndigoError> {
-        if let Err(e) = self.disconnect_all_devices() {
+        if let Err(e) = self.detach_all_devices() {
             warn!("'{}' - could not deatch all devices: {e}", self);
         }
 
@@ -136,7 +131,7 @@ where
         trace!("'{}' - detaching client...", self);
         let ptr = ptr::addr_of!(*self.sys) as *mut indigo_client;
         let result = unsafe { indigo_detach_client(ptr) };
-        map_indigo_result(result, "indigo_detach_client")
+        Bus::map_indigo_result_to_lib((), result, "indigo_detach_client")
     }
 
     /// Define all properties for devices attached to the INDIGO bus.
@@ -150,7 +145,7 @@ where
             //let p = &mut INDIGO_ALL_PROPERTIES as &mut indigo_property;
             let ptr = ptr::addr_of!(*self.sys) as *mut indigo_client;
             let result = indigo_enumerate_properties(ptr, p);
-            map_indigo_result(result, "indigo_enumerate_properties")
+            Bus::map_indigo_result_to_lib((), result, "indigo_enumerate_properties")
         }
     }
 
@@ -162,12 +157,10 @@ where
         f: impl FnOnce(Result<(), IndigoError>) + 'a,
     ) -> Result<(), IndigoError> {
         trace!("Enter '{}'", function_name!());
-        let r = d.request(IndigoRequest::Connect, f)?;
-        trace!("Connecting device '{}'...", d);
         let n = d.addr_of_name();
         let ptr = ptr::addr_of!(*self.sys) as *mut indigo_client;
         let result = unsafe { indigo_device_connect(ptr, n) };
-        map_indigo_result(result, "indigo_device_connect")
+        Bus::map_indigo_result_to_lib((), result, "indigo_device_connect")
     }
 
     /// Disconnect a device from the INDIGO bus.
@@ -177,13 +170,12 @@ where
         d: &mut Device,
         f: impl FnOnce(Result<(), IndigoError>) + 'a,
     ) -> Result<(), IndigoError> {
-
-        trace!("Enter '{}'", function_name!());        let r = d.request(IndigoRequest::Disconnect, f)?;
+        trace!("Enter '{}'", function_name!());
         trace!("Disconnecting device '{}'...", d);
         let n = d.addr_of_name();
         let ptr = ptr::addr_of!(*self.sys) as *mut indigo_client;
         let result = unsafe { indigo_device_disconnect(ptr, n) };
-        map_indigo_result(result, "indigo_device_disconnect")
+        Bus::map_indigo_result_to_lib((), result, "indigo_device_disconnect")
     }
 
     // -- getters
@@ -315,7 +307,7 @@ where
         lock.model
             .device_map()
             .entry(key)
-            .or_insert(Device::try_from(device).unwrap()) // FIXME hadle Device::try_from errors
+            .or_insert(Device::try_from(device).unwrap()) // FIXME handle Device::try_from errors
             .define_property(p)
             .inspect_err(|e| error!("{e}"))
             .expect("could not define property");
@@ -421,7 +413,13 @@ where
                 Ok(connected) => {
                     if connected {
                         // conneted, detach and return the result
-                        (Ok(()), Some(d.detach(|r| ())))
+                        (
+                            Ok(()),
+                            Some(d.detach(|res| {
+                                res?;
+                                Ok(())
+                            })),
+                        )
                     } else {
                         // not connected, don't try to detach
                         (Ok(()), None)
@@ -457,7 +455,12 @@ where
         let total = con_ok + con_err;
         info!(
             "{} - devices: {}; Connection: [OK: {}; Err: {}]; Detach: [OK: {}; Err: {}]",
-            function_name!(), total, dis_ok, dis_err, con_ok, con_err
+            function_name!(),
+            total,
+            dis_ok,
+            dis_err,
+            con_ok,
+            con_err
         );
 
         let failed = con_err + dis_err;
@@ -523,7 +526,12 @@ where
         let total = con_ok + con_err;
         info!(
             "{} - devices: {}; Connection: [OK: {}; Err: {}]; Detach: [OK: {}; Err: {}]",
-            function_name!(), total, dis_ok, dis_err, con_ok, con_err
+            function_name!(),
+            total,
+            dis_ok,
+            dis_err,
+            con_ok,
+            con_err
         );
 
         let failed = con_err + dis_err;

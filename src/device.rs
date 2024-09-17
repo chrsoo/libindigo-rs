@@ -1,14 +1,8 @@
-use bus::map_indigo_result;
 use function_name::named;
 use parking_lot::{MappedRwLockWriteGuard, Mutex, RwLock, RwLockWriteGuard};
-use property::PropertyItemIterator;
 use std::{
-    collections::{
-        hash_map::{Values, ValuesMut},
-        HashMap,
-    },
+    collections::HashMap,
     ffi::c_void,
-    iter::Map,
     ptr::{self, addr_of},
 };
 use strum::IntoEnumIterator;
@@ -17,14 +11,28 @@ use strum_macros::EnumIter;
 use super::*;
 use enum_primitive::*;
 use libindigo_sys::{self, *};
-use log::{debug, trace, warn};
+use log::{debug, error, trace, warn};
 
-pub struct Device {
+struct DeviceState<'a> {
+    props: StringMap<Property>,
+    request: Option<IndigoRequest2<'a, Device<'a>>>,
+}
+
+impl<'a> DeviceState<'a> {
+    fn new_lock_ptr() -> *mut c_void {
+        let state = Box::new(RwLock::new(DeviceState {
+            props: HashMap::new(),
+            request: None,
+        }));
+        Box::into_raw(state) as *mut _
+    }
+}
+
+pub struct Device<'a> {
+    // TODO refactor indigo_device ptr to &'mut ref
     sys: *mut indigo_device,
-    context: Option<DeviceContext>,
-    props: RwLock<StringMap<Property>>,
-    request: Mutex<Option<IndigoRequest2<Device>>>,
-    callback: Option<Box<dyn FnOnce(Result<(), IndigoError>)>>,
+    // sys_context: &'a mut DeviceContext<'a>,
+    state: &'a mut RwLock<DeviceState<'a>>,
 }
 
 enum_from_primitive! {
@@ -84,21 +92,27 @@ pub struct GlobalLock {
     tok: indigo_glock,
 }
 
-impl<'a> Display for Device {
+impl<'a> Display for Device<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }
 }
 
-impl<'a> Device {
+impl<'a> Device<'a> {
     pub fn new(name: &str) -> Device {
-        let mut d = Box::new(indigo_device {
+        let state = Box::new(RwLock::new(DeviceState {
+            props: HashMap::new(),
+            request: None,
+        }));
+        let state_ptr = Box::into_raw(state);
+
+        let sys = Box::new(indigo_device {
             name: str_to_buf(name).unwrap(),
             lock: 0 as indigo_glock,
             is_remote: false,
             gp_bits: 0,
             device_context: ptr::null_mut(),
-            private_data: ptr::null_mut(),
+            private_data: DeviceState::new_lock_ptr(),
             master_device: ptr::null_mut(),
             last_result: indigo_result_INDIGO_OK,
             version: indigo_version_INDIGO_VERSION_CURRENT,
@@ -107,15 +121,14 @@ impl<'a> Device {
             enumerate_properties: None,
             change_property: None,
             enable_blob: None,
-            detach: None,
+            detach: Some(Device::on_detach),
         });
+        let sys_ptr = Box::into_raw(sys);
 
         Device {
-            sys: ptr::addr_of_mut!(d) as *mut _,
-            context: None,
-            props: RwLock::new(HashMap::new()),
-            request: Mutex::new(None),
-            callback: None,
+            sys: sys_ptr,
+            // sys_context: &mut sys_conetxt,
+            state: unsafe { &mut *state_ptr },
         }
     }
 
@@ -151,22 +164,22 @@ impl<'a> Device {
     }
 
     #[named]
-    pub fn define_property(&mut self, p: Property) -> Result<(),IndigoError> {
+    pub fn define_property(&mut self, p: Property) -> Result<(), IndigoError> {
         trace!("Enter '{}'", function_name!());
-        let mut props = self.props.write();
-        let p = props.entry(p.name()).or_insert(p);
+        let mut lock = self.state.write();
+        let p = lock.props.entry(p.name()).or_insert(p);
         // TODO notify device listeners
-        debug!("Defined property '{}' for '{}'", p.name(), self.name());
+        debug!("Property '{}' defined for '{}'", p.name(), self.name());
         Ok(())
     }
 
     pub fn property(&self, name: &str) -> Result<MappedRwLockWriteGuard<Property>, IndigoError> {
-        let props = self.props.write();
-        if props.contains_key(name) {
+        let lock = self.state.write();
+        if lock.props.contains_key(name) {
             let p = RwLockWriteGuard::map(
-                props,
+                lock,
                 // should not panic as we checked that the entry exists
-                |p: &mut HashMap<String, Property>| p.get_mut(name).unwrap(),
+                |s: &mut DeviceState| s.props.get_mut(name).unwrap(),
             );
             Ok(p)
         } else {
@@ -179,9 +192,10 @@ impl<'a> Device {
 
     /// Return an iterator over all properties for this device.
     pub fn properties<'b>(&'b self) -> GuardedStringMap<'b, Property> {
-        GuardedStringMap {
-            lock: self.props.write(),
-        }
+        todo!()
+        // GuardedStringMap {
+        //     lock: self.state.write(),
+        // }
     }
 
     /// Return a propety using an libindigo-sys constant property name, e.g. [CONNECTION_PROPERTY_NAME].
@@ -245,7 +259,7 @@ impl<'a> Device {
 
     pub fn interfaces(&self) -> Vec<Interface> {
         let info = const_to_string(INFO_PROPERTY_NAME); // TODO make this a constant
-        if let Some(p) = self.props.read().get(&info) {
+        if let Some(p) = self.state.read().props.get(&info) {
             trace!("found INFO property");
             if let Some(ifs) = p
                 .items()
@@ -282,15 +296,20 @@ impl<'a> Device {
 
     /// Detach the device  from the INDIGO bus.
     #[named]
-    pub fn detach<F>(&self, f: F) -> Result<(),IndigoError>
-    where F: FnOnce(Result<(), IndigoError>) + 'a, // TODO find out if the lifetime specifier really is needed!
+    pub fn detach(
+        &self,
+        f: impl FnMut(IndigoResult<Device<'a>>) -> IndigoResult<()> + 'a,
+    ) -> Result<(), IndigoError>
+// where F: FnOnce(Result<(), IndigoError>) + 'a, // TODO find out if the lifetime specifier really is needed!
     {
         trace!("Enter '{}'", function_name!());
-        let r = self.request(IndigoRequest::Disconnect, f)?;
+        let r = self.request(IndigoRequest2::Detach(Box::new(f)))?;
         trace!("Disconnecting device '{}'...", self);
-        let ptr = ptr::addr_of!(*self.sys) as *mut indigo_device;
-        let result = unsafe { indigo_detach_device(ptr) };
-        map_indigo_result(result, "indigo_detach_device")
+        let result = unsafe {
+            let ptr = ptr::addr_of!(*self.sys) as *mut indigo_device;
+            indigo_detach_device(ptr)
+        };
+        Bus::map_indigo_result_to_lib((), result, "indigo_detach_device")
     }
 
     pub fn change_property(&self) -> Result<(), IndigoError> {
@@ -316,61 +335,98 @@ impl<'a> Device {
         }
     }
 
-    pub(crate) fn request(
-        &self,
-        request: IndigoRequest,
-        f: impl FnOnce(Result<(), IndigoError>) + 'a,
-    ) -> Result<(), IndigoError> {
-        let mut r = self.request.lock();
-        if let Some(request) = &mut *r {
+    fn request(&self, request: IndigoRequest2<'a, Device<'a>>) -> Result<(), IndigoError> {
+        let mut lock = self.state.write();
+        if let Some(request) = &lock.request {
             return Err(IndigoError::Other(format!(
                 "{} request in progress for device '{}'",
                 request,
                 self.name(),
             )));
         }
-        *r = Some(request);
-        self.callback = Some(Box::new(f));
+        lock.request = Some(request);
         Ok(())
     }
-}
 
-/// Return a mutable reference to a [Device] stored on the [indigo_device] private data field.
-#[deprecated = "method needs to be merged with try_from trait"]
-pub(crate) unsafe fn get_device<'a>(d: *mut indigo_device) -> Device {
-    // https://stackoverflow.com/a/24191977/51016
-    if (*d).private_data == ptr::null_mut() {
-        Device::try_from(d).unwrap()
-    } else {
-        let ptr = (*d).private_data;
-        ptr::read(ptr as *mut Device)
+    // -- INDIGO unsafe callback methods
+
+    #[named]
+    unsafe extern "C" fn on_detach(device: *mut indigo_device) -> indigo_result {
+        trace!("INDIGO callback '{}'", function_name!());
+
+        // lock the device state
+        let state: RwLock<DeviceState> =
+            ptr::read((*device).private_data as *mut RwLock<DeviceState>);
+        let mut lock = state.write();
+
+        // restore the device
+        let d = Device::try_from(device);
+        if let Err(e) = d {
+            error!(
+                "Could not restore the Device private_data in indigo_device: {}",
+                e
+            );
+            return BusError::Failed as indigo_result;
+        }
+        let d = d.unwrap();
+
+        // presumable the last result is that related to the INDIGO on_detach callback...
+        let result = Bus::map_indigo_result_to_lib(d, (*device).last_result, function_name!());
+
+        // invoke the callback method provided it has been set previously
+        if let Some(request) = &mut lock.request {
+            let result = request.callback(result);
+            Bus::map_indigo_result_to_sys(result, function_name!())
+        } else {
+            warn!(
+                "Spurius callback without a registered request for device '{}'",
+                buf_to_str((*device).name)
+            );
+            BusError::Failed as indigo_result
+        }
     }
 }
 
-impl<'a> TryFrom<*mut indigo_device> for Device {
+impl<'a> TryFrom<*mut indigo_device> for Device<'a> {
     type Error = IndigoError;
 
     fn try_from(value: *mut indigo_device) -> Result<Self, Self::Error> {
         if value == ptr::null_mut() {
             return Err(IndigoError::Other("indigo_device is null".to_string()));
         }
-        let ptr = unsafe { ptr::read(value).device_context };
-        let context = DeviceContext::try_from(ptr)?;
+        debug!("device addr {:p}", value);
+
+        let mut device = unsafe { ptr::read(value) };
+
+        // connect callbacks
+        if let None = device.detach {
+            device.detach = Some(Device::on_detach);
+        }
+        // TODO set remaining callbacks
+
+        // TODO restore the DeviceContext
+        // read the device context from the raw pointer
+        //let ptr = device.device_context;
+        // let context = DeviceContext::try_from(ptr)?;
+
+        // create the device state if it has not yet been defined
+        if device.private_data == ptr::null_mut() {
+            trace!("creating new state for device '{}'", buf_to_str(device.name));
+            device.private_data = DeviceState::new_lock_ptr();
+        }
+
         Ok(Device {
             sys: value,
-            context: Some(context),
-            props: RwLock::new(HashMap::new()),
-            request: Mutex::new(None),
-            callback: None,
+            state: unsafe { &mut *(device.private_data as *mut _) },
         })
     }
 }
 
-pub struct DeviceContext {
-    sys: indigo_device_context,
+pub struct DeviceContext<'a> {
+    sys: &'a mut indigo_device_context,
 }
 
-impl TryFrom<*mut c_void> for DeviceContext {
+impl<'a> TryFrom<*mut c_void> for DeviceContext<'a> {
     type Error = IndigoError;
 
     fn try_from(value: *mut c_void) -> Result<Self, Self::Error> {
@@ -379,7 +435,8 @@ impl TryFrom<*mut c_void> for DeviceContext {
                 "indigo_device_contetxt pointer is null".to_string(),
             ));
         }
-        let sys = unsafe { ptr::read(value as *mut indigo_device_context) };
+        // let sys = unsafe { &mut ptr::read(value as *mut indigo_device_context) };
+        let sys = unsafe { &mut *(value as *mut _) };
         Ok(DeviceContext { sys })
     }
 }

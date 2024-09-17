@@ -9,7 +9,7 @@ impl Bus {
     pub fn start() -> Result<(), IndigoError> {
         trace!("Starting bus...");
         let r = unsafe { indigo_start() };
-        map_indigo_result(r, "indigo_start")
+        Bus::map_indigo_result_to_lib((), r, "indigo_start")
             .inspect_err(|e| error!("Error starting INDIGO Bus: {}", e))
             .and_then(|()| {
                 info!("Started the INDIGO Bus.");
@@ -20,7 +20,7 @@ impl Bus {
     pub fn stop() -> Result<(), IndigoError> {
         trace!("Stopping bus...");
         let r = unsafe { indigo_stop() };
-        map_indigo_result(r, "indigo_stop")
+        Bus::map_indigo_result_to_lib((), r, "indigo_stop")
             .inspect_err(|e| error!("Error stopping INDIGO Bus: {}", e))
             .and_then(|()| {
                 info!("Stopped the INDIGO Bus.");
@@ -48,23 +48,27 @@ impl Bus {
         debug!("Setting log level '{:?}'.", level);
         unsafe { indigo_set_log_level(level as i32) };
     }
-}
 
-/// Map the indigo result to `Ok(())` if result code is `0`, to `Err(IndigoError::Bus)` if the code represents
-/// a known error, and to `Err(IndigoError::Other)` if the result code is not a well-known result.
-pub fn map_indigo_result<'a>(result: indigo_result, operation: &str) -> Result<(), IndigoError> {
-    if result == indigo_result_INDIGO_OK {
-        trace!("INDIGO - '{}' Ok.", operation);
-        return Ok(());
+    /// Map the indigo result to `Ok(())` if result code is `0`, to `Err(IndigoError::Bus)` if the code represents
+    /// a known error, and to `Err(IndigoError::Other)` if the result code is not a well-known result.
+    pub fn map_indigo_result_to_lib<'a,T>(t: T, result: indigo_result, operation: &str) -> IndigoResult<T> {
+        if result == indigo_result_INDIGO_OK {
+            trace!("INDIGO - '{}' Ok.", operation);
+            return Ok(t);
+        }
+
+        if let Some(result) = BusError::from_u32(result) {
+            warn!("INDIGO bus error: '{}'.", result);
+            Err(IndigoError::Bus(result))
+        } else {
+            let msg = format!("INDIGO unknown bus result: {}.", result);
+            warn!("{msg}");
+            Err(IndigoError::Other(msg))
+        }
     }
 
-    if let Some(result) = BusError::from_u32(result) {
-        warn!("Bus error: '{}'.", result);
-        Err(IndigoError::Bus(result))
-    } else {
-        let msg = format!("Unknown bus result: {}.", result);
-        warn!("{msg}");
-        Err(IndigoError::Other(msg))
+    pub(crate) fn map_indigo_result_to_sys(result: IndigoResult<()>, operation: &str) -> indigo_result {
+        todo!()
     }
 }
 
@@ -75,10 +79,10 @@ mod tests {
     #[test]
     fn map_indigo_result_ok() {
         assert_eq!(
-            map_indigo_result(indigo_result_INDIGO_OK, "test").ok(),
+            Bus::map_indigo_result_to_lib((), indigo_result_INDIGO_OK, "test").ok(),
             Some(())
         );
-        if let IndigoError::Bus(e) = map_indigo_result(indigo_result_INDIGO_FAILED, "test")
+        if let IndigoError::Bus(e) = Bus::map_indigo_result_to_lib((), indigo_result_INDIGO_FAILED, "test")
             .err()
             .unwrap()
         {

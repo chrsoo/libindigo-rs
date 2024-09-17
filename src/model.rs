@@ -11,9 +11,9 @@ pub trait Model<'a> {
 
     fn device_map<'b>(
         &'b self,
-    ) -> RwLockWriteGuard<RawRwLock, HashMap<String, Device>>;
+    ) -> RwLockWriteGuard<RawRwLock, HashMap<String, Device<'a>>>;
 
-    fn devices<'b>(&'b self) -> GuardedStringMap<'b, Device> {
+    fn devices<'b>(&'b self) -> GuardedStringMap<'b, Device<'a>> {
         GuardedStringMap {
             lock: self.device_map(),
         }
@@ -23,7 +23,7 @@ pub trait Model<'a> {
     fn on_define_property(
         &mut self,
         c: &mut Client<'a, Self::M>,
-        d: Device,
+        d: Device<'a>,
         p: Property,
         msg: Option<String>,
     ) -> Result<(), IndigoError> {
@@ -40,7 +40,7 @@ pub trait Model<'a> {
     fn on_update_property(
         &mut self,
         c: &'a mut Client<'a, Self::M>,
-        d: Device,
+        d: Device<'a>,
         p: Property,
         msg: Option<String>,
     ) -> Result<(), IndigoError> {
@@ -84,8 +84,8 @@ pub trait Model<'a> {
 }
 
 // struct DefaultModelIterator<'a> {
-//     // lock: RwLockReadGuard<'a,HashMap<String,Device>>,
-//     devices: Values<'a,String, Device>,
+//     // lock: RwLockReadGuard<'a,HashMap<String,Device<'a>>>,
+//     devices: Values<'a,String, Device<'a>>,
 // }
 
 // impl<'a> Iterator for DefaultModelIterator<'a> {
@@ -111,13 +111,13 @@ pub trait Model<'a> {
 
 /// A default implementation of [Model] that manages the set of all enumerated devices
 /// and their properties that are defined on the [Bus] .
-pub struct DefaultModel {
+pub struct DefaultModel<'a> {
     props: RwLock<HashMap<PropertyKey, Property>>,
-    devices: RwLock<HashMap<String, Device>>,
+    devices: RwLock<HashMap<String, Device<'a>>>,
 }
 
-impl<'a> DefaultModel {
-    pub fn new() -> DefaultModel {
+impl<'a> DefaultModel<'a> {
+    pub fn new() -> DefaultModel<'a> {
         DefaultModel {
             props: RwLock::new(HashMap::new()),
             devices: RwLock::new(HashMap::new()),
@@ -125,17 +125,17 @@ impl<'a> DefaultModel {
     }
 }
 
-impl<'a> Model<'a> for DefaultModel {
-    type M = DefaultModel;
+impl<'a> Model<'a> for DefaultModel<'a> {
+    type M = DefaultModel<'a>;
 
     fn device_map<'b>(
         &'b self,
-    ) -> RwLockWriteGuard<RawRwLock, HashMap<String, Device>> {
+    ) -> RwLockWriteGuard<RawRwLock, HashMap<String, Device<'a>>> {
         self.devices.write()
         //RwLockWriteGuard::map(self.devices.write(), |d| d)
     }
 
-    fn devices<'b>(&'b self) -> GuardedStringMap<'b, Device> {
+    fn devices<'b>(&'b self) -> GuardedStringMap<'b, Device<'a>> {
         GuardedStringMap {
             lock: self.devices.write(),
         }
@@ -144,7 +144,7 @@ impl<'a> Model<'a> for DefaultModel {
     fn on_define_property(
         &mut self,
         c: &mut Client<'a, Self::M>,
-        d: Device,
+        d: Device<'a>,
         p: Property,
         msg: Option<String>,
     ) -> Result<(), IndigoError> {

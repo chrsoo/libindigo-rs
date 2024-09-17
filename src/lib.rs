@@ -271,15 +271,26 @@ enum IndigoRequest {
 }
 
 pub type IndigoResult<T> = Result<T,IndigoError>;
-pub type Callback<T> = dyn FnOnce(IndigoResult<T>) -> IndigoResult<()>;
+pub type Callback<'a,T> = dyn FnMut(IndigoResult<T>) -> IndigoResult<()> +'a;
 
 /// Types of request for [Client], [ServerConnection], or [Device].
 #[derive(strum_macros::Display)]
-enum IndigoRequest2<T> {
-    Connect(Box<Callback<T>>),
-    Disconnect(Box<Callback<T>>),
-    Attach(Box<Callback<T>>),
-    Detach(Box<Callback<T>>),
+enum IndigoRequest2<'a,T> {
+    Connect(Box<&'a mut Callback<'a,T>>),
+    Disconnect(Box<&'a mut Callback<'a,T>>),
+    Attach(Box<&'a mut Callback<'a,T>>),
+    Detach(Box<Callback<'a,T>>),
+}
+
+impl<'a,T> IndigoRequest2<'a,T> {
+    pub fn callback(&mut self, r: IndigoResult<T>) -> IndigoResult<()>{
+        match self {
+            IndigoRequest2::Connect(c) => c(r),
+            IndigoRequest2::Disconnect(c) => c(r),
+            IndigoRequest2::Attach(c) => c(r),
+            IndigoRequest2::Detach(c) => c(r),
+        }
+    }
 }
 
 #[cfg(test)]

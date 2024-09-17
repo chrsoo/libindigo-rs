@@ -64,7 +64,7 @@ impl ServerConnection {
                 srv_ptr_ptr,
             )
         };
-        map_indigo_result(result, "indigo_connect_server").inspect(|()|
+        Bus::map_indigo_result_to_lib((), result, "indigo_connect_server").inspect(|()|
         info!("Connected to {}.", self)
     )
 }
@@ -72,7 +72,7 @@ impl ServerConnection {
     pub fn dicsonnect(&mut self) -> Result<(), IndigoError> {
         trace!("Disconncting from {}...", self);
         let result = unsafe { indigo_disconnect_server(ptr::addr_of_mut!(self.sys)) };
-        map_indigo_result(result, "indigo_disconnect_server").inspect(|()|
+        Bus::map_indigo_result_to_lib((), result, "indigo_disconnect_server").inspect(|()|
             info!("Disconnected from {}.", self)
         )
     }
