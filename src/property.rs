@@ -1,7 +1,5 @@
 use std::{
-    ffi::{c_long, CStr},
-    fmt::Display,
-    ptr,
+    ffi::{c_long, CStr}, fmt::Display, ptr
 };
 
 use enum_primitive::*;
@@ -256,7 +254,7 @@ impl<'a> PropertyItem {
 /// Defines [items](PropertyItem) holding the [values](PropertyValue) of the property for
 /// an INDIGO [device](crate::Device).
 ///
-/// From the [INDIGO cleint documentation](https://github.com/indigo-astronomy/indigo/blob/master/indigo_docs/CLIENT_DEVELOPMENT_BASICS.md#properties):
+/// From the [INDIGO client documentation](https://github.com/indigo-astronomy/indigo/blob/master/indigo_docs/CLIENT_DEVELOPMENT_BASICS.md#properties):
 /// > In case the client needs to check the values of some property item of a
 /// > specified device it is always a good idea to check if the property is in OK state:
 /// > ```rust
@@ -452,8 +450,12 @@ pub struct PropertyItemIterator<'a> {
 impl<'a> Iterator for PropertyItemIterator<'a> {
     type Item = PropertyItem;
     fn next(&mut self) -> Option<Self::Item> {
-        let result = PropertyItem::sys(&self.property_type, &self.items[self.index]);
-        self.index += 1;
-        Some(result)
+        if self.index < self.items.len() {
+            let result = PropertyItem::sys(&self.property_type, &self.items[self.index]);
+            self.index += 1;
+            Some(result)
+        } else {
+            None
+        }
     }
 }

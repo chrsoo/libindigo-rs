@@ -13,9 +13,13 @@ use enum_primitive::*;
 use libindigo_sys::{self, *};
 use log::{debug, error, trace, warn};
 
+pub trait Device {
+    fn name(&self) -> &str;
+}
+
 struct DeviceState<'a> {
     props: StringMap<Property>,
-    request: Option<IndigoRequest2<'a, Device<'a>>>,
+    request: Option<IndigoRequest2<'a, DeviceImpl<'a>>>,
 }
 
 impl<'a> DeviceState<'a> {
@@ -28,7 +32,7 @@ impl<'a> DeviceState<'a> {
     }
 }
 
-pub struct Device<'a> {
+pub struct DeviceImpl<'a> {
     // TODO refactor indigo_device ptr to &'mut ref
     sys: *mut indigo_device,
     // sys_context: &'a mut DeviceContext<'a>,
@@ -92,14 +96,14 @@ pub struct GlobalLock {
     tok: indigo_glock,
 }
 
-impl<'a> Display for Device<'a> {
+impl<'a> Display for DeviceImpl<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name())
     }
 }
 
-impl<'a> Device<'a> {
-    pub fn new(name: &str) -> Device {
+impl<'a> DeviceImpl<'a> {
+    pub fn new(name: &str) -> DeviceImpl {
         let state = Box::new(RwLock::new(DeviceState {
             props: HashMap::new(),
             request: None,
@@ -121,11 +125,11 @@ impl<'a> Device<'a> {
             enumerate_properties: None,
             change_property: None,
             enable_blob: None,
-            detach: Some(Device::on_detach),
+            detach: Some(DeviceImpl::on_detach),
         });
         let sys_ptr = Box::into_raw(sys);
 
-        Device {
+        DeviceImpl {
             sys: sys_ptr,
             // sys_context: &mut sys_conetxt,
             state: unsafe { &mut *state_ptr },
@@ -298,7 +302,7 @@ impl<'a> Device<'a> {
     #[named]
     pub fn detach(
         &self,
-        f: impl FnMut(IndigoResult<Device<'a>>) -> IndigoResult<()> + 'a,
+        f: impl FnMut(IndigoResult<DeviceImpl<'a>>) -> IndigoResult<()> + 'a,
     ) -> Result<(), IndigoError>
 // where F: FnOnce(Result<(), IndigoError>) + 'a, // TODO find out if the lifetime specifier really is needed!
     {
@@ -309,7 +313,7 @@ impl<'a> Device<'a> {
             let ptr = ptr::addr_of!(*self.sys) as *mut indigo_device;
             indigo_detach_device(ptr)
         };
-        Bus::map_indigo_result_to_lib((), result, "indigo_detach_device")
+        Bus::sys_to_lib((), result, "indigo_detach_device")
     }
 
     pub fn change_property(&self) -> Result<(), IndigoError> {
@@ -319,7 +323,7 @@ impl<'a> Device<'a> {
 
     /// Returns `IndigoError::Other`if the source and target devices do not share
     /// the same name or if they refer to different `indigo_device` objects.
-    pub(crate) fn assert_same(&self, d: Device) -> Result<(), IndigoError> {
+    pub(crate) fn assert_same(&self, d: DeviceImpl) -> Result<(), IndigoError> {
         if self.name() != d.name() {
             return Err(IndigoError::Other(
                 "Source and target do not share the same name.".to_string(),
@@ -335,7 +339,7 @@ impl<'a> Device<'a> {
         }
     }
 
-    fn request(&self, request: IndigoRequest2<'a, Device<'a>>) -> Result<(), IndigoError> {
+    fn request(&self, request: IndigoRequest2<'a, DeviceImpl<'a>>) -> Result<(), IndigoError> {
         let mut lock = self.state.write();
         if let Some(request) = &lock.request {
             return Err(IndigoError::Other(format!(
@@ -360,7 +364,7 @@ impl<'a> Device<'a> {
         let mut lock = state.write();
 
         // restore the device
-        let d = Device::try_from(device);
+        let d = DeviceImpl::try_from(device);
         if let Err(e) = d {
             error!(
                 "Could not restore the Device private_data in indigo_device: {}",
@@ -371,12 +375,12 @@ impl<'a> Device<'a> {
         let d = d.unwrap();
 
         // presumable the last result is that related to the INDIGO on_detach callback...
-        let result = Bus::map_indigo_result_to_lib(d, (*device).last_result, function_name!());
+        let result = Bus::sys_to_lib(d, (*device).last_result, function_name!());
 
         // invoke the callback method provided it has been set previously
         if let Some(request) = &mut lock.request {
             let result = request.callback(result);
-            Bus::map_indigo_result_to_sys(result, function_name!())
+            Bus::lib_to_sys(result, function_name!())
         } else {
             warn!(
                 "Spurius callback without a registered request for device '{}'",
@@ -387,7 +391,7 @@ impl<'a> Device<'a> {
     }
 }
 
-impl<'a> TryFrom<*mut indigo_device> for Device<'a> {
+impl<'a> TryFrom<*mut indigo_device> for DeviceImpl<'a> {
     type Error = IndigoError;
 
     fn try_from(value: *mut indigo_device) -> Result<Self, Self::Error> {
@@ -400,7 +404,7 @@ impl<'a> TryFrom<*mut indigo_device> for Device<'a> {
 
         // connect callbacks
         if let None = device.detach {
-            device.detach = Some(Device::on_detach);
+            device.detach = Some(DeviceImpl::on_detach);
         }
         // TODO set remaining callbacks
 
@@ -411,11 +415,14 @@ impl<'a> TryFrom<*mut indigo_device> for Device<'a> {
 
         // create the device state if it has not yet been defined
         if device.private_data == ptr::null_mut() {
-            trace!("creating new state for device '{}'", buf_to_str(device.name));
+            trace!(
+                "creating new state for device '{}'",
+                buf_to_str(device.name)
+            );
             device.private_data = DeviceState::new_lock_ptr();
         }
 
-        Ok(Device {
+        Ok(DeviceImpl {
             sys: value,
             state: unsafe { &mut *(device.private_data as *mut _) },
         })
@@ -455,9 +462,9 @@ mod tests {
     }
 
     fn test_connection_status() -> Result<(), IndigoError> {
-        let m = DefaultModel::new();
+        let m = FlatPropertyModel::new();
         let c = Client::new("TestClient", m, false);
-        let d = Device::new("TestDevice");
+        let d = DeviceImpl::new("TestDevice");
         match d.connection_status() {
             Ok(true) => info!("Device {d} is CONNECTED."),
             Ok(false) => info!("Device {d} is DISCONNECTED."),

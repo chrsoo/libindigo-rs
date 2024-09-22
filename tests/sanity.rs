@@ -59,7 +59,7 @@ fn client_callbacks() -> Result<(), IndigoError> {
     Bus::start()?;
 
     let mut server = Bus::connect("INDIGO", "localhost", 7624)?;
-    let model = DefaultModel::new();
+    let model = FlatPropertyModel::new();
     let mut client = Client::new("TestClient", model, false);
     let monitor = Arc::new(TestMonitor {
         visited: Arc::new((Mutex::new(false), Condvar::new())),
@@ -68,13 +68,12 @@ fn client_callbacks() -> Result<(), IndigoError> {
     let m = monitor.clone();
     client.attach(move |c| {
         debug!("Attach callback closure called.");
-        // c.attach(|c| c.get_all_properties())?;
         m.visit()
     })?;
-    monitor.wait()?;
+    client.define_properties()?;
 
     sleep(Duration::from_secs(3));
-
+    monitor.wait()?;
     {
         /*
         let props = client
@@ -92,18 +91,26 @@ fn client_callbacks() -> Result<(), IndigoError> {
         debug!("----------------");
         */
         client.model(|m| Ok(
-            m.device_map()
+            m.props_map()
             .iter()
-            .for_each(|(_, d)| debug!("{}", d))
+            .for_each(|(_, p)| {
+                println!("{p}");
+                for i in p.items() {
+                    println!("    {i}");
+                }
+            })
         ))?;
 
         client.blobs().iter().for_each(|b| debug!("{:?}", b));
 
+        /*
         client.model(|m| Ok(
             m.device_map()
             .iter()
             .for_each(|(k, d)| debug!("Interfaces: {:?}", d.interfaces()))
         ))?;
+
+         */
     }
 
     let m = monitor.clone();

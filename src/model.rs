@@ -1,35 +1,37 @@
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{hash_map::{Entry, Iter, ValuesMut}, HashMap};
 
 use log::debug;
-use parking_lot::{lock_api::RwLockWriteGuard, RawRwLock, RwLock};
+use parking_lot::{lock_api::RwLockWriteGuard, MappedRwLockWriteGuard, RawRwLock, RwLock};
 
-use crate::{Client, Device, GuardedStringMap, IndigoError, Property, PropertyKey};
+use crate::{Client, DeviceImpl, GuardedStringMap, IndigoError, Property, PropertyKey};
 
 /// Data model used by a [IndigoClient] with callback methods to handle [IndigoBus] events.
 pub trait Model<'a> {
     type M: Model<'a>;
 
+    /*
     fn device_map<'b>(
         &'b self,
-    ) -> RwLockWriteGuard<RawRwLock, HashMap<String, Device<'a>>>;
+    ) -> RwLockWriteGuard<RawRwLock, HashMap<String, DeviceImpl<'a>>>;
 
-    fn devices<'b>(&'b self) -> GuardedStringMap<'b, Device<'a>> {
+    fn devices<'b>(&'b self) -> GuardedStringMap<'b, DeviceImpl<'a>> {
         GuardedStringMap {
             lock: self.device_map(),
         }
     }
+    */
 
     /// Called each time the property of a device is defined or its definition requested.
     fn on_define_property(
         &mut self,
         c: &mut Client<'a, Self::M>,
-        d: Device<'a>,
+        d: String,
         p: Property,
         msg: Option<String>,
     ) -> Result<(), IndigoError> {
         debug!(
-            "Device: '{}'; Property '{}'; DEFINED with message '{:?}' defined for ",
-            d.name(),
+            "Device: '{}'; Property '{}'; DEFINED with message '{:?}'",
+            d,
             p.name(),
             msg
         );
@@ -39,14 +41,14 @@ pub trait Model<'a> {
     /// Called each time a property is updated for a device.
     fn on_update_property(
         &mut self,
-        c: &'a mut Client<'a, Self::M>,
-        d: Device<'a>,
+        c: &mut Client<'a, Self::M>,
+        d: String,
         p: Property,
         msg: Option<String>,
     ) -> Result<(), IndigoError> {
         debug!(
-            "Device: '{}'; Property '{}'; UPDATED with message '{:?}' defined for ",
-            d.name(),
+            "Device: '{}'; Property '{}'; UPDATED with message '{:?}'",
+            d,
             p.name(),
             msg
         );
@@ -57,13 +59,13 @@ pub trait Model<'a> {
     fn on_delete_property(
         &mut self,
         c: &mut Client<'a, Self::M>,
-        d: Device,
+        d: String,
         p: Property,
         msg: Option<String>,
     ) -> Result<(), IndigoError> {
         debug!(
-            "Device: '{}'; Property '{}'; DELETED with message '{:?}' defined for ",
-            d.name(),
+            "Device: '{}'; Property '{}'; DELETED with message '{:?}'",
+            d,
             p.name(),
             msg
         );
@@ -75,7 +77,7 @@ pub trait Model<'a> {
     fn on_send_message(
         &mut self,
         c: &mut Client<'a, Self::M>,
-        d: Device,
+        d: String,
         msg: String,
     ) -> Result<(), IndigoError> {
         debug!("Message '{:?}' SENT", msg);
@@ -111,95 +113,94 @@ pub trait Model<'a> {
 
 /// A default implementation of [Model] that manages the set of all enumerated devices
 /// and their properties that are defined on the [Bus] .
-pub struct DefaultModel<'a> {
+pub struct DeviceModel<'a> {
     props: RwLock<HashMap<PropertyKey, Property>>,
-    devices: RwLock<HashMap<String, Device<'a>>>,
+    devices: RwLock<HashMap<String, DeviceImpl<'a>>>,
+
 }
 
-impl<'a> DefaultModel<'a> {
-    pub fn new() -> DefaultModel<'a> {
-        DefaultModel {
+pub struct FlatPropertyModel<'a> {
+    props: RwLock<HashMap<PropertyKey, Property>>,
+     devices: RwLock<HashMap<String, DeviceImpl<'a>>>,
+}
+
+impl<'a> FlatPropertyModel<'a> {
+    pub fn new() -> FlatPropertyModel<'a> {
+        FlatPropertyModel {
             props: RwLock::new(HashMap::new()),
             devices: RwLock::new(HashMap::new()),
         }
     }
-}
 
-impl<'a> Model<'a> for DefaultModel<'a> {
-    type M = DefaultModel<'a>;
+    // fn props(&self) -> MappedRwLockWriteGuard<ValuesMut<PropertyKey,Property>> {
+    //     RwLockWriteGuard::map(self.props.write(), |props| &mut props.values_mut())
+    // }
 
-    fn device_map<'b>(
-        &'b self,
-    ) -> RwLockWriteGuard<RawRwLock, HashMap<String, Device<'a>>> {
-        self.devices.write()
-        //RwLockWriteGuard::map(self.devices.write(), |d| d)
+    pub fn props_map(&self) -> RwLockWriteGuard<RawRwLock, HashMap<PropertyKey, Property>> {
+        self.props.write()
     }
 
-    fn devices<'b>(&'b self) -> GuardedStringMap<'b, Device<'a>> {
+    pub fn props_map1<'b>(&'b self) -> GuardedStringMap<'b, DeviceImpl<'a>> {
         GuardedStringMap {
             lock: self.devices.write(),
         }
     }
 
+}
+
+impl<'a> Model<'a> for FlatPropertyModel<'a> {
+    type M = FlatPropertyModel<'a>;
+
     fn on_define_property(
         &mut self,
         c: &mut Client<'a, Self::M>,
-        d: Device<'a>,
+        d: String,
         p: Property,
         msg: Option<String>,
     ) -> Result<(), IndigoError> {
         let mut props = self.props.write();
-        // props.entry(p.key()).and_modify(|pi| { pi.update(&p); }).or_insert(p);
-
         match props.entry(p.key()) {
             Entry::Occupied(mut e) => e.get_mut().update(p),
             Entry::Vacant(e) => _ = e.insert(p),
         };
 
-        let mut devs = self.devices.write();
-        match devs.entry(d.name().to_string()) {
-            Entry::Occupied(e) => e.get().assert_same(d)?,
-            Entry::Vacant(e) => _ = e.insert(d),
-        };
-
         Ok(())
     }
-    /*
-        fn on_update_property(
-            &mut self,
-            c: &'a mut Client<'a, impl Model<'a,T>>,
-            d: &'a mut Device<'a, impl Model<'a,T>>,
-            p: Property,
-            msg: Option<String>,
-        ) -> Result<(), IndigoError> {
 
-    */
     fn on_update_property(
         &mut self,
-        c: &'a mut Client<'a, Self::M>,
-        d: Device,
+        c: &mut Client<'a, Self::M>,
+        d: String,
         p: Property,
         msg: Option<String>,
     ) -> Result<(), IndigoError> {
-        Ok(())
+        let mut props = self.props.write();
+        match props.get_mut(&p.key()) {
+            Some(prop) => Ok(prop.update(p)),
+            None => Err(IndigoError::Bus(crate::BusError::NotFound)),
+        }
     }
 
     fn on_delete_property(
         &mut self,
         c: &mut Client<'a, Self::M>,
-        d: Device,
+        d: String,
         p: Property,
         msg: Option<String>,
     ) -> Result<(), IndigoError> {
-        Ok(())
+        let mut props = self.props.write();
+        match props.remove(&p.key()) {
+            Some(_) => Ok(()),
+            None => Err(IndigoError::Bus(crate::BusError::NotFound)),
+        }
     }
 
     fn on_send_message(
         &mut self,
         c: &mut Client<'a, Self::M>,
-        d: Device,
+        d: String,
         msg: String,
     ) -> Result<(), IndigoError> {
-        Ok(())
+        todo!()
     }
 }

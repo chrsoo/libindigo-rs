@@ -1,10 +1,9 @@
 use std::io::prelude::*;
 use std::env;
-use std::io::{BufReader, Error, ErrorKind};
+use std::io::BufReader;
 use std::path::PathBuf;
 use semver::Version;
 use regex::Regex;
-use bindgen::Builder;
 
 fn join_paths(base: &PathBuf, path: &str) -> String {
     let p = base.join(path);

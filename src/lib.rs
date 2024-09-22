@@ -10,8 +10,8 @@ mod server;
 
 pub use bus::Bus;
 pub use client::Client;
-pub use device::Device;
-pub use model::DefaultModel;
+pub use device::DeviceImpl;
+pub use model::FlatPropertyModel;
 pub use model::Model;
 use parking_lot::RwLockWriteGuard;
 pub use property::Property;
@@ -224,7 +224,7 @@ fn buf_to_str<'a, const N: usize>(buf: [c_char; N]) -> &'a str {
     let ptr = buf.as_ptr();
     let cstr = unsafe { CStr::from_ptr(ptr) };
     cstr.to_str()
-        .inspect_err(|e| warn!("{}", e))
+        .inspect_err(|e| warn!("{e}"))
         .unwrap_or("<invalid>")
 }
 
@@ -270,20 +270,20 @@ enum IndigoRequest {
     Detach,
 }
 
-pub type IndigoResult<T> = Result<T,IndigoError>;
-pub type Callback<'a,T> = dyn FnMut(IndigoResult<T>) -> IndigoResult<()> +'a;
+pub type IndigoResult<T> = Result<T, IndigoError>;
+pub type Callback<'a, T> = dyn FnMut(IndigoResult<T>) -> IndigoResult<()> + 'a;
 
 /// Types of request for [Client], [ServerConnection], or [Device].
 #[derive(strum_macros::Display)]
-enum IndigoRequest2<'a,T> {
-    Connect(Box<&'a mut Callback<'a,T>>),
-    Disconnect(Box<&'a mut Callback<'a,T>>),
-    Attach(Box<&'a mut Callback<'a,T>>),
-    Detach(Box<Callback<'a,T>>),
+enum IndigoRequest2<'a, T> {
+    Connect(Box<&'a mut Callback<'a, T>>),
+    Disconnect(Box<&'a mut Callback<'a, T>>),
+    Attach(Box<&'a mut Callback<'a, T>>),
+    Detach(Box<Callback<'a, T>>),
 }
 
-impl<'a,T> IndigoRequest2<'a,T> {
-    pub fn callback(&mut self, r: IndigoResult<T>) -> IndigoResult<()>{
+impl<'a, T> IndigoRequest2<'a, T> {
+    pub fn callback(&mut self, r: IndigoResult<T>) -> IndigoResult<()> {
         match self {
             IndigoRequest2::Connect(c) => c(r),
             IndigoRequest2::Disconnect(c) => c(r),
