@@ -1,4 +1,8 @@
-use std::{marker::PhantomData, os::raw::c_void, ptr, sync::Arc};
+use std::{
+    marker::PhantomData,
+    os::raw::c_void,
+    ptr::{self},
+};
 
 use crate::*;
 use device::Device;
@@ -10,7 +14,7 @@ use property::{Blob, BlobMode};
 
 struct ClientState<'a, T>
 where
-    T: Model<'a>,
+    T: ClientCallbacks<'a>,
 {
     model: T,
     request: Option<IndigoRequest>,
@@ -18,37 +22,235 @@ where
     ref_count: u32,
 }
 
-/// Device as seen from the Client.
-pub struct ClientDevice {
-    name: String,
-    props: RwLock<HashMap<String, Property>>,
-}
+/// Data model used by a [IndigoClient] with callback methods to handle [IndigoBus] events.
+pub trait ClientCallbacks<'a> {
+    type M: ClientCallbacks<'a>;
 
-impl Device for ClientDevice {
-    fn name(&self) -> &str {
-        self.name.as_str()
+    /// Called each time the property of a device is defined or its definition requested.
+    fn on_define_property(
+        &mut self,
+        c: &mut Client<'a, Self::M>,
+        d: String,
+        p: Property,
+        msg: Option<String>,
+    ) -> Result<(), IndigoError> {
+        debug!(
+            "Device: '{}'; Property '{}'; DEFINED with message '{:?}'",
+            d,
+            p.name(),
+            msg
+        );
+        Ok(())
+    }
+
+    /// Called each time a property is updated for a device.
+    fn on_update_property(
+        &mut self,
+        c: &mut Client<'a, Self::M>,
+        d: String,
+        p: Property,
+        msg: Option<String>,
+    ) -> Result<(), IndigoError> {
+        debug!(
+            "Device: '{}'; Property '{}'; UPDATED with message '{:?}'",
+            d,
+            p.name(),
+            msg
+        );
+        Ok(())
+    }
+
+    /// Called each time a property is deleted.
+    fn on_delete_property(
+        &mut self,
+        c: &mut Client<'a, Self::M>,
+        d: String,
+        p: Property,
+        msg: Option<String>,
+    ) -> Result<(), IndigoError> {
+        debug!(
+            "Device: '{}'; Property '{}'; DELETED with message '{:?}'",
+            d,
+            p.name(),
+            msg
+        );
+        Ok(())
+    }
+
+    /// Called each a device broadcasts a message. The default implementation logs the message at INFO level.
+    fn on_send_message(
+        &mut self,
+        c: &mut Client<'a, Self::M>,
+        d: String,
+        msg: String,
+    ) -> Result<(), IndigoError> {
+        info!("Device: '{d}';  SEND  message: '{msg}'");
+        Ok(())
     }
 }
 
-impl ClientDevice {
-    pub fn define_property(property: Property) {
+/// A device as seen from a client implementation
+pub struct ClientDevice<'a> {
+    name: &'a str,
+    props: &'a mut HashMap<String, Property>,
+}
+
+// TODO move ClientDevice methods to Device trait
+impl<'a> ClientDevice<'a> {
+    pub(crate) fn addr_of_name(&self) -> *mut c_char {
+        // addr_of!((*self.sys).name) as *const _ as *mut c_char
         todo!()
     }
 }
 
-impl From<*mut indigo_device> for ClientDevice {
-    fn from(value: *mut indigo_device) -> Self {
-        ClientDevice {
-            name: buf_to_string((unsafe { &*value }).name),
-            props: RwLock::new(HashMap::new()),
+impl<'a> Display for ClientDevice<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let status = self.connected().map_or_else(
+            |e| format!("{:?}", e),
+            |s| {
+                if s {
+                    "connected".to_string()
+                } else {
+                    "disconnected".to_string()
+                }
+            },
+        );
+        write!(f, "{} ({}) [", self.name(), status)?;
+        let mut sep = "";
+        if let Some(ifaces) = self.list_interfaces() {
+            for item in ifaces {
+                write!(f, "{sep}{item}")?;
+                sep = ", ";
+            }
         }
+        write!(f, "]")?;
+
+        Ok(())
+    }
+}
+
+impl<'a> Device for ClientDevice<'a> {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn get(&self, property: &str) -> Option<&Property> {
+        self.props.get(property)
+    }
+
+    fn get_mut(&mut self, property: &str) -> Option<&mut Property> {
+        self.props.get_mut(property)
+    }
+
+    fn props(&self) -> impl Iterator<Item = &Property> {
+        self.props.values()
+    }
+
+    fn props_mut(&mut self) -> impl Iterator<Item = &mut Property> {
+        self.props.values_mut()
+    }
+}
+
+/// A default implementation of [ClientCallbacks] that manages the set of all enumerated devices
+/// and their properties that are defined on the [Bus](crate::Bus) .
+pub struct ClientDeviceModel {
+    devices: HashMap<String, HashMap<String, Property>>,
+}
+
+impl<'a> ClientCallbacks<'a> for ClientDeviceModel {
+    type M = ClientDeviceModel;
+
+    fn on_define_property(
+        &mut self,
+        c: &mut Client<'a, Self::M>,
+        d: String,
+        p: Property,
+        msg: Option<String>,
+    ) -> Result<(), IndigoError> {
+        // FIXME hanlde device 'd'
+        let props = self
+            .devices
+            .entry(p.device())
+            .or_insert_with(|| HashMap::new());
+        props
+            .entry(p.name())
+            .and_modify(|prop| prop.update(&p))
+            .or_insert(p);
+
+        Ok(())
+    }
+
+    fn on_update_property(
+        &mut self,
+        c: &mut Client<'a, Self::M>,
+        d: String,
+        p: Property,
+        msg: Option<String>,
+    ) -> Result<(), IndigoError> {
+        // FIXME handle device 'd'
+        if let Some(props) = self.devices.get_mut(&p.device()) {
+            if let Some(prop) = props.get_mut(&p.name()) {
+                prop.update(&p);
+                Ok(())
+            } else {
+                Err(IndigoError::Message(
+                    "Trying to update an undefined property.",
+                ))
+            }
+        } else {
+            Err(IndigoError::Message("Device not found."))
+        }
+    }
+
+    fn on_delete_property(
+        &mut self,
+        c: &mut Client<'a, Self::M>,
+        d: String,
+        p: Property,
+        msg: Option<String>,
+    ) -> Result<(), IndigoError> {
+        if let Some(props) = self.devices.get_mut(&d) {
+            if let Some(prop) = props.remove(&p.name()) {
+                Ok(())
+            } else {
+                Err(IndigoError::Message(
+                    "Trying to delete an undefined property.",
+                ))
+            }
+        } else {
+            Err(IndigoError::Message("Device not found."))
+        }
+    }
+
+    fn on_send_message(
+        &mut self,
+        c: &mut Client<'a, Self::M>,
+        d: String,
+        msg: String,
+    ) -> Result<(), IndigoError> {
+        info!("Device: '{d}';  SEND  message: '{msg}'");
+        Ok(())
+    }
+}
+
+impl ClientDeviceModel {
+    pub fn new() -> ClientDeviceModel {
+        ClientDeviceModel {
+            devices: HashMap::new(),
+        }
+    }
+
+    pub fn devices(&mut self) -> impl Iterator<Item = ClientDevice> {
+        self.devices
+            .iter_mut()
+            .map(|(k, v)| ClientDevice { name: k, props: v })
     }
 }
 
 /// Client to manage devices attached to the INDIGO [Bus].
 pub struct Client<'a, T>
 where
-    T: Model<'a>,
+    T: ClientCallbacks<'a>,
 {
     /// System record for INDIGO clients.
     sys: &'a indigo_client,
@@ -57,7 +259,7 @@ where
 
 impl<'a, M> Client<'a, M>
 where
-    M: Model<'a, M = M> + 'a,
+    M: ClientCallbacks<'a, M = M> + 'a,
 {
     /// Create new client for a model. Clients running locally in the same process
     /// as the INDIGO [Bus] should set remote to `false` and clients running in a
@@ -111,7 +313,7 @@ where
     where
         F: FnMut(&mut Client<'a, M>) -> Result<(), IndigoError> + 'a,
     {
-        trace!("'{self}' - registering {request} request.");
+        trace!("'{self}' - registering {request} request...");
         let name = self.name();
         // let name = buf_to_str(self.sys.name);
         let mut lock = self.aquire_write_lock();
@@ -177,10 +379,11 @@ where
     }
 
     /// Connect a device from the INDIGO bus.
+
     #[named]
     pub fn connect_device(
         &mut self,
-        d: &mut DeviceImpl,
+        d: &mut ClientDevice,
         f: impl FnOnce(Result<(), IndigoError>) + 'a,
     ) -> Result<(), IndigoError> {
         trace!("Enter '{}'", function_name!());
@@ -191,15 +394,16 @@ where
     }
 
     /// Disconnect a device from the INDIGO bus.
+    // TODO implement the callback
     #[named]
     pub fn disconnect_device(
         &mut self,
-        d: &mut DeviceImpl,
+        d: &str,
         f: impl FnOnce(Result<(), IndigoError>) + 'a,
     ) -> Result<(), IndigoError> {
         trace!("Enter '{}'", function_name!());
         trace!("Disconnecting device '{}'...", d);
-        let n = d.addr_of_name();
+        let n = d.as_ptr() as *const _ as *mut c_char;
         let ptr = ptr::addr_of!(*self.sys) as *mut indigo_client;
         let result = unsafe { indigo_device_disconnect(ptr, n) };
         Bus::sys_to_lib((), result, "indigo_device_disconnect")
@@ -256,30 +460,30 @@ where
 
         if let Some(request) = &lock.request {
             if request != expected {
-                warn!("Indigo callback called for a {request} request for '{name}'; expected {expected}.")
+                warn!("'{name}' - Indigo callback for {request} request; expected {expected}.")
             }
             // Reset the request.
             lock.request = None;
         } else {
-            warn!("INDIGO callback for '{name}' without an active request.");
+            warn!("'{name}' - INDIGO callback without an active request.");
         }
 
         let c = Self::try_from(client);
         if let Err(e) = c {
-            error!("INDIGO {expected} callback for '{name}' failed as the client state could not be restored.");
+            error!("'{name}' - INDIGO {expected} callback failed as the client state could not be restored.");
             return e.into();
         }
 
         trace!("Notifying the client requestor...");
 
         if let Err(e) = (lock.callback)(&mut c.unwrap()) {
-            error!("Callback notification error: '{}'.", e);
+            error!("'{name}' - callback notification error: '{}'.", e);
             if let IndigoError::Bus(b) = e {
                 return b.into();
             }
             return BusError::Failed.into();
         }
-        debug!("Client '{name}' notified for {expected}.");
+        debug!("'{name}' - notified for {expected}.");
 
         lock.callback = Box::new(|c| {
             // If this error is returned we are receiving callbacks without first calling attach,
@@ -296,15 +500,14 @@ where
 
     #[named]
     unsafe extern "C" fn on_attach(client: *mut indigo_client) -> indigo_result {
-        trace!("INDIGO '{}' callback.", function_name!());
-        info!("'{}' attached.", buf_to_str((*client).name));
+        log_indigo_callback(client, function_name!());
+        info!("'{}' - attached.", buf_to_str((*client).name));
         Self::callback(client, &IndigoRequest::Attach)
     }
 
     #[named]
     unsafe extern "C" fn on_detach(client: *mut indigo_client) -> indigo_result {
-        trace!("INDIGO '{}' callback.", function_name!());
-        info!("'{}' detached.", buf_to_str((*client).name));
+        log_indigo_callback(client, function_name!());
         Self::callback(client, &IndigoRequest::Detach)
     }
 
@@ -316,8 +519,7 @@ where
         property: *mut indigo_property,
         message: *const i8,
     ) -> indigo_result {
-
-        trace!("INDIGO '{}' callback.", function_name!());
+        log_indigo_callback(client, function_name!());
 
         let name = buf_to_string((unsafe { &*client }).name);
         let mut lock = Self::write_lock(client);
@@ -327,6 +529,12 @@ where
         let device = buf_to_string((unsafe { &*device }).name);
         let msg = ptr_to_string(message);
 
+        debug!(
+            "'{}' - device: '{}' DEFINE property: '{}'",
+            name,
+            device,
+            p.name()
+        );
         let result = lock.model.on_define_property(&mut c, device, p, msg);
         Bus::lib_to_sys(result, function_name!())
     }
@@ -338,8 +546,7 @@ where
         property: *mut indigo_property,
         message: *const i8,
     ) -> indigo_result {
-
-        trace!("INDIGO '{}' callback.", function_name!());
+        log_indigo_callback(client, function_name!());
 
         let name = buf_to_string((unsafe { &*client }).name);
         let mut lock = Self::write_lock(client);
@@ -349,6 +556,12 @@ where
         let device = buf_to_string((unsafe { &*device }).name);
         let msg = ptr_to_string(message);
 
+        debug!(
+            "'{}' - device: '{}' UPDATE property: '{}'",
+            name,
+            device,
+            p.name()
+        );
         let result = lock.model.on_update_property(&mut c, device, p, msg);
         Bus::lib_to_sys(result, function_name!())
     }
@@ -360,8 +573,7 @@ where
         property: *mut indigo_property,
         message: *const ::std::os::raw::c_char,
     ) -> indigo_result {
-
-        trace!("INDIGO '{}' callback.", function_name!());
+        log_indigo_callback(client, function_name!());
 
         let name = buf_to_string((unsafe { &*client }).name);
         let mut lock = Self::write_lock(client);
@@ -371,6 +583,12 @@ where
         let device = buf_to_string((unsafe { &*device }).name);
         let msg = ptr_to_string(message);
 
+        debug!(
+            "'{}' - device: '{}' DELETE property: '{}'",
+            name,
+            device,
+            p.name()
+        );
         let result = lock.model.on_delete_property(&mut c, device, p, msg);
         Bus::lib_to_sys(result, function_name!())
     }
@@ -381,8 +599,7 @@ where
         device: *mut indigo_device,
         message: *const ::std::os::raw::c_char,
     ) -> indigo_result {
-
-        trace!("INDIGO '{}' callback.", function_name!());
+        log_indigo_callback(client, function_name!());
 
         let name = buf_to_string((unsafe { &*client }).name);
         let mut lock = Self::write_lock(client);
@@ -398,7 +615,9 @@ where
             return e.into();
         }
 
-        let result = lock.model.on_send_message(&mut c, device, msg.unwrap());
+        let msg = msg.unwrap();
+        debug!("'{}' - device: '{}' SEND message: '{}'", name, device, msg);
+        let result = lock.model.on_send_message(&mut c, device, msg);
         Bus::lib_to_sys(result, function_name!())
     }
 
@@ -430,7 +649,26 @@ where
     }
 }
 
-impl<'a, T: Model<'a>> Display for Client<'a, T> {
+unsafe fn log_indigo_callback(client: *mut indigo_client, method: &str) {
+    let result = (*client).last_result;
+    if result > 0 {
+        debug!(
+            "'{}' - INDIGO callback for '{}' with result {:?}",
+            buf_to_str((*client).name),
+            method,
+            result
+        );
+    } else {
+        trace!(
+            "'{}' - INDIGO callback for '{}' with result {:?}",
+            buf_to_str((*client).name),
+            method,
+            result
+        );
+    }
+}
+
+impl<'a, T: ClientCallbacks<'a>> Display for Client<'a, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = buf_to_str(self.sys.name);
         write!(f, "{name}")
@@ -453,7 +691,7 @@ where T: Model<'a> {
 
 impl<'a, T> TryFrom<*mut indigo_client> for Client<'a, T>
 where
-    T: Model<'a>,
+    T: ClientCallbacks<'a>,
 {
     type Error = BusError;
 
@@ -461,7 +699,10 @@ where
         let sys = unsafe { &*value };
         if sys.client_context == ptr::null_mut() {
             let client = buf_to_string(sys.name);
-            warn!("Could not restore '{}' client state as client_context is null", client);
+            warn!(
+                "Could not restore '{}' client state as client_context is null",
+                client
+            );
             Err(BusError::NotFound)
         } else {
             Ok(Client {

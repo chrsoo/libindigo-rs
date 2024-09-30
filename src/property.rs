@@ -1,5 +1,5 @@
 use std::{
-    ffi::{c_long, CStr}, fmt::Display, ptr
+    cmp::Ordering, ffi::{c_long, CStr}, fmt::Display, ptr
 };
 
 use enum_primitive::*;
@@ -124,6 +124,26 @@ impl Display for PropertyValue {
     }
 }
 
+impl Eq for Property { }
+
+impl PartialEq for Property {
+    fn eq(&self, other: &Self) -> bool {
+        self.sys == other.sys
+    }
+}
+
+impl Ord for Property {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.name().cmp(&other.name())
+    }
+}
+
+impl PartialOrd for Property {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.sys.partial_cmp(&other.sys)
+    }
+}
+
 impl PropertyValue {
     fn item_to_text(item: &indigo_item) -> PropertyValue {
         let v = unsafe { item.__bindgen_anon_1.text.as_ref() };
@@ -234,6 +254,23 @@ impl<'a> Display for PropertyItem {
     }
 }
 
+impl Eq for PropertyItem { }
+impl PartialEq for PropertyItem {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.value == other.value
+    }
+}
+impl PartialOrd for PropertyItem {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.name.partial_cmp(&other.name)
+    }
+}
+impl Ord for PropertyItem {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.name.cmp(&other.name)
+    }
+}
+
 impl<'a> PropertyItem {
     /// Create a new [PropertyItem] from an [indigo_item].
     fn sys(prop: &'a PropertyType, item: &indigo_item) -> PropertyItem {
@@ -320,13 +357,17 @@ impl Display for Property {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Property[Name: {}; Device: {}; Group: {}; Label: {}; Hints: {}]",
+            "Property[Name: '{}'; Device: '{}'; Group: '{}'; Label: '{}'; Hints: '{}']",
             self.name(),
             self.device(),
             self.group(),
             self.label(),
             self.hints(),
-        )
+        )?;
+        for item in self {
+            write!(f, "    {item}")?;
+        }
+        Ok(())
     }
 }
 
@@ -401,8 +442,7 @@ impl Property {
         (unsafe { &*self.sys }).count as usize
     }
 
-    #[deprecated]
-    pub fn update(&mut self, p: Property) {
+    pub fn update(&mut self, p: &Property) {
         self.sys = p.sys;
     }
 
@@ -412,6 +452,18 @@ impl Property {
             items: unsafe { (&*self.sys).items.as_slice((&*self.sys).count as usize) },
             index: 0,
         }
+    }
+
+    pub fn get_item(&self, name: &str) -> Option<PropertyItem> {
+        self.items()
+            .filter(|i| i.name == name)
+            .nth(0)
+    }
+
+    pub fn get_mut_item(&mut self, name: &str) -> Option<PropertyItem> {
+        self.items()
+            .filter(|i| i.name == name)
+            .nth(0)
     }
 
     /*

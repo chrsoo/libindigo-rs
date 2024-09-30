@@ -76,6 +76,7 @@ impl Bus {
                 IndigoError::Bus(bus_error) => bus_error.into(),
                 IndigoError::Sys(_) => BusError::Failed.into(),
                 IndigoError::Other(_) => BusError::Failed.into(),
+                IndigoError::Message(_) => BusError::Failed.into(),
             }
         }
     }

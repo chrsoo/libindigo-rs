@@ -4,16 +4,16 @@
 mod bus;
 mod client;
 mod device;
-mod model;
+mod driver;
 mod property;
 mod server;
 
 pub use bus::Bus;
 pub use client::Client;
-pub use device::DeviceImpl;
-pub use model::FlatPropertyModel;
-pub use model::Model;
-use parking_lot::RwLockWriteGuard;
+pub use device::Device;
+pub use device::Interface;
+pub use client::ClientCallbacks;
+pub use client::ClientDeviceModel;
 pub use property::Property;
 pub use property::PropertyItem;
 pub use property::PropertyKey;
@@ -22,6 +22,7 @@ pub use property::PropertyType;
 pub use property::PropertyValue;
 pub use server::ServerConnection;
 
+use parking_lot::RwLockWriteGuard;
 use log::warn;
 use std::collections::hash_map::Values;
 use std::collections::hash_map::ValuesMut;
@@ -74,6 +75,8 @@ pub enum IndigoError {
     Sys(Box<dyn Error>),
     /// Other errors.
     Other(String),
+    /// Other errors.
+    Message(&'static str),
 }
 
 unsafe impl Sync for IndigoError {}
@@ -84,7 +87,8 @@ impl Display for IndigoError {
         match self {
             IndigoError::Bus(result) => Display::fmt(result, f),
             IndigoError::Sys(error) => Display::fmt(error, f),
-            IndigoError::Other(msg) => write!(f, "{}", msg),
+            IndigoError::Other(msg) => write!(f, "{msg}"),
+            IndigoError::Message(msg) => write!(f, "{msg}"),
         }
     }
 }
@@ -234,6 +238,13 @@ fn const_to_string(name: &[u8]) -> String {
     name.to_string_lossy().into_owned()
 }
 
+#[deprecated]
+fn const_to_str<'a>(message: &[u8]) -> IndigoResult<&'a str> {
+    let message = message.as_ptr();
+    let cstr = unsafe { CStr::from_ptr(message as *const i8) };
+    Ok(cstr.to_str()?)
+}
+
 fn ptr_to_string(message: *const c_char) -> Option<String> {
     if message == ptr::null() {
         None
@@ -347,5 +358,10 @@ mod tests {
             BusError::from_indigo_result(indigo_result_INDIGO_OK).err(),
             Some("Unknown INDIGO error result: 0".to_string())
         );
+    }
+
+    #[test]
+    fn sys_constants() {
+        assert_eq!("INFO", const_to_string(INFO_PROPERTY_NAME));
     }
 }

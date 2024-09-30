@@ -35,6 +35,12 @@ struct TestMonitor {
 }
 
 impl TestMonitor {
+    fn new() -> TestMonitor {
+        TestMonitor {
+            visited: Arc::new((Mutex::new(false), Condvar::new())),
+        }
+    }
+
     fn visit(&self) -> Result<(), IndigoError> {
         let (lock, cvar) = &*self.visited;
         let mut visited = lock.lock().unwrap();
@@ -42,7 +48,7 @@ impl TestMonitor {
         cvar.notify_one();
         Ok(())
     }
-    pub fn wait(&self) -> Result<(), IndigoError> {
+    fn wait(&self) -> Result<(), IndigoError> {
         let (lock, cvar) = &*self.visited;
         let mut visited = lock.lock().unwrap();
         while !*visited {
@@ -54,64 +60,46 @@ impl TestMonitor {
 }
 
 #[test]
-fn client_callbacks() -> Result<(), IndigoError> {
+fn client() -> Result<(), IndigoError> {
+    // prepare the monitor to be used for async testing
+    let monitor = Arc::new(TestMonitor::new());
+
+    // prepare and start the bus
     Bus::set_log_level(LogLevel::Debug);
     Bus::start()?;
+    // connect the bus to the remote server
+    let mut remote_server = Bus::connect("Indigo", "localhost", 7624)?;
 
-    let mut server = Bus::connect("INDIGO", "localhost", 7624)?;
-    let model = FlatPropertyModel::new();
-    let mut client = Client::new("TestClient", model, false);
-    let monitor = Arc::new(TestMonitor {
-        visited: Arc::new((Mutex::new(false), Condvar::new())),
-    });
+    // create a client for the remove server
+    let mut client = Client::new("TestClient", ClientDeviceModel::new(), false);
 
+    // attach the client to the INDIGO bus with a callback reference to the monitor
     let m = monitor.clone();
     client.attach(move |c| {
         debug!("Attach callback closure called.");
         m.visit()
     })?;
-    client.define_properties()?;
-
-    sleep(Duration::from_secs(3));
+    // wait for the async callback to happen
     monitor.wait()?;
-    {
-        /*
-        let props = client
-            .model()
-            .devices()
-            .into_iter()
-            .flatten()
-            .filter(|p| matches!(p.property_type(), PropertyType::Blob))
-            // create an iterator of type tuple (PropertyKey,PropertyItem)
-            //.map(|(k, p)| iter::repeat(k).take(p.items_used()).zip(p.items()))
-            //.flatten()
-            //.for_each(|(k, i)| debug!("{k}, {i}"));
-            .for_each(|p| debug!("{p}"));
 
-        debug!("----------------");
-        */
-        client.model(|m| Ok(
-            m.props_map()
-            .iter()
-            .for_each(|(_, p)| {
-                println!("{p}");
-                for i in p.items() {
-                    println!("    {i}");
-                }
-            })
-        ))?;
+    // initialise all properties
+    client.define_properties()?;
+    // give some time for the property definition callbacks to happen
+    // NOTE should there not be a callback signalling that all the props have been defined?
+    sleep(Duration::from_secs(3));
 
-        client.blobs().iter().for_each(|b| debug!("{:?}", b));
+    client.model(|m| {
+        Ok(m.devices().for_each(|d| {
+            println!("{d}");
+            d.props().for_each(|p| println!("    {}", p.name()));
+        }))
+    })?;
 
-        /*
-        client.model(|m| Ok(
-            m.device_map()
-            .iter()
-            .for_each(|(k, d)| debug!("Interfaces: {:?}", d.interfaces()))
-        ))?;
+    client.blobs().iter().for_each(|b| debug!("{:?}", b));
 
-         */
-    }
+    remote_server.dicsonnect()?;
+
+    // client.disconnect_device("Indigo", |r| debug!("Disconnect callback: '{:?}'", r))?;
 
     let m = monitor.clone();
     client.detach(move |c| {
@@ -120,7 +108,6 @@ fn client_callbacks() -> Result<(), IndigoError> {
     })?;
     monitor.wait()?;
 
-    server.dicsonnect()?;
     // server.shutdown()?;
 
     sleep(Duration::from_secs(5));
