@@ -1,3 +1,11 @@
+[workspace]
+
+members = [
+    ".",
+    "app",
+    "sys",
+]
+
 [package]
 name = "libindigo"
 version = "0.1.0+INDIGO.2.0.289"

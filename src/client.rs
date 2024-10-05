@@ -339,8 +339,8 @@ where
     /// Attach the client to the INDIGO bus and invoke the callback closure when done.
     pub fn attach(
         &mut self,
-        f: impl FnMut(&mut Client<'a, M>) -> Result<(), IndigoError> + 'a,
-    ) -> Result<(), IndigoError> {
+        f: impl FnMut(&mut Client<'a, M>) -> IndigoResult<()> + 'a,
+    ) -> IndigoResult<()> {
         self.register_request(IndigoRequest::Attach, f)?;
 
         trace!("'{}' - attaching client...", self);

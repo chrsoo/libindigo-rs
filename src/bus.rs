@@ -6,7 +6,7 @@ use server::ServerConnection;
 pub struct Bus {}
 
 impl Bus {
-    pub fn start() -> Result<(), IndigoError> {
+    pub fn start() -> IndigoResult<()> {
         trace!("Starting bus...");
         let r = unsafe { indigo_start() };
         Bus::sys_to_lib((), r, "indigo_start")
@@ -17,7 +17,7 @@ impl Bus {
             })
     }
 
-    pub fn stop() -> Result<(), IndigoError> {
+    pub fn stop() -> IndigoResult<()> {
         trace!("Stopping bus...");
         let r = unsafe { indigo_stop() };
         Bus::sys_to_lib((), r, "indigo_stop")
@@ -37,7 +37,7 @@ impl Bus {
         }
     }
 
-    pub fn log(msg: &str) -> Result<(), IndigoError> {
+    pub fn log(msg: &str) -> IndigoResult<()> {
         debug!("Bus log message: '{}'.", msg);
         let buf: [c_char; 256] = str_to_buf(msg)?;
         unsafe { indigo_log(buf.as_ptr()) };
