@@ -1,14 +1,112 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <interface>
-  <template class="MyGtkAppWindow" parent="GtkApplicationWindow">
-    <property name="title">My GTK App</property>
+  <object class="GtkEntryBuffer" id="server-host" />
+  <object class="GtkEntryBuffer" id="server-port" />
+  <template class="LibINDIGOExampleApp" parent="GtkApplicationWindow">
+    <property name="title">libindigo-rs</property>
     <child>
-      <object class="GtkButton" id="button">
-        <property name="label">Press me!</property>
+      <object class="ServerPanel" id="server_panel" />
+    </child>
+    <child>
+      <object class="GtkBox">
+        <property name="orientation">vertical</property>
         <property name="margin-top">12</property>
         <property name="margin-bottom">12</property>
         <property name="margin-start">12</property>
         <property name="margin-end">12</property>
+        <property name="spacing">6</property>
+        <child>
+          <object class="GtkFrame">
+            <child type="label">
+              <object class="GtkLabel" id="info"/>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">horizontal</property>
+            <child>
+              <object class="GtkEntry" id="host">
+                <property name="placeholder-text" translatable="yes">localhost</property>
+                <property name="buffer">server-host</property>
+                <property name="input-hints">GTK_INPUT_HINT_LOWERCASE | GTK_INPUT_HINT_WORD_COMPLETION | GTK_INPUT_HINT_NO_SPELLCHECK</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="label">:</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkEntry" id="port">
+                <property name="placeholder-text" translatable="yes">7624</property>
+                <property name="width-chars">5</property>
+                <property name="max-width-chars">5</property>
+                <property name="max-length">5</property>
+                <property name="input-purpose">GTK_INPUT_PURPOSE_DIGITS</property>
+                <property name="buffer">server-port</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkButton" id="button">
+                <property name="icon-name">media-playback-start</property>
+                <!-- <property name="icon-tooltip-text">Press play to connect server!</property> -->
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="button1">
+            <property name="label">Press me!</property>
+            <property name="margin-top">12</property>
+            <property name="margin-bottom">12</property>
+            <property name="margin-start">12</property>
+            <property name="margin-end">12</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">horizontal</property>
+            <property name="margin-top">12</property>
+            <property name="margin-bottom">12</property>
+            <property name="margin-start">12</property>
+            <property name="margin-end">12</property>
+            <property name="spacing">6</property>
+            <child>
+              <object class="GtkStackSidebar">
+                <property name="stack">device-stack</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkStack" id="device-stack">
+                <property name="hexpand">true</property>
+                <property name="vexpand">true</property>
+                <child>
+                  <object class="GtkStackPage">
+                    <property name="name">page1</property>
+                    <property name="title">Device 1</property>
+                    <property name="child">
+                      <object class="GtkLabel">
+                        <property name="label">Properties for Device ................. 1</property>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkStackPage">
+                    <property name="name">page2</property>
+                    <property name="title">Device 2</property>
+                    <property name="child">
+                      <object class="GtkLabel">
+                        <property name="label">Properties for Device ................ 2</property>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
       </object>
     </child>
   </template>

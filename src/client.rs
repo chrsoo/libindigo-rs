@@ -347,7 +347,7 @@ where
         // request that the client is attached to the bus
         let ptr = ptr::addr_of!(*self.sys) as *mut indigo_client;
         let result = unsafe { indigo_attach_client(ptr) };
-        Bus::sys_to_lib((), result, "indigo_attach_client")
+        bus::sys_to_lib((), result, "indigo_attach_client")
     }
 
     /// Detach the client from the INDIGO bus and invoke the callback closure when done.
@@ -360,7 +360,7 @@ where
         trace!("'{}' - detaching client...", self);
         let ptr = ptr::addr_of!(*self.sys) as *mut indigo_client;
         let result = unsafe { indigo_detach_client(ptr) };
-        Bus::sys_to_lib((), result, "indigo_detach_client")
+        bus::sys_to_lib((), result, "indigo_detach_client")
     }
 
     /// Define all properties for devices attached to the INDIGO bus.
@@ -374,7 +374,7 @@ where
             //let p = &mut INDIGO_ALL_PROPERTIES as &mut indigo_property;
             let ptr = ptr::addr_of!(*self.sys) as *mut indigo_client;
             let result = indigo_enumerate_properties(ptr, p);
-            Bus::sys_to_lib((), result, "indigo_enumerate_properties")
+            bus::sys_to_lib((), result, "indigo_enumerate_properties")
         }
     }
 
@@ -390,7 +390,7 @@ where
         let n = d.addr_of_name();
         let ptr = ptr::addr_of!(*self.sys) as *mut indigo_client;
         let result = unsafe { indigo_device_connect(ptr, n) };
-        Bus::sys_to_lib((), result, "indigo_device_connect")
+        bus::sys_to_lib((), result, "indigo_device_connect")
     }
 
     /// Disconnect a device from the INDIGO bus.
@@ -406,7 +406,7 @@ where
         let n = d.as_ptr() as *const _ as *mut c_char;
         let ptr = ptr::addr_of!(*self.sys) as *mut indigo_client;
         let result = unsafe { indigo_device_disconnect(ptr, n) };
-        Bus::sys_to_lib((), result, "indigo_device_disconnect")
+        bus::sys_to_lib((), result, "indigo_device_disconnect")
     }
 
     // -- getters
@@ -536,7 +536,7 @@ where
             p.name()
         );
         let result = lock.model.on_define_property(&mut c, device, p, msg);
-        Bus::lib_to_sys(result, function_name!())
+        bus::lib_to_sys(result, function_name!())
     }
 
     #[named]
@@ -563,7 +563,7 @@ where
             p.name()
         );
         let result = lock.model.on_update_property(&mut c, device, p, msg);
-        Bus::lib_to_sys(result, function_name!())
+        bus::lib_to_sys(result, function_name!())
     }
 
     #[named]
@@ -590,7 +590,7 @@ where
             p.name()
         );
         let result = lock.model.on_delete_property(&mut c, device, p, msg);
-        Bus::lib_to_sys(result, function_name!())
+        bus::lib_to_sys(result, function_name!())
     }
 
     #[named]
@@ -618,7 +618,7 @@ where
         let msg = msg.unwrap();
         debug!("'{}' - device: '{}' SEND message: '{}'", name, device, msg);
         let result = lock.model.on_send_message(&mut c, device, msg);
-        Bus::lib_to_sys(result, function_name!())
+        bus::lib_to_sys(result, function_name!())
     }
 
     /// Acquire a lock on the client state held in the `client_context` of sys.

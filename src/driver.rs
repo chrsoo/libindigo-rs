@@ -6,7 +6,8 @@ use libindigo_sys::{indigo_detach_device, indigo_device, indigo_device_context, 
 use log::{debug, error, trace, warn};
 use parking_lot::{MappedRwLockWriteGuard, RwLock, RwLockWriteGuard};
 
-use crate::{buf_to_str, buf_to_string, const_to_string, device::GlobalLock, str_to_buf, AccessToken, Bus, BusError, GuardedStringMap, IndigoError, IndigoRequest2, IndigoResult, Property, StringMap};
+use crate::bus;
+use crate::{buf_to_str, buf_to_string, const_to_string, device::GlobalLock, str_to_buf, AccessToken, BusError, GuardedStringMap, IndigoError, IndigoRequest2, IndigoResult, Property, StringMap};
 
 struct DeviceState<'a> {
     props: StringMap<Property>,
@@ -162,7 +163,7 @@ impl<'a> DeviceDriver<'a> {
             let ptr = ptr::addr_of!(*self.sys) as *mut indigo_device;
             indigo_detach_device(ptr)
         };
-        Bus::sys_to_lib((), result, "indigo_detach_device")
+        bus::sys_to_lib((), result, "indigo_detach_device")
     }
 
     pub fn change_property(&self) -> Result<(), IndigoError> {
@@ -224,12 +225,12 @@ impl<'a> DeviceDriver<'a> {
         let d = d.unwrap();
 
         // presumable the last result is that related to the INDIGO on_detach callback...
-        let result = Bus::sys_to_lib(d, (*device).last_result, function_name!());
+        let result = bus::sys_to_lib(d, (*device).last_result, function_name!());
 
         // invoke the callback method provided it has been set previously
         if let Some(request) = &mut lock.request {
             let result = request.callback(result);
-            Bus::lib_to_sys(result, function_name!())
+            bus::lib_to_sys(result, function_name!())
         } else {
             warn!(
                 "Spurius callback without a registered request for device '{}'",

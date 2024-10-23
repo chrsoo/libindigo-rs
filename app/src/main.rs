@@ -1,8 +1,14 @@
 mod window;
+mod server_object;
+mod server_panel;
 
+use std::env;
+
+use gtk::glib::ExitCode;
 use gtk::prelude::*;
 use gtk::{gio, glib, Application};
-use libindigo::{Bus, IndigoResult, LogLevel, ServerConnection};
+use libindigo::{bus, LogLevel};
+use log::{error, warn};
 use window::Window;
 
 const APP_ID: &str = "se.jabberwocky.libindigo-rs-example-app";
@@ -38,12 +44,25 @@ const APP_ID: &str = "se.jabberwocky.libindigo-rs-example-app";
 
     // server.shutdown()?;
 
-    Bus::stop()?;
+    bus::stop()?;
 
      */
 
 
 fn main() -> glib::ExitCode {
+    // TODO make the glib log level configurable over GTK settings.
+    env::set_var("G_MESSAGES_DEBUG", "all");
+    glib_logger::init(&glib_logger::SIMPLE);
+    log::set_max_level(log::LevelFilter::Debug);
+
+    // TODO make the INDIGO LogLevel configurable over GTK settings.
+    // Set the log level and start the local INDIGO bus
+    bus::set_log_level(LogLevel::Debug);
+    if let Err(e) = bus::start() {
+        error!("Could not start the INDIGO bus: {e}");
+        return glib::ExitCode::FAILURE
+    }
+
     // Register and include resources
     gio::resources_register_include!("libindigo-rs-example-app.gresource").expect("Failed to register resources.");
 
@@ -54,18 +73,18 @@ fn main() -> glib::ExitCode {
     app.connect_activate(build_ui);
 
     // Run the application
-    app.run()
+    app.run();
+
+    if let Err(e) = bus::stop() {
+        warn!("Error while stopping the INDIGO bus: {e}");
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
 }
+
 fn build_ui(app: &Application) {
     // Create new window and present it
     let window = Window::new(app);
     window.present();
-}
-
-fn init_indigo_server() -> IndigoResult<ServerConnection> {
-     // prepare and start the bus
-    Bus::set_log_level(LogLevel::Debug);
-    Bus::start()?;
-    // connect the bus to the remote server
-    Bus::connect("Indigo", "localhost", 7624)
 }

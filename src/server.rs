@@ -1,12 +1,53 @@
 use std::{
-    ffi::c_int,
-    ptr, thread::sleep, time::Duration,
+    ffi::c_int, iter::Cloned, ptr, thread::sleep, time::Duration
 };
 
-use super::bus::*;
 use super::*;
 use libindigo_sys::{self, *};
 use log::{debug, info, trace};
+
+pub fn connect(name: &str, host: &str, port: c_int) -> IndigoResult<ServerConnection> {
+    trace!("Connecting to {host}:{port}...");
+    if !hostname_validator::is_valid(host) {
+        return Err(IndigoError::Other(format!("invalid hostname: '{host}'")))
+    }
+
+    let name = str_to_buf(name)?;
+    let host = str_to_buf(host)?;
+
+    let mut entry = indigo_server_entry {
+        name: name,
+        host: host,
+        port: port,
+        connection_id: 0,
+        thread: ptr::null_mut(),
+        thread_started: false,
+        socket: 0,
+        protocol_adapter: ptr::null_mut(),
+        last_error: [0; 256],
+        shutdown: false,
+    };
+
+    let mut srv_ptr = ptr::addr_of_mut!(entry);
+    let srv_ptr_ptr = ptr::addr_of_mut!(srv_ptr);
+
+    let result = unsafe {
+        indigo_connect_server(
+            entry.name.as_ptr(),
+            entry.host.as_ptr(),
+            entry.port,
+            srv_ptr_ptr,
+        )
+    };
+
+    let connection = ServerConnection {
+        sys: entry,
+    };
+
+    bus::sys_to_lib(connection, result, "indigo_connect_server")
+        .inspect(|c| info!("Connection to {c} successful."))
+        .inspect_err(|e| warn!("Connection failed: {e}."))
+}
 
 #[derive(Debug)]
 pub struct ServerConnection {
@@ -25,34 +66,11 @@ impl Display for ServerConnection {
 // TODO check if the connection is valid for INDI servers...
 /// Connection to a remote INDIGO server.
 impl ServerConnection {
-    /// Create a new, unconnected server.
-    pub fn new<'a>(
-        name: &'a str,
-        host: &'a str,
-        port: c_int,
-    ) -> Result<ServerConnection, IndigoError> {
-        let name = str_to_buf(name)?;
-        let host = str_to_buf(host)?;
 
-        let entry = indigo_server_entry {
-            name: name,
-            host: host,
-            port: port,
-            connection_id: 0,
-            thread: ptr::null_mut(),
-            thread_started: false,
-            socket: 0,
-            protocol_adapter: ptr::null_mut(),
-            last_error: [0i8; 256],
-            shutdown: false,
-        };
-
-        Ok(ServerConnection { sys: entry })
-    }
-
-    pub fn connect(&mut self)
+    pub fn reconnect(&mut self)
     -> Result<(), IndigoError> {
-        trace!("Connecting to {}...", self);
+        trace!("Reconnecting to {}...", self);
+
         let mut srv_ptr = ptr::addr_of_mut!(self.sys);
         let srv_ptr_ptr = ptr::addr_of_mut!(srv_ptr);
 
@@ -64,8 +82,8 @@ impl ServerConnection {
                 srv_ptr_ptr,
             )
         };
-        Bus::sys_to_lib((), result, "indigo_connect_server").inspect(|()|
-            info!("Connected to {}.", self
+        bus::sys_to_lib((), result, "indigo_connect_server").inspect(|()|
+            info!("Reconnected to {}.", self
         )
     )
 }
@@ -74,9 +92,24 @@ impl ServerConnection {
         trace!("Disconncting from {}...", self);
         let srv_ptr = ptr::addr_of_mut!(self.sys);
         let result = unsafe { indigo_disconnect_server(srv_ptr) };
-        Bus::sys_to_lib((), result, "indigo_disconnect_server").inspect(|()|
+        bus::sys_to_lib((), result, "indigo_disconnect_server").inspect(|()|
             info!("Disconnected from {}.", self)
         )
+    }
+
+    /// returns `Ok(true)` if connected to the server, `Ok(false)` if disconnected, and
+    /// `Err(IndigoError::Other(error))` if disconnected and there was an error.
+    pub fn is_connected(&self) -> IndigoResult<bool> {
+        let mut msg = [0;256];
+        let msg_ptr = msg.as_mut_ptr();
+        let srv_ptr = (ptr::addr_of!(self.sys)) as *mut indigo_server_entry;
+        let connected = unsafe { indigo_connection_status(srv_ptr, msg_ptr) };
+        let msg = buf_to_string(msg);
+        if connected || msg.is_empty() {
+            Ok(connected)
+        } else {
+            Err(IndigoError::Other(format!("Connection status failed: {msg}")))
+        }
     }
 
     /// Return `true` if the server's thread is started.
@@ -89,7 +122,7 @@ impl ServerConnection {
         return self.sys.shutdown;
     }
 
-    /// Disconnect and wait for the server to shutdown.
+    /// Shutdown the server thread.
     pub fn shutdown(&mut self) -> Result<(), IndigoError> {
         self.dicsonnect()?;
         let mut timeout = 0;
@@ -109,13 +142,3 @@ impl ServerConnection {
         todo!("implment server discovery over bonjour et co")
     }
 }
-
-// impl Drop for ServerConnection {
-//     fn drop(&mut self) {
-//         if self.is_active() & !self.is_shutdown() {
-//             if let Err(e) = self.dicsonnect(true) {
-//                 todo!("log disconnect error '{}'", e)
-//             };
-//         }
-//     }
-// }

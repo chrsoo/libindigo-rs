@@ -9,25 +9,27 @@ use test_log::test;
 
 // TODO run indigio sky in Docker as test harness
 use libindigo::*;
+use libindigo::server;
+use libindigo::bus;
 use log::debug;
 
 #[test]
 fn start_stop_bus() -> Result<(), IndigoError> {
-    Bus::set_log_level(LogLevel::Debug);
-    Bus::start()?;
-    Bus::start()?; // second call to make sure the function is reentrant
+    bus::set_log_level(LogLevel::Debug);
+    bus::start()?;
+    bus::start()?; // second call to make sure the function is reentrant
     sleep(Duration::from_secs(1));
-    Bus::stop()?;
-    Bus::stop() // second call to make sure the function is reentrant
+    bus::stop()?;
+    bus::stop() // second call to make sure the function is reentrant
 }
 
 #[test]
-fn bus_connect() -> Result<(), IndigoError> {
-    Bus::set_log_level(LogLevel::Debug);
-    let mut con = Bus::connect("INDIGO", "localhost", 7624)?;
+fn server_connect() -> Result<(), IndigoError> {
+    bus::set_log_level(LogLevel::Debug);
+    let mut con = server::connect("INDIGO", "localhost", 7624)?;
     sleep(Duration::from_secs(1));
     con.shutdown()?;
-    Bus::stop()
+    bus::stop()
 }
 
 struct TestMonitor {
@@ -65,10 +67,10 @@ fn client() -> Result<(), IndigoError> {
     let monitor = Arc::new(TestMonitor::new());
 
     // prepare and start the bus
-    Bus::set_log_level(LogLevel::Debug);
-    Bus::start()?;
+    bus::set_log_level(LogLevel::Debug);
+    bus::start()?;
     // connect the bus to the remote server
-    let mut remote_server = Bus::connect("Indigo", "localhost", 7624)?;
+    let mut connection = server::connect("INDIGO", "localhost", 7624)?;
 
     // create a client for the remove server
     let mut client = Client::new("TestClient", ClientDeviceModel::new(), false);
@@ -97,7 +99,7 @@ fn client() -> Result<(), IndigoError> {
 
     client.blobs().iter().for_each(|b| debug!("{:?}", b));
 
-    remote_server.dicsonnect()?;
+    connection.dicsonnect()?;
 
     // client.disconnect_device("Indigo", |r| debug!("Disconnect callback: '{:?}'", r))?;
 
@@ -111,7 +113,7 @@ fn client() -> Result<(), IndigoError> {
     // server.shutdown()?;
 
     sleep(Duration::from_secs(5));
-    Bus::stop()
+    bus::stop()
 }
 
 /*

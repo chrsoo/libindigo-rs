@@ -1,12 +1,13 @@
 #![allow(dead_code, unused_variables)]
 #![cfg_attr(feature = "nightly", feature(mapped_lock_guards))]
 
-mod bus;
 mod client;
 mod device;
 mod driver;
 mod property;
-mod server;
+
+pub mod bus;
+pub mod server;
 
 pub use bus::Bus;
 pub use client::Client;
@@ -127,6 +128,11 @@ impl From<Utf8Error> for IndigoError {
     }
 }
 
+impl From<std::io::Error> for IndigoError {
+    fn from(e: std::io::Error) -> Self {
+        IndigoError::Sys(Box::new(e))
+    }
+}
 impl<T: 'static> From<PoisonError<T>> for IndigoError {
     fn from(value: PoisonError<T>) -> Self {
         IndigoError::Sys(Box::new(value))

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <template class="ServerPanel">
+    <!-- <property name="margin-top">12</property>
+    <property name="margin-bottom">12</property>
+    <property name="margin-start">12</property>
+    <property name="margin-end">12</property>
+    <property name="spacing">6</property>
+    <property name="orientation">vertical</property> -->
+    <child>
+      <object class="GtkLabel" id="message_label">
+        <property name="label">apa apa apa apa apa apa apa apa apa apa apa apa</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkBox">
+        <property name="margin-top">12</property>
+        <property name="margin-bottom">12</property>
+        <property name="margin-start">12</property>
+        <property name="margin-end">12</property>
+        <property name="spacing">6</property>
+        <property name="orientation">horizontal</property>
+        <child>
+          <object class="GtkEntry" id="hostname_entry">
+            <property name="placeholder-text" translatable="yes">localhost</property>
+            <property name="input-hints">
+              GTK_INPUT_HINT_LOWERCASE | GTK_INPUT_HINT_WORD_COMPLETION | GTK_INPUT_HINT_NO_SPELLCHECK
+            </property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel">
+            <property name="label">:</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkEntry" id="port_entry">
+            <property name="placeholder-text" translatable="yes">7624</property>
+            <property name="width-chars">5</property>
+            <property name="max-width-chars">5</property>
+            <property name="max-length">5</property>
+            <property name="input-purpose">GTK_INPUT_PURPOSE_DIGITS</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="server_button">
+            <property name="icon-name">media-playback-start</property>
+            <!-- <property name="icon-tooltip-text">Press play to connect server!</property> -->
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>
