@@ -101,6 +101,9 @@ impl<'a> ClientDevice<'a> {
         // addr_of!((*self.sys).name) as *const _ as *mut c_char
         todo!()
     }
+    pub fn name(&self) -> &str {
+        self.name
+    }
 }
 
 impl<'a> Display for ClientDevice<'a> {

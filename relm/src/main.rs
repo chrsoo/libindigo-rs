@@ -1,14 +1,17 @@
 mod server;
+mod property;
+mod device;
 
 use std::env;
 
+use device::DeviceStatus;
 use gtk::{glib::ExitCode, prelude::*};
 use log::{error, warn};
 
 use gtk::glib;
-use libindigo::{bus, LogLevel};
-use relm4::{Component, ComponentController, ComponentParts, ComponentSender, Controller, RelmApp, RelmWidgetExt, SimpleComponent};
-use server::IndigoServer;
+use libindigo::{bus, Client, ClientDeviceModel, LogLevel};
+use relm4::{factory::FactoryHashMap, Component, ComponentController, ComponentParts, ComponentSender, Controller, RelmApp, RelmWidgetExt};
+use server::{IndigoServer, ServerCommand, ServerOutput};
 
 fn main() -> glib::ExitCode {
     env::set_var("G_MESSAGES_DEBUG", "all");
@@ -34,22 +37,33 @@ fn main() -> glib::ExitCode {
     }
 }
 
-#[derive(Debug)]
-enum AppMode {
-    Connected,
-    Disconnected,
+#[derive(Debug, Clone)]
+enum AppCommand {
+    AttachClient(String),
+    DetachClient,
+    UpdateStatus(String),
+}
+
+#[derive(Debug, Clone)]
+enum CommandOutput {
+    ClientAttached(String),
+    ClientDetached(String),
 }
 
 struct IndigoAppModel {
     // TODO add IndigoServer
     server: Controller<IndigoServer>,
+    client: Option<Client<'static, ClientDeviceModel>>,
+    devices: FactoryHashMap<String,crate::device::Device<'static>>,
+    status: String,
 }
 
 #[relm4::component]
-impl SimpleComponent for IndigoAppModel {
+impl Component for IndigoAppModel {
     type Init = ();
-    type Input = server::ServerStatus;
+    type Input = AppCommand;
     type Output = ();
+    type CommandOutput = CommandOutput;
 
     view! {
         window = gtk::ApplicationWindow {
@@ -58,7 +72,31 @@ impl SimpleComponent for IndigoAppModel {
                 set_orientation: gtk::Orientation::Vertical,
                 set_margin_all: 5,
                 set_spacing: 5,
-                append = model.server.widget(),
+                gtk::Label {
+                    #[watch]
+                    set_label: &model.status,
+                },
+                #[local_ref] server ->
+                gtk::Box { },
+                gtk::Label {
+                    set_label: "No devices.",
+                    #[watch]
+                    set_visible: model.devices.is_empty(),
+                },
+                gtk::Box {
+                    set_orientation: gtk::Orientation::Horizontal,
+                    set_margin_all: 5,
+                    set_spacing: 5,
+                    #[watch]
+                    set_visible: !model.devices.is_empty(),
+                    gtk::StackSidebar {
+                        set_stack: device_stack,
+                    },
+                    #[local_ref] device_stack ->
+                    gtk::Stack {
+
+                    },
+                }
             },
         }
     }
@@ -70,41 +108,102 @@ impl SimpleComponent for IndigoAppModel {
         sender: ComponentSender<Self>,
     ) -> relm4::ComponentParts<Self> {
 
-        // relm4_icons::initialize_icons();
+        let devices = FactoryHashMap::builder()
+            .launch(gtk::Stack::default())
+            .forward(sender.input_sender(), |output| match output {
+                DeviceStatus::Connected => todo!(),
+                DeviceStatus::Disconnected => todo!(),
+                DeviceStatus::Busy => todo!(),
+            });
+
+            // relm4_icons::initialize_icons();
         let server = IndigoServer::builder()
             .launch(())
-            .forward(sender.input_sender(), |msg| msg);
-        server.widget().set_visible(true);
+            .forward(sender.input_sender(), |msg| match msg{
+                ServerOutput::Detach => AppCommand::DetachClient,
+                ServerOutput::Connected(m) => AppCommand::AttachClient(m),
+                ServerOutput::Disconnected(m) => AppCommand::UpdateStatus(m),
+                ServerOutput::StatusMessage(m) => AppCommand::UpdateStatus(m),
+            });
 
-        let model = IndigoAppModel { server };
+        let model = IndigoAppModel { server, devices, client: None, status: String::new()};
+
+        // local widget refs used in the view macro above.
+        let device_stack = model.devices.widget();
+        let server = model.server.widget();
+
         let widgets = view_output!();
         ComponentParts { model, widgets }
     }
 
-    /*
-    fn update(&mut self, message: Self::Input, _sender: ComponentSender<Self>) {
-        match message {
-            AppInput::Connect => self.connect(),
-            AppInput::Disconnect => self.disconnect(),
-        }
-        if self.is_connected() {
-            self.icon = DISCONNECT_ICON_NAME;
-        } else {
-            self.icon = CONNECT_ICON_NAME;
+    fn update(
+        &mut self,
+        input: <Self as relm4::Component>::Input,
+        sender: ComponentSender<Self>,
+        _root: &<Self as relm4::Component>::Root) {
+
+        match input {
+            AppCommand::AttachClient(m) => {
+                self.status = m;
+                self.attach_client(sender);
+            },
+            AppCommand::DetachClient => self.detach_client(sender),
+            AppCommand::UpdateStatus(m) => self.status = m,
         }
     }
-    */
 
-    // /// Update the view to represent the updated model.
-    // fn update_view(&self, widgets: &mut Self::Widgets, _sender: ComponentSender<Self>) {
-    //     if self.is_connected() {
-    //         widgets.button.set_icon_name(DISCONNECT_ICON_NAME);
-    //         widgets.button.set_tooltip_text(Some(SERVER_DISCONNECT_MSG))
-    //         // TODO enable entry values
-    //     } else {
-    //         widgets.button.set_icon_name(CONNECT_ICON_NAME);
-    //         widgets.button.set_tooltip_text(Some(SERVER_CONNECT_MSG))
-    //         // TODO disable entry of values
-    //     }
-    // }
+    fn update_cmd(
+            &mut self,
+            message: Self::CommandOutput,
+            _sender: ComponentSender<Self>,
+            _root: &Self::Root,
+        ) {
+        match message {
+            CommandOutput::ClientAttached(m) => self.status = m,
+            CommandOutput::ClientDetached(m) => {
+                self.status = m;
+                self.client = None;
+                self.server.sender().send(ServerCommand::Disconnect).unwrap();
+            },
+        }
+    }
+}
+
+impl IndigoAppModel {
+    fn attach_client(&mut self, sender: ComponentSender<Self>) {
+        self.status = format!("Attaching the client to the INDIGO bus...");
+
+        let model = ClientDeviceModel::new();
+        self.client = Some(Client::new("INDIGO", model, true));
+
+        let c = self.client.as_mut().unwrap();
+        let s = sender.clone();
+        if let Err(e) = c.attach(move |_c| {
+            s.input(AppCommand::UpdateStatus(
+                format!("Attached the client to the INDIGO bus.")
+            ));
+            Ok(())
+        }) {
+            sender.input(AppCommand::UpdateStatus(
+                format!("Failed attching the client to the INDIGO bus: {e}.")
+            ));
+        }
+    }
+
+    fn detach_client(&mut self, sender: ComponentSender<Self>) {
+        self.status = format!("Detaching the client from the INDIGO bus...");
+
+        if let Some(client) = self.client.as_mut() {
+            if let Err(e) = client.detach(move |_c| {
+                sender.oneshot_command(async { CommandOutput::ClientDetached(
+                    format!("Detached the client from the INDIGO bus.")
+                )});
+                Ok(())
+            }) {
+                self.status = format!("Failed detaching the client from the INDIGO bus: {e}.");
+            }
+        } else {
+            self.status = format!("Error: trying to detach a non-exisisting client.");
+        }
+    }
 }

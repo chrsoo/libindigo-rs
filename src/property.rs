@@ -10,48 +10,48 @@ use url::Url;
 use crate::{buf_to_str, buf_to_string};
 
 enum_from_primitive! {
-#[derive(Debug, Copy, Clone, PartialEq)]
-#[repr(u32)]
-/// Possible states of a `Property`.
-pub enum PropertyState  {
-    /// Property is passive (unused by INDIGO).
-    Idle = indigo_property_state_INDIGO_IDLE_STATE,
-    /// Property is in correct state or if operation on property was successful.
-    Ok = indigo_property_state_INDIGO_OK_STATE,
-    /// Property is transient state or if operation on property is pending.
-    Busy = indigo_property_state_INDIGO_BUSY_STATE,
-    /// Property is in incorrect state or if operation on property failed.
-    Alert = indigo_property_state_INDIGO_ALERT_STATE,
-}
-}
-
-enum_from_primitive! {
-#[derive(Debug, Copy, Clone, PartialEq)]
-#[repr(u32)]
-/// Possible states of a `Property`.
-pub enum PropertyPermission  {
-    ReadOnly = indigo_property_perm_INDIGO_RO_PERM,
-    ReadWrite = indigo_property_perm_INDIGO_RW_PERM,
-    WriteOnly = indigo_property_perm_INDIGO_WO_PERM,
-}
+    #[derive(Debug, Copy, Clone, PartialEq)]
+    #[repr(u32)]
+    /// Possible states of a `Property`.
+    pub enum PropertyState  {
+        /// Property is passive (unused by INDIGO).
+        Idle = indigo_property_state_INDIGO_IDLE_STATE,
+        /// Property is in correct state or if operation on property was successful.
+        Ok = indigo_property_state_INDIGO_OK_STATE,
+        /// Property is transient state or if operation on property is pending.
+        Busy = indigo_property_state_INDIGO_BUSY_STATE,
+        /// Property is in incorrect state or if operation on property failed.
+        Alert = indigo_property_state_INDIGO_ALERT_STATE,
+    }
 }
 
 enum_from_primitive! {
-#[derive(Debug, Copy, Clone, PartialEq)]
-#[repr(u32)]
-/// Possible property types.
-pub enum PropertyType  {
-    /// Strings of limited width.
-    Text = indigo_property_type_INDIGO_TEXT_VECTOR,
-    /// Float numbers with defined min, max values and increment.
-    Number = indigo_property_type_INDIGO_NUMBER_VECTOR,
-    /// Logical values representing “on” and “off” state.
-    Switch = indigo_property_type_INDIGO_SWITCH_VECTOR,
-    /// Status values with four possible values Idle, Ok, Busy, and Alert.
-    Light = indigo_property_type_INDIGO_LIGHT_VECTOR,
-    /// Binary data of any type and any length.
-    Blob = indigo_property_type_INDIGO_BLOB_VECTOR,
+    #[derive(Debug, Copy, Clone, PartialEq)]
+    #[repr(u32)]
+    /// Possible states of a `Property`.
+    pub enum PropertyPermission  {
+        ReadOnly = indigo_property_perm_INDIGO_RO_PERM,
+        ReadWrite = indigo_property_perm_INDIGO_RW_PERM,
+        WriteOnly = indigo_property_perm_INDIGO_WO_PERM,
+    }
 }
+
+enum_from_primitive! {
+    #[derive(Debug, Copy, Clone, PartialEq)]
+    #[repr(u32)]
+    /// Possible property types.
+    pub enum PropertyType  {
+        /// Strings of limited width.
+        Text = indigo_property_type_INDIGO_TEXT_VECTOR,
+        /// Float numbers with defined min, max values and increment.
+        Number = indigo_property_type_INDIGO_NUMBER_VECTOR,
+        /// Logical values representing “on” and “off” state.
+        Switch = indigo_property_type_INDIGO_SWITCH_VECTOR,
+        /// Status values with four possible values Idle, Ok, Busy, and Alert.
+        Light = indigo_property_type_INDIGO_LIGHT_VECTOR,
+        /// Binary data of any type and any length.
+        Blob = indigo_property_type_INDIGO_BLOB_VECTOR,
+    }
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -285,6 +285,19 @@ impl<'a> PropertyItem {
             hints,
             value,
         }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+    pub fn hints(&self) -> &str {
+        &self.hints
+    }
+    pub fn value(&self) -> &PropertyValue {
+        &self.value
     }
 }
 

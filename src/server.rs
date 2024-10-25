@@ -1,5 +1,5 @@
 use std::{
-    ffi::c_int, iter::Cloned, ptr, thread::sleep, time::Duration
+    borrow::BorrowMut, ffi::c_int, iter::Cloned, ops::Deref, ptr, rc::Rc, thread::sleep, time::Duration
 };
 
 use super::*;
@@ -41,7 +41,7 @@ pub fn connect(name: &str, host: &str, port: c_int) -> IndigoResult<ServerConnec
     };
 
     let connection = ServerConnection {
-        sys: entry,
+        sys: Rc::new(entry),
     };
 
     bus::sys_to_lib(connection, result, "indigo_connect_server")
@@ -49,9 +49,9 @@ pub fn connect(name: &str, host: &str, port: c_int) -> IndigoResult<ServerConnec
         .inspect_err(|e| warn!("Connection failed: {e}."))
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ServerConnection {
-    sys: indigo_server_entry,
+    sys: Rc<indigo_server_entry>,
 }
 
 impl Display for ServerConnection {
@@ -67,11 +67,15 @@ impl Display for ServerConnection {
 /// Connection to a remote INDIGO server.
 impl ServerConnection {
 
+    fn addr_of_sys(&self) -> *mut indigo_server_entry {
+        ptr::from_ref(self.sys.deref()) as *mut indigo_server_entry
+    }
+
     pub fn reconnect(&mut self)
     -> Result<(), IndigoError> {
         trace!("Reconnecting to {}...", self);
 
-        let mut srv_ptr = ptr::addr_of_mut!(self.sys);
+        let mut srv_ptr = self.addr_of_sys();
         let srv_ptr_ptr = ptr::addr_of_mut!(srv_ptr);
 
         let result = unsafe {
@@ -83,14 +87,13 @@ impl ServerConnection {
             )
         };
         bus::sys_to_lib((), result, "indigo_connect_server").inspect(|()|
-            info!("Reconnected to {}.", self
+            info!("Reconnected to {}.", self)
         )
-    )
-}
+    }
 
     pub fn dicsonnect(&mut self) -> Result<(), IndigoError> {
         trace!("Disconncting from {}...", self);
-        let srv_ptr = ptr::addr_of_mut!(self.sys);
+        let srv_ptr = self.addr_of_sys();
         let result = unsafe { indigo_disconnect_server(srv_ptr) };
         bus::sys_to_lib((), result, "indigo_disconnect_server").inspect(|()|
             info!("Disconnected from {}.", self)

@@ -13,6 +13,7 @@ pub use bus::Bus;
 pub use client::Client;
 pub use device::Device;
 pub use device::Interface;
+pub use client::ClientDevice;
 pub use client::ClientCallbacks;
 pub use client::ClientDeviceModel;
 pub use property::Property;
