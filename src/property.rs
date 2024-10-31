@@ -327,6 +327,7 @@ impl<'a> PropertyItem {
 /// > 	values
 /// > );
 /// > ```
+#[derive(Debug, Clone)]
 pub struct Property {
     sys: *mut indigo_property,
 }
