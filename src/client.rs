@@ -89,24 +89,72 @@ pub trait ClientCallbacks<'a> {
     }
 }
 
-/// A device as seen from a client implementation
-pub struct ClientDevice<'a> {
-    name: &'a str,
-    props: &'a mut HashMap<String, Property>,
+/// A device as seen from a client implementation.
+#[derive(Debug,Clone)]
+pub struct ClientDevice {
+    // name: &'a str,
+    // props: &'a mut HashMap<String, Property>,
+    name: String,
+    props: HashMap<String,Property>,
+    // event hooks
+    // create_property_hook: Option<Box<dyn Fn(&Property)>>,
+    // update_property_hook: Option<Box<dyn Fn(&Property)>>,
+    // delete_property_hook: Option<Box<dyn Fn(&Property)>>,
 }
 
 // TODO move ClientDevice methods to Device trait
-impl<'a> ClientDevice<'a> {
+impl ClientDevice {
+
+    pub fn new(name: String) -> Self {
+        Self {
+            name,
+            props: HashMap::new(),
+            // create_property_hook: None,
+            // update_property_hook: None,
+            // delete_property_hook: None,
+        }
+    }
+
     pub(crate) fn addr_of_name(&self) -> *mut c_char {
         // addr_of!((*self.sys).name) as *const _ as *mut c_char
         todo!()
     }
-    pub fn name(&self) -> &str {
-        self.name
+
+    pub fn create_property_hook(&mut self, hook: fn(&Property)) {
+        // self.create_property_hook = Some(Box::new(hook));
+    }
+
+    pub fn update_property_hook(&mut self, hook: fn(&Property)) {
+        // self.update_property_hook = Some(Box::new(hook));
+    }
+
+    pub fn delete_property_hook(&mut self, hook: fn(&Property)) {
+        // self.delete_property_hook = Some(Box::new(hook));
+    }
+
+    pub fn upsert_property(&mut self, p: Property) -> IndigoResult<()> {
+        self.props
+        .entry(p.name().to_string())
+        .and_modify(|prop| prop.update(&p))
+        .or_insert(p);
+        // if let Some(hook) = self.create_property_hook.as_deref_mut() {
+        //     hook(self.props.get(&name).unwrap())
+        // }
+        Ok(())
+    }
+
+    pub fn delete_property(&mut self, p: Property) -> IndigoResult<Property> {
+        if let Some(prop) = self.props.remove(p.name()) {
+            Ok(prop)
+        } else {
+            Err(IndigoError::Message(
+                "Trying to delete an undefined property.",
+            ))
+        }
     }
 }
 
-impl<'a> Display for ClientDevice<'a> {
+impl<'a> Display for ClientDevice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let status = self.connected().map_or_else(
             |e| format!("{:?}", e),
@@ -132,7 +180,8 @@ impl<'a> Display for ClientDevice<'a> {
     }
 }
 
-impl<'a> Device for ClientDevice<'a> {
+impl Device for ClientDevice {
+
     fn name(&self) -> &str {
         &self.name
     }
@@ -157,7 +206,9 @@ impl<'a> Device for ClientDevice<'a> {
 /// A default implementation of [ClientCallbacks] that manages the set of all enumerated devices
 /// and their properties that are defined on the [Bus](crate::Bus) .
 pub struct ClientDeviceModel {
-    devices: HashMap<String, HashMap<String, Property>>,
+    // devices: HashMap<String, HashMap<String, Property>>,
+    devices: HashMap<String,ClientDevice>,
+    create_device_hook: Option<Box<dyn FnMut(&ClientDevice)>>,
 }
 
 impl<'a> ClientCallbacks<'a> for ClientDeviceModel {
@@ -171,16 +222,17 @@ impl<'a> ClientCallbacks<'a> for ClientDeviceModel {
         msg: Option<String>,
     ) -> Result<(), IndigoError> {
         // FIXME hanlde device 'd'
-        let props = self
+        let device = self
             .devices
-            .entry(p.device())
-            .or_insert_with(|| HashMap::new());
-        props
-            .entry(p.name())
-            .and_modify(|prop| prop.update(&p))
-            .or_insert(p);
-
-        Ok(())
+            .entry(p.device().to_string())
+            .or_insert_with(|| {
+                let device = ClientDevice::new(p.device().to_string());
+                if let Some(hook) = self.create_device_hook.as_deref_mut() {
+                    hook(&device)
+                }
+                device
+            });
+        device.upsert_property(p)
     }
 
     fn on_update_property(
@@ -191,7 +243,7 @@ impl<'a> ClientCallbacks<'a> for ClientDeviceModel {
         msg: Option<String>,
     ) -> Result<(), IndigoError> {
         // FIXME handle device 'd'
-        if let Some(props) = self.devices.get_mut(&p.device()) {
+        if let Some(props) = self.devices.get_mut(p.device()) {
             if let Some(prop) = props.get_mut(&p.name()) {
                 prop.update(&p);
                 Ok(())
@@ -211,15 +263,15 @@ impl<'a> ClientCallbacks<'a> for ClientDeviceModel {
         d: String,
         p: Property,
         msg: Option<String>,
-    ) -> Result<(), IndigoError> {
-        if let Some(props) = self.devices.get_mut(&d) {
-            if let Some(prop) = props.remove(&p.name()) {
-                Ok(())
-            } else {
-                Err(IndigoError::Message(
-                    "Trying to delete an undefined property.",
-                ))
+    ) -> IndigoResult<()> {
+
+        if let Some(device) = self.devices.get_mut(&d) {
+            if let Ok(prop) = device.delete_property(p) {
+                // if let Some(hook) = device.delete_property_hook.as_deref_mut() {
+                //     hook(&prop);
+                // }
             }
+            Ok(())
         } else {
             Err(IndigoError::Message("Device not found."))
         }
@@ -240,13 +292,17 @@ impl ClientDeviceModel {
     pub fn new() -> ClientDeviceModel {
         ClientDeviceModel {
             devices: HashMap::new(),
+            create_device_hook: None,
         }
     }
 
-    pub fn devices(&mut self) -> impl Iterator<Item = ClientDevice> {
-        self.devices
-            .iter_mut()
-            .map(|(k, v)| ClientDevice { name: k, props: v })
+    pub fn devices(&mut self) -> impl Iterator<Item = &mut ClientDevice> {
+        self.devices.values_mut()
+    }
+
+    // client device hooks
+    pub fn create_device_hook(&mut self, hook: impl Fn(&ClientDevice) + 'static) {
+        self.create_device_hook = Some(Box::new(hook));
     }
 }
 
@@ -528,7 +584,7 @@ where
         let mut lock = Self::write_lock(client);
         let mut c = Self::try_from(client).expect("callback failed");
 
-        let p = Property::new(property);
+        let p = Property::from(property);
         let device = buf_to_string((unsafe { &*device }).name);
         let msg = ptr_to_string(message);
 
@@ -555,7 +611,7 @@ where
         let mut lock = Self::write_lock(client);
         let mut c = Self::try_from(client).expect("callback failed");
 
-        let p = Property::new(property);
+        let p = Property::from(property);
         let device = buf_to_string((unsafe { &*device }).name);
         let msg = ptr_to_string(message);
 
@@ -582,7 +638,7 @@ where
         let mut lock = Self::write_lock(client);
         let mut c = Self::try_from(client).expect("callback failed");
 
-        let p = Property::new(property);
+        let p = Property::from(property);
         let device = buf_to_string((unsafe { &*device }).name);
         let msg = ptr_to_string(message);
 

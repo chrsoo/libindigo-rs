@@ -106,7 +106,7 @@ impl<'a> DeviceDriver<'a> {
     pub fn define_property(&mut self, p: Property) -> Result<(), IndigoError> {
         trace!("Enter '{}'", function_name!());
         let mut lock = self.state.write();
-        let p = lock.props.entry(p.name()).or_insert(p);
+        let p = lock.props.entry(p.name().to_string()).or_insert(p);
         // TODO notify device listeners
         debug!("Property '{}' defined for '{}'", p.name(), self.name());
         Ok(())

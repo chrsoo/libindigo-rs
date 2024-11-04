@@ -842,6 +842,7 @@ name = "libindigo"
 version = "0.1.0+INDIGO.2.0.289"
 dependencies = [
  "enum_primitive",
+ "fragile",
  "function_name",
  "hostname-validator",
  "lazy_static",
@@ -865,6 +866,21 @@ dependencies = [
  "gtk4",
  "libindigo",
  "log",
+]
+
+[[package]]
+name = "libindigo-relm"
+version = "0.1.0"
+dependencies = [
+ "fragile",
+ "glib_logger",
+ "gtk4",
+ "libindigo",
+ "log",
+ "parking_lot",
+ "relm4",
+ "relm4-components",
+ "tokio",
 ]
 
 [[package]]
@@ -1181,19 +1197,6 @@ name = "regex-syntax"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a66a03ae7c801facd77a29370b4faec201768915ac14a721ba36f20bc9c209b"
-
-[[package]]
-name = "relm"
-version = "0.1.0"
-dependencies = [
- "glib_logger",
- "gtk4",
- "libindigo",
- "log",
- "relm4",
- "relm4-components",
- "tokio",
-]
 
 [[package]]
 name = "relm4"

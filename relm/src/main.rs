@@ -4,14 +4,16 @@ mod device;
 
 use std::env;
 
-use device::DeviceStatus;
-use gtk::{glib::ExitCode, prelude::*};
+use device::{Device, DeviceCommand, DeviceEvent};
+use gtk::{glib::ExitCode, prelude::*, StackPage};
 use log::{error, warn};
-
 use gtk::glib;
-use libindigo::{bus, Client, ClientDeviceModel, LogLevel};
-use relm4::{factory::FactoryHashMap, Component, ComponentController, ComponentParts, ComponentSender, Controller, RelmApp, RelmWidgetExt};
+use libindigo::{bus, Client, ClientCallbacks, ClientDevice, LogLevel, Property};
+use relm4::{factory::{FactoryHashMap, FactoryView}, Component, ComponentController, ComponentParts, ComponentSender, Controller, MessageBroker, RelmApp, RelmWidgetExt};
 use server::{IndigoServer, ServerCommand, ServerOutput};
+
+
+static BROKER: MessageBroker<AppCommand> = MessageBroker::new();
 
 fn main() -> glib::ExitCode {
     env::set_var("G_MESSAGES_DEBUG", "all");
@@ -27,7 +29,8 @@ fn main() -> glib::ExitCode {
     }
 
     let app = RelmApp::new("se.jabberwocky.libindigo-rs-example-app");
-    app.run::<IndigoAppModel>(());
+    app.with_broker(&BROKER).run::<IndigoApp>(());
+    // app.run::<IndigoApp>(());
 
     if let Err(e) = bus::stop() {
         warn!("Error while stopping the INDIGO bus: {e}");
@@ -41,6 +44,7 @@ fn main() -> glib::ExitCode {
 enum AppCommand {
     AttachClient(String),
     DetachClient,
+    DefineProperty(Property),
     UpdateStatus(String),
 }
 
@@ -50,16 +54,15 @@ enum CommandOutput {
     ClientDetached(String),
 }
 
-struct IndigoAppModel {
-    // TODO add IndigoServer
+struct IndigoApp {
     server: Controller<IndigoServer>,
-    client: Option<Client<'static, ClientDeviceModel>>,
-    devices: FactoryHashMap<String,crate::device::Device<'static>>,
+    client: Option<Client<'static, DeviceCallbackHandler>>,
+    devices: FactoryHashMap<String,crate::device::Device>,
     status: String,
 }
 
 #[relm4::component]
-impl Component for IndigoAppModel {
+impl Component for IndigoApp {
     type Init = ();
     type Input = AppCommand;
     type Output = ();
@@ -85,16 +88,19 @@ impl Component for IndigoAppModel {
                 },
                 gtk::Box {
                     set_orientation: gtk::Orientation::Horizontal,
-                    set_margin_all: 5,
-                    set_spacing: 5,
+                    // set_margin_all: 5,
+                    // set_spacing: 5,
+                    set_vexpand: true,
+                    set_hexpand: true,
                     #[watch]
                     set_visible: !model.devices.is_empty(),
                     gtk::StackSidebar {
-                        set_stack: device_stack,
+                        #[watch]
+                        set_stack: model.devices.widget(),
+                        set_visible: true,
                     },
                     #[local_ref] device_stack ->
                     gtk::Stack {
-
                     },
                 }
             },
@@ -111,12 +117,14 @@ impl Component for IndigoAppModel {
         let devices = FactoryHashMap::builder()
             .launch(gtk::Stack::default())
             .forward(sender.input_sender(), |output| match output {
-                DeviceStatus::Connected => todo!(),
-                DeviceStatus::Disconnected => todo!(),
-                DeviceStatus::Busy => todo!(),
+                DeviceEvent::Connected(d) => AppCommand::UpdateStatus(format!("Connected device '{d}'")),
+                DeviceEvent::Disconnected(d) => AppCommand::UpdateStatus(format!("Disconnected device '{d}'")),
+                DeviceEvent::PropertyDefined(p) => AppCommand::UpdateStatus(format!("Defined property '{p}'")),
+                DeviceEvent::PropertyUpdated(p) => AppCommand::UpdateStatus(format!("Defined property '{p}'")),
+                DeviceEvent::PropertyDeleted(p) => AppCommand::UpdateStatus(format!("Defined property '{p}'")),
+                DeviceEvent::Busy(d) => AppCommand::UpdateStatus(format!("Device is busy '{d}'")),
             });
 
-            // relm4_icons::initialize_icons();
         let server = IndigoServer::builder()
             .launch(())
             .forward(sender.input_sender(), |msg| match msg{
@@ -126,7 +134,8 @@ impl Component for IndigoAppModel {
                 ServerOutput::StatusMessage(m) => AppCommand::UpdateStatus(m),
             });
 
-        let model = IndigoAppModel { server, devices, client: None, status: String::new()};
+        // let devices = Arc::new(devices);
+        let model = IndigoApp { server, devices, client: None, status: String::new() };
 
         // local widget refs used in the view macro above.
         let device_stack = model.devices.widget();
@@ -149,6 +158,7 @@ impl Component for IndigoAppModel {
             },
             AppCommand::DetachClient => self.detach_client(sender),
             AppCommand::UpdateStatus(m) => self.status = m,
+            AppCommand::DefineProperty(p) => self.define_property(p),
         }
     }
 
@@ -169,12 +179,30 @@ impl Component for IndigoAppModel {
     }
 }
 
-impl IndigoAppModel {
+impl IndigoApp {
+
+    fn define_property(&mut self, property: Property) {
+        let device = &property.device().to_string();
+        if let None = self.devices.get(device) {
+            self.devices.insert(device.clone(), ClientDevice::new(device.clone()));
+        }
+        // self.devices.widget().add_titled(child, Some(property.name()), property.name());
+        self.devices.send(&device, DeviceCommand::DefineProperty(property));
+    }
+
     fn attach_client(&mut self, sender: ComponentSender<Self>) {
         self.status = format!("Attaching the client to the INDIGO bus...");
 
-        let model = ClientDeviceModel::new();
-        self.client = Some(Client::new("INDIGO", model, true));
+        // let mut model = ClientDeviceModel::new();
+        // let mut devices = self.devices.clone();
+        // model.create_device_hook(move|device| {
+        //     devices.guard().push_back(device);
+        //     // noop
+        // });
+
+        let devices = self.devices.clone();
+        let callback_handler = DeviceCallbackHandler::new(devices);
+        self.client = Some(Client::new("INDIGO", callback_handler, true));
 
         let c = self.client.as_mut().unwrap();
         let s = sender.clone();
@@ -206,4 +234,86 @@ impl IndigoAppModel {
             self.status = format!("Error: trying to detach a non-exisisting client.");
         }
     }
+}
+
+
+pub(crate) struct DeviceCallbackHandler {
+    devices: FactoryHashMap<String,Device>,
+}
+
+impl DeviceCallbackHandler {
+    pub(crate) fn new(devices: FactoryHashMap<String,Device>) -> Self {
+        Self {devices }
+    }
+}
+
+impl<'a> ClientCallbacks<'a> for DeviceCallbackHandler {
+    type M = DeviceCallbackHandler;
+
+    fn on_define_property(
+        &mut self,
+        _c: &mut libindigo::Client<'a, Self::M>,
+        d: String,
+        p: libindigo::Property,
+        msg: Option<String>,
+    ) -> Result<(), libindigo::IndigoError> {
+
+        let name = p.name().to_string();
+        let device = p.device().to_string();
+        // let p = Sticky::new(p);
+        BROKER.send(AppCommand::DefineProperty(p));
+        log::debug!("Device: '{device}'; Property '{name}'; DEFINED with message '{:?}'", msg);
+        Ok(())
+    }
+
+    fn on_update_property(
+        &mut self,
+        _c: &mut libindigo::Client<'a, Self::M>,
+        d: String,
+        p: libindigo::Property,
+        msg: Option<String>,
+    ) -> Result<(), libindigo::IndigoError> {
+        log::debug!(
+            "Device: '{}'; Property '{}'; UPDATED with message '{:?}'",
+            p.device(),
+            p.name(),
+            msg
+        );
+
+        let key = &p.key().name;
+        // let p = Sticky::new(p);
+        self.devices.send(key, DeviceCommand::UpdateProperty(p));
+        Ok(())
+    }
+
+    fn on_delete_property(
+        &mut self,
+        _c: &mut libindigo::Client<'a, Self::M>,
+        d: String,
+        p: libindigo::Property,
+        msg: Option<String>,
+    ) -> Result<(), libindigo::IndigoError> {
+        log::debug!(
+            "Device: '{}'; Property '{}'; DELETED with message '{:?}'",
+            p.device(),
+            p.name(),
+            msg
+        );
+
+        let key = &p.key().name;
+        // let p = Sticky::new(p);
+        self.devices.send(key, DeviceCommand::DeleteProperty(p));
+        Ok(())
+    }
+
+    fn on_send_message(
+        &mut self,
+        _c: &mut libindigo::Client<'a, Self::M>,
+        d: String,
+        msg: String,
+    ) -> Result<(), libindigo::IndigoError> {
+        log::info!("Device: '{d}';  SEND  message: '{msg}'");
+        Ok(())
+    }
+
 }

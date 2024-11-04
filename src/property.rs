@@ -1,5 +1,5 @@
 use std::{
-    cmp::Ordering, ffi::{c_long, CStr}, fmt::Display, ptr
+    cmp::Ordering, ffi::{c_long, CStr}, fmt::Display, hash::{DefaultHasher, Hasher}, ptr, slice
 };
 
 use enum_primitive::*;
@@ -73,6 +73,7 @@ pub enum PropertyValue {
         target: f64,
     },
     Switch(bool),
+    // TODO map INDIGO_IDLE_STATE, INDIGO_OK_STATE, INDIGO_BUSY_STATE to the Light property
     Light(u32),
     Blob {
         // TODO map blob file exension to mime-type or other more structured format
@@ -240,7 +241,7 @@ pub enum SwitchRule  {
 }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct PropertyItem {
     pub name: String,
     pub label: String,
@@ -329,7 +330,19 @@ impl<'a> PropertyItem {
 /// > ```
 #[derive(Debug, Clone)]
 pub struct Property {
-    sys: *mut indigo_property,
+    name: String,
+    device: String,
+    sys: u64,
+    group: String,
+    label: String,
+    hints: String,
+    state: PropertyState,
+    property_type: PropertyType,
+    perm: PropertyPermission,
+    rule: SwitchRule,
+    hidden: bool,
+    defined: bool,
+    items: Vec<PropertyItem>,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
@@ -385,96 +398,79 @@ impl Display for Property {
     }
 }
 
-impl Property {
-    pub(crate) fn new(property: *mut indigo_property) -> Self {
-        Self { sys: property }
-    }
+impl<'a> Property {
 
     // -- getters
 
     pub fn key(&self) -> PropertyKey {
         PropertyKey {
-            dev: self.device(),
-            name: self.name(),
+            dev: self.device().to_string(),
+            name: self.name().to_string(),
         }
     }
 
-    pub fn name(&self) -> String {
-        buf_to_string((unsafe { &*self.sys }).name)
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
-    pub fn device(&self) -> String {
-        buf_to_string((unsafe { &*self.sys }).device)
+    pub fn device(&self) -> &str {
+        &self.device
     }
 
-    pub fn group(&self) -> String {
-        buf_to_string((unsafe { &*self.sys }).group)
+    pub fn group(&self) -> &str {
+        &self.group
     }
 
-    pub fn label(&self) -> String {
-        buf_to_string((unsafe { &*self.sys }).label)
+    pub fn label(&self) -> &str {
+        &self.label
     }
 
-    pub fn hints(&self) -> String {
-        buf_to_string((unsafe { &*self.sys }).hints)
+    pub fn hints(&self) -> &str {
+        &self.hints
     }
 
-    pub fn state(&self) -> PropertyState {
-        PropertyState::from_u32((unsafe { &*self.sys }).state).unwrap()
+    pub fn state(&self) -> &PropertyState {
+        &self.state
     }
 
-    pub fn property_type(&self) -> PropertyType {
-        PropertyType::from_u32((unsafe { &*self.sys }).type_).unwrap()
+    pub fn property_type(&self) -> &PropertyType {
+        &self.property_type
     }
 
-    pub fn perm(&self) -> PropertyPermission {
-        PropertyPermission::from_u32((unsafe { &*self.sys }).perm).unwrap()
+    pub fn perm(&self) -> &PropertyPermission {
+        &self.perm
     }
 
     /// Switch behaviour rule (for switch properties).
-    pub fn rule(&self) -> SwitchRule {
-        SwitchRule::from_u32((unsafe { &*self.sys }).rule).unwrap()
+    pub fn rule(&self) -> &SwitchRule {
+        &self.rule
     }
 
     /// `true`if `Property` is hidden/unused by  driver (for optional properties).
     pub fn hidden(&self) -> bool {
-        (unsafe { &*self.sys }).hidden
+        self.hidden
     }
 
     /// `true` if `Property` is defined.
     pub fn defined(&self) -> bool {
-        (unsafe { &*self.sys }).defined
-    }
-
-    /// Number of allocated property items.
-    pub fn items_allocated(&self) -> usize {
-        (unsafe { &*self.sys }).allocated_count as usize
-    }
-
-    /// Number of used property items.
-    pub fn items_used(&self) -> usize {
-        (unsafe { &*self.sys }).count as usize
+        self.defined
     }
 
     pub fn update(&mut self, p: &Property) {
         self.sys = p.sys;
     }
 
-    pub fn items(&self) -> PropertyItemIterator {
-        PropertyItemIterator {
-            property_type: self.property_type(),
-            items: unsafe { (&*self.sys).items.as_slice((&*self.sys).count as usize) },
-            index: 0,
-        }
+    pub fn items(&'a self) -> slice::Iter<'a, PropertyItem> {
+        self.into_iter()
     }
 
-    pub fn get_item(&self, name: &str) -> Option<PropertyItem> {
+    pub fn get_item(&self, name: &str) -> Option<&PropertyItem> {
         self.items()
             .filter(|i| i.name == name)
             .nth(0)
     }
 
-    pub fn get_mut_item(&mut self, name: &str) -> Option<PropertyItem> {
+    pub fn get_mut_item(&mut self, name: &str) -> Option<&PropertyItem> {
         self.items()
             .filter(|i| i.name == name)
             .nth(0)
@@ -491,37 +487,61 @@ impl Property {
     */
 }
 
+impl From<*mut indigo_property> for Property {
+    fn from(value: *mut indigo_property) -> Self {
+        let mut hasher = DefaultHasher::new();
+        ptr::hash(value, &mut hasher);
+        let sys = hasher.finish();
+
+        let p = unsafe { &*value };
+
+        let name = buf_to_string(p.name);
+        let device = buf_to_string(p.device);
+        let group = buf_to_string(p.group);
+        let label = buf_to_string(p.label);
+        let hints = buf_to_string(p.hints);
+        let state = PropertyState::from_u32(p.state).unwrap();
+        let property_type = PropertyType::from_u32(p.type_).unwrap();
+        let perm = PropertyPermission::from_u32(p.perm).unwrap();
+        let rule = SwitchRule::from_u32(p.perm).unwrap();
+        let hidden = p.hidden;
+        let defined = p.defined;
+
+        let mut items = Vec::new();
+        for i in unsafe { p.items.as_slice(p.count as usize) } {
+            items.push(PropertyItem::sys(&property_type, i));
+        }
+
+        Property { sys, name, device, group, label, hints, state, property_type, perm, rule, hidden, defined, items }
+    }
+}
+
 impl<'a> IntoIterator for &'a Property {
-    type Item = PropertyItem;
-    type IntoIter = PropertyItemIterator<'a>;
+    type Item = &'a PropertyItem;
+    type IntoIter = slice::Iter<'a, PropertyItem>;
 
     fn into_iter(self) -> Self::IntoIter {
-        let items = unsafe { (&*self.sys).items.as_slice((&*self.sys).count as usize) };
-        let property_type = self.property_type();
-        Self::IntoIter {
-            property_type,
-            items,
-            index: 0,
-        }
+        self.items.iter()
     }
 }
 
 /// Iterator for all `PropertyItem` items of this `Property`.
 pub struct PropertyItemIterator<'a> {
-    property_type: PropertyType,
-    items: &'a [indigo_item],
+    property_type: &'a PropertyType,
+    items: &'a PropertyItem,
     index: usize,
 }
 
-impl<'a> Iterator for PropertyItemIterator<'a> {
-    type Item = PropertyItem;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.items.len() {
-            let result = PropertyItem::sys(&self.property_type, &self.items[self.index]);
-            self.index += 1;
-            Some(result)
-        } else {
-            None
-        }
-    }
-}
+
+// impl<'a> Iterator for PropertyItemIterator<'a> {
+//     type Item = &'a PropertyItem;
+//     fn next(&mut self) -> Option<Self::Item> {
+//         if self.index < self.items.len() {
+//             let result = PropertyItem::sys(self.property_type, &self.items[self.index]);
+//             self.index += 1;
+//             Some(result)
+//         } else {
+//             None
+//         }
+//     }
+// }

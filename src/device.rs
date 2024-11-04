@@ -20,7 +20,7 @@ pub trait Device {
         let info = &const_to_string(INFO_PROPERTY_NAME); // TODO make this a constant
 
         if let Some(p) = self.get(info) {
-            if p.property_type() == PropertyType::Text {
+            if p.property_type() == &PropertyType::Text {
                 return Some(p);
             } else {
                 warn!(
@@ -48,10 +48,10 @@ pub trait Device {
     ///     Err(state) => warn!("Device {d} is in the {state}"),
     /// }
     /// ```
-    fn connected(&self) -> Result<bool,PropertyState> {
+    fn connected(&self) -> Result<bool,&PropertyState> {
         let property_name = const_to_string(CONNECTION_PROPERTY_NAME);
         if let Some(connection) = self.get(&property_name) {
-            if connection.state() != PropertyState::Ok {
+            if connection.state() != &PropertyState::Ok {
                 return Err(connection.state());
             }
             let disconnected_item = const_to_string(CONNECTION_DISCONNECTED_ITEM_NAME);
@@ -68,7 +68,7 @@ pub trait Device {
                                 self.name(), property_name, item.name, item.value
                             );
                             warn!("{}", msg);
-                            return Err(PropertyState::Alert);
+                            return Err(&PropertyState::Alert);
                         }
                     };
                 }
@@ -77,12 +77,12 @@ pub trait Device {
                 "{}.{}: could not find a '{}' or '{}' item",
                 self.name(), property_name, connected_item, disconnected_item
             );
-            return Err(PropertyState::Alert);
+            return Err(&PropertyState::Alert);
 
         }
 
         warn!("{}.{}: property not found", self.name(), property_name);
-        return Err(PropertyState::Alert)
+        return Err(&PropertyState::Alert)
     }
 
     fn is_interface(&self, iface: &Interface) -> bool {
@@ -90,7 +90,7 @@ pub trait Device {
             //let device_interface_item = const_to_str(INFO_DEVICE_INTERFACE_ITEM_NAME)?;
             let device_interface_item = &const_to_string(INFO_DEVICE_INTERFACE_ITEM_NAME);
             if let Some(item) = p.get_item(device_interface_item) {
-                if let PropertyValue::Text(ifs) = item.value {
+                if let PropertyValue::Text(ifs) = &item.value {
                     return iface.matches(&ifs);
                 } else {
                     warn!(
@@ -108,7 +108,7 @@ pub trait Device {
         // let device_interface_item = const_to_str(INFO_DEVICE_INTERFACE_ITEM_NAME)?;
         let device_interface_item = &const_to_string(INFO_DEVICE_INTERFACE_ITEM_NAME);
         if let Some(item) = p.get_item(device_interface_item) {
-            if let PropertyValue::Text(ifs) = item.value {
+            if let PropertyValue::Text(ifs) = &item.value {
                 return Some(Interface::map(&ifs));
             } else {
                 warn!(

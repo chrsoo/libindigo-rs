@@ -22,21 +22,3 @@ export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:/opt/homebrew/opt/pkg-config
 #export PATH="/opt/homebrew/bin:$PATH"
 PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig" cargo run
 ```
-
-
-# Which GUI framework?
-[The state of Rust GUI libraries](https://blog.logrocket.com/state-rust-gui-libraries/#comparing-rust-gui-libraries)
-
-| Popularity | (by GitHub stars) | Project users | Compatibility | Production ready |
-| ---------- | ----------------- | ------------- | ------------- | ---------------- |
-| gtk-rs | 1.5k | 1.4k | Windows, Linux, macOS | No |
-| fltk-rs | 1.4k | 1k | Windows, Linux, macOS | **Yes** |
-| iced | 21.6k | 2.9k | Windows, macOS, Linux, and Web | No |
-| relm | 2.4k | not-in-view | Windows, Linux, macOS | No |
-| Azul | 5.7k | not-in-view | Windows, Linux, macOS | **Yes** (alpha release) |
-| egui | 18k | 11.3k | Windows, macOS, Linux, and Web | No |
-| Tauri | 72.8k | 554 | macOS, Windows, Linux, Android and iOS | **Yes** |
-| Slint | 12k | 544 | macOS, Windows, Linux, Android and iOS, Web | **Yes** |
-| Druid | 9.2k | 2.1k | macOS, Windows, Linux/BSD and Web | No |
-| Yew | 29.3k | 10.7k | Web/WebAssembly | No |
-| Xilem | 2.3k|–|Linux | No releases yet |

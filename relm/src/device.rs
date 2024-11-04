@@ -1,12 +1,21 @@
 use gtk::prelude::*;
+use gtk::StackPage;
 use libindigo::ClientDevice;
+use libindigo::Device as IndigoDevice;
+use libindigo::Property as IndigoProperty;
+use relm4::factory::CloneableFactoryComponent;
+use relm4::factory::FactoryHashMap;
 use relm4::{
-    gtk, prelude::{DynamicIndex, FactoryComponent}, FactorySender
+    gtk, prelude::FactoryComponent, FactorySender
 };
 
+use crate::property::Property;
+
 /// Relm model for a [ClientDevice].
-pub struct Device<'a> {
-    device: ClientDevice<'a>,
+pub struct Device {
+    device: ClientDevice,
+    props: FactoryHashMap<String,Property>,
+    message: Option<String>,
 }
 
 /// Connect or disconnect the INDIGO Device.
@@ -16,46 +25,118 @@ pub enum DeviceCommand {
     Connect,
     /// Disconnect the device from the INDIGO bus.
     Disconnect,
+    /// Add a new property to the device.
+    DefineProperty(IndigoProperty),
+    /// Add a new property to the device.
+    UpdateProperty(IndigoProperty),
+    /// Add a new property to the device.
+    DeleteProperty(IndigoProperty),
+    /// Send an INDIGO message to the device.
+    Message(String)
 }
 
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-/// Status of an INDIGO [ClientDevice].
-pub enum DeviceStatus  {
+#[derive(Debug, Clone, PartialEq)]
+/// Events for an INDIGO [ClientDevice].
+pub enum DeviceEvent  {
     /// Device is connected to the INDIGO bus.
-    Connected,
+    Connected(String),
     /// Device is disconnected from the INDIGO bus.
-    Disconnected,
+    Disconnected(String),
+    /// A new property was defined for the device.
+    PropertyDefined(String),
+    /// A property was updated.
+    PropertyUpdated(String),
+    /// A property was deleted.
+    PropertyDeleted(String),
     /// Device is busy changing its connection status.
-    Busy,
+    Busy(String),
 }
 
 #[relm4::factory(pub)]
-impl FactoryComponent for Device<'static> {
-    type Init = ClientDevice<'static>;
+impl FactoryComponent for Device {
+    type Init = ClientDevice;
     type Input = DeviceCommand;
-    type Output = DeviceStatus;
-    type CommandOutput = DeviceStatus;
+    type Output = DeviceEvent;
+    type CommandOutput = DeviceEvent;
     type ParentWidget = gtk::Stack;
+    type Index = String;
 
     view! {
         #[root]
         gtk::Box {
-            set_orientation: gtk::Orientation::Horizontal,
-            set_spacing: 10,
-            gtk::Label {
-                #[watch]
-                set_label: &self.device.name(),
-            }
+            set_orientation: gtk::Orientation::Vertical,
+            // set_spacing: 10,
+            self.props.widget() ->
+            &gtk::Box {
+                set_orientation: gtk::Orientation::Vertical,
+                set_spacing: 10,
+            },
+        },
+        #[local_ref]
+        returned_widget -> gtk::StackPage {
+            set_name: self.device.name(),
+            set_title: self.device.name(),
         }
     }
 
-    fn init_model(device: Self::Init, _index: &DynamicIndex, _sender: FactorySender<Self>) -> Self {
-        Self { device }
+    fn init_model(device: Self::Init, _index: &String, sender: FactorySender<Self>) -> Self {
+        let props = FactoryHashMap::builder()
+            .launch(gtk::Box::default())
+            .detach();
+            // .forward(sender.input_sender(), |output| match output {
+            //     DeviceEvent::Connected(d) => AppCommand::UpdateStatus(format!("Connected device '{d}'")),
+            //     DeviceEvent::Disconnected(d) => AppCommand::UpdateStatus(format!("Disconnected device '{d}'")),
+            //     DeviceEvent::PropertyDefined(p) => AppCommand::UpdateStatus(format!("Defined property '{p}'")),
+            //     DeviceEvent::PropertyUpdated(p) => AppCommand::UpdateStatus(format!("Defined property '{p}'")),
+            //     DeviceEvent::PropertyDeleted(p) => AppCommand::UpdateStatus(format!("Defined property '{p}'")),
+            //     DeviceEvent::Busy(d) => AppCommand::UpdateStatus(format!("Device is busy '{d}'")),
+            // });
+
+        Self { device, props, message: None }
     }
 
+    fn update(&mut self, message: Self::Input, sender: FactorySender<Self>) {
+        match message {
+            DeviceCommand::Connect => todo!(),
+            DeviceCommand::Disconnect => todo!(),
+            DeviceCommand::DefineProperty(p) => self.define_property(p, sender),
+            DeviceCommand::UpdateProperty(p) => self.update_property(p, sender),
+            DeviceCommand::DeleteProperty(p) => self.delete_property(p, sender),
+            DeviceCommand::Message(m) => self.message = Some(m),
+        }
+    }
+
+    // fn update_view(&self, widgets: &mut Self::Widgets, sender: FactorySender<Self>) {
+    //     sender.output(DeviceEvent::PropertyDefined(widgets)).unwrap();
+    // }
 }
 
-impl<'a> Device<'a> {
+impl CloneableFactoryComponent for Device {
+    fn get_init(&self) -> Self::Init {
+        self.device.clone()
+    }
+}
+
+impl Device {
+
+    fn define_property(&mut self, p: IndigoProperty, sender: FactorySender<Self>) {
+        let name = p.name().to_string();
+        // self.device.upsert_property(p).unwrap();
+        self.props.insert(name.to_string(), p);
+        sender.output(DeviceEvent::PropertyDefined(name)).unwrap();
+    }
+
+    fn update_property(&mut self, p: IndigoProperty, sender: FactorySender<Self>) {
+        let name = p.name().to_string();
+        self.device.upsert_property(p).unwrap();
+        sender.output(DeviceEvent::PropertyUpdated(name)).unwrap();
+    }
+
+    fn delete_property(&mut self, p: IndigoProperty, sender: FactorySender<Self>) {
+        let name = p.name().to_string();
+        self.device.delete_property(p).unwrap();
+        sender.output(DeviceEvent::PropertyDeleted(name)).unwrap();
+    }
 
 }

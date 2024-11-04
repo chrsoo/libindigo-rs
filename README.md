@@ -1,3 +1,8 @@
+> [!CAUTION]
+> The current version of LibINDIGO-rs should be considered **alpha** quality, i.e.
+> a first draft for how INDIDGO development could look like with Rust. Please refer
+> to the [known issues]](ISSUES.md) for details.
+
 # File Structure
 ```bash
 ➜  libindigo git:(master) ✗ tree --gitignore
