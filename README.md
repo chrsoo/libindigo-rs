@@ -1,7 +1,7 @@
 > [!CAUTION]
 > The current version of LibINDIGO-rs should be considered **alpha** quality, i.e.
 > a first draft for how INDIDGO development could look like with Rust. Please refer
-> to the [known issues]](ISSUES.md) for details.
+> to the [known issues](ISSUES.md) for details.
 
 The `libindigo-rs` API is consists of five public modules:
 
