@@ -8,8 +8,8 @@ The `libindigo-rs` API is consists of five public modules:
 * `libindigo` - Shared API for client and device driver development.
 * `libindigo/bus` - API related to controlling the INDIGO bus.
 * `libindigo/client` - API specific for developing INDIGO clients.
-* `libindigo/server` - API specific for INDIGO servers.
 * `libindigo/device` - API specific for developing INDIGO device drivers.
+* `libindigo/server` - API specific for managing INDIGO servers.
 
 The `client` and `device` modules contains implementations of traits defined in the `libindigo` API, notable `Device`
 
@@ -17,8 +17,8 @@ The `client` and `device` modules contains implementations of traits defined in 
 ```bash
 tree --gitignore
 # files elided for brevity
-├── relm/...                    # Example Client APP crate for testing developed in Relm4
-├── src                         # libindigo-rs source code
+├── relm/...                    # Example Relm4 Client APP crate for testing libindigo.
+├── src                         # libindigo source code
 │   ├── bus.rs                  # internal bus module
 │   ├── client.rs               # public API specific to client development
 │   ├── device.rs               # public API specific for device and driver development
