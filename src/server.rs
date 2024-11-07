@@ -1,5 +1,5 @@
 use std::{
-    borrow::BorrowMut, ffi::c_int, iter::Cloned, ops::Deref, ptr, rc::Rc, thread::sleep, time::Duration
+    ffi::c_int, ops::Deref, ptr, rc::Rc, thread::sleep, time::Duration
 };
 
 use super::*;

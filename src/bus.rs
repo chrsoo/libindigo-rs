@@ -1,7 +1,6 @@
 use super::*;
 use libindigo_sys::*;
 use log::{debug, error, info, trace, warn};
-use server::ServerConnection;
 
 pub struct Bus {}
 
