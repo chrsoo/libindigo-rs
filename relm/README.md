@@ -1,4 +1,5 @@
-> [!CAUTION] The `libindigo-relm` module is an example INDIGO app for demonstrating the viability
+> [!CAUTION]
+> The `libindigo-relm` module is an example INDIGO app for demonstrating the viability
 > of the `libindigo-rs` API for building clients. It does not have a real purpose beyond this and
 > should not be used for anything productive.
 
