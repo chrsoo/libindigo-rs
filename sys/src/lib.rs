@@ -8,7 +8,7 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 #[cfg(test)]
 mod tests {
-    use std::{ffi::{c_char, c_void, CStr, CString}, ptr};
+    use std::{ffi::{CStr, CString}, ptr};
 
     use super::*;
 
