@@ -19,21 +19,21 @@ The `client` and `device` modules contains implementations of traits defined in 
 ```bash
 tree --gitignore
 # files elided for brevity
-├── relm/...                    # Example Relm4 Client APP crate for testing libindigo.
-├── src                         # libindigo source code
+├── relm/...                    # Example Relm4 Client APP crate for testing libINDIGO.
+├── src                         # libINDIGO source code
 │   ├── bus.rs                  # internal bus module
 │   ├── client.rs               # public API specific to client development
 │   ├── device.rs               # public API specific for device and driver development
 │   ├── lib.rs                  # generic INDIGO code applicable for both devices and clients
 │   ├── property.rs             # internal property module
 │   └── server.rs               # internal server module
-├── sys                         # INDIGO system level API crate
+├── sys                         # INDIGO FFI bindings crate
 │   ├── externals               # git submodules
 │   │   └── indigo              # -> https://github.com/indigo-astronomy/indigo.git
 │   └── build.rs                # generates Rust API using `bindgen`
 ├── tests                       # integration tests
 │   └── sanity.rs               # sanity tests, requires indigo running at localhost
-├── Cargo.toml                  # `libindigo` crate definition
+├── Cargo.toml                  # libINDIGO crate definition
 ├── ISSUES.md                   # known issues
 ├── NOTES.md                    # development notes
 └── READM.md                    # this file
