@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_variables)]
+
 use std::{collections::HashMap, ffi::c_void, fmt::Display, ptr};
 
 use enum_primitive::FromPrimitive;

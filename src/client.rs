@@ -19,7 +19,6 @@ where
     model: T,
     request: Option<IndigoRequest>,
     callback: Box<dyn FnMut(&mut Client<'a, T>) -> Result<(), IndigoError> + 'a>,
-    ref_count: u32,
 }
 
 /// Data model used by a [IndigoClient] with callback methods to handle [IndigoBus] events.
@@ -29,7 +28,7 @@ pub trait ClientCallbacks<'a> {
     /// Called each time the property of a device is defined or its definition requested.
     fn on_define_property(
         &mut self,
-        c: &mut Client<'a, Self::M>,
+        _c: &mut Client<'a, Self::M>,
         d: String,
         p: Property,
         msg: Option<String>,
@@ -46,7 +45,7 @@ pub trait ClientCallbacks<'a> {
     /// Called each time a property is updated for a device.
     fn on_update_property(
         &mut self,
-        c: &mut Client<'a, Self::M>,
+        _c: &mut Client<'a, Self::M>,
         d: String,
         p: Property,
         msg: Option<String>,
@@ -63,7 +62,7 @@ pub trait ClientCallbacks<'a> {
     /// Called each time a property is deleted.
     fn on_delete_property(
         &mut self,
-        c: &mut Client<'a, Self::M>,
+        _c: &mut Client<'a, Self::M>,
         d: String,
         p: Property,
         msg: Option<String>,
@@ -80,7 +79,7 @@ pub trait ClientCallbacks<'a> {
     /// Called each a device broadcasts a message. The default implementation logs the message at INFO level.
     fn on_send_message(
         &mut self,
-        c: &mut Client<'a, Self::M>,
+        _c: &mut Client<'a, Self::M>,
         d: String,
         msg: String,
     ) -> Result<(), IndigoError> {
@@ -96,10 +95,6 @@ pub struct ClientDevice {
     // props: &'a mut HashMap<String, Property>,
     name: String,
     props: HashMap<String,Property>,
-    // event hooks
-    // create_property_hook: Option<Box<dyn Fn(&Property)>>,
-    // update_property_hook: Option<Box<dyn Fn(&Property)>>,
-    // delete_property_hook: Option<Box<dyn Fn(&Property)>>,
 }
 
 // TODO move ClientDevice methods to Device trait
@@ -118,18 +113,6 @@ impl ClientDevice {
     pub(crate) fn addr_of_name(&self) -> *mut c_char {
         // addr_of!((*self.sys).name) as *const _ as *mut c_char
         todo!()
-    }
-
-    pub fn create_property_hook(&mut self, hook: fn(&Property)) {
-        // self.create_property_hook = Some(Box::new(hook));
-    }
-
-    pub fn update_property_hook(&mut self, hook: fn(&Property)) {
-        // self.update_property_hook = Some(Box::new(hook));
-    }
-
-    pub fn delete_property_hook(&mut self, hook: fn(&Property)) {
-        // self.delete_property_hook = Some(Box::new(hook));
     }
 
     pub fn upsert_property(&mut self, p: Property) -> IndigoResult<()> {
@@ -216,10 +199,10 @@ impl<'a> ClientCallbacks<'a> for ClientDeviceModel {
 
     fn on_define_property(
         &mut self,
-        c: &mut Client<'a, Self::M>,
-        d: String,
+        _c: &mut Client<'a, Self::M>,
+        _d: String,
         p: Property,
-        msg: Option<String>,
+        _msg: Option<String>,
     ) -> Result<(), IndigoError> {
         // FIXME hanlde device 'd'
         let device = self
@@ -237,10 +220,10 @@ impl<'a> ClientCallbacks<'a> for ClientDeviceModel {
 
     fn on_update_property(
         &mut self,
-        c: &mut Client<'a, Self::M>,
-        d: String,
+        _c: &mut Client<'a, Self::M>,
+        _d: String,
         p: Property,
-        msg: Option<String>,
+        _msg: Option<String>,
     ) -> Result<(), IndigoError> {
         // FIXME handle device 'd'
         if let Some(props) = self.devices.get_mut(p.device()) {
@@ -259,18 +242,14 @@ impl<'a> ClientCallbacks<'a> for ClientDeviceModel {
 
     fn on_delete_property(
         &mut self,
-        c: &mut Client<'a, Self::M>,
+        _c: &mut Client<'a, Self::M>,
         d: String,
         p: Property,
-        msg: Option<String>,
+        _msg: Option<String>,
     ) -> IndigoResult<()> {
 
         if let Some(device) = self.devices.get_mut(&d) {
-            if let Ok(prop) = device.delete_property(p) {
-                // if let Some(hook) = device.delete_property_hook.as_deref_mut() {
-                //     hook(&prop);
-                // }
-            }
+            device.delete_property(p)?;
             Ok(())
         } else {
             Err(IndigoError::Message("Device not found."))
@@ -279,7 +258,7 @@ impl<'a> ClientCallbacks<'a> for ClientDeviceModel {
 
     fn on_send_message(
         &mut self,
-        c: &mut Client<'a, Self::M>,
+        _c: &mut Client<'a, Self::M>,
         d: String,
         msg: String,
     ) -> Result<(), IndigoError> {
@@ -313,7 +292,7 @@ where
 {
     /// System record for INDIGO clients.
     sys: &'a indigo_client,
-    model: &'a PhantomData<T>,
+    _model: &'a PhantomData<T>,
 }
 
 impl<'a, M> Client<'a, M>
@@ -327,12 +306,11 @@ where
         let state = Box::new(RwLock::new(ClientState {
             model,
             request: None,
-            callback: Box::new(|c|
+            callback: Box::new(|_|
                 // If this callback is invoked it means that we received an INDIGO callback
                 // without having called invoke or connect on the client, or that the code
                 // has failed to store the callback on the right client object.
                 Err(IndigoError::Other(format!("Initial callback placeholder that should never be called!")))),
-            ref_count: 1,
         }));
 
         let indigo_client = Box::new(indigo_client {
@@ -359,7 +337,7 @@ where
 
         Client {
             sys: unsafe { &*ptr },
-            model: &PhantomData,
+            _model: &PhantomData,
         }
     }
 
@@ -443,7 +421,7 @@ where
     pub fn connect_device(
         &mut self,
         d: &mut ClientDevice,
-        f: impl FnOnce(Result<(), IndigoError>) + 'a,
+        _f: impl FnOnce(Result<(), IndigoError>) + 'a,
     ) -> Result<(), IndigoError> {
         trace!("Enter '{}'", function_name!());
         let n = d.addr_of_name();
@@ -458,7 +436,7 @@ where
     pub fn disconnect_device(
         &mut self,
         d: &str,
-        f: impl FnOnce(Result<(), IndigoError>) + 'a,
+        _f: impl FnOnce(Result<(), IndigoError>) + 'a,
     ) -> Result<(), IndigoError> {
         trace!("Enter '{}'", function_name!());
         trace!("Disconnecting device '{}'...", d);
@@ -469,10 +447,6 @@ where
     }
 
     // -- getters
-
-    fn state<'b>(&'b mut self) -> &'b mut RwLock<ClientState<'a, M>> {
-        unsafe { &mut *(self.sys.client_context as *mut RwLock<ClientState<'a, M>>) }
-    }
 
     pub fn name(&self) -> String {
         buf_to_string(self.sys.name)
@@ -544,7 +518,7 @@ where
         }
         debug!("'{name}' - notified for {expected}.");
 
-        lock.callback = Box::new(|c| {
+        lock.callback = Box::new(|_| {
             // If this error is returned we are receiving callbacks without first calling attach,
             // i.e. we the callback from INDIGO happens more than once for any given attach request.
             Err(IndigoError::Other(format!(
@@ -694,18 +668,6 @@ where
         trace!("'{}' - model write lock acquired.", name);
         lock
     }
-
-    fn aquire_write_lock2<'b>(
-        c: &'b mut Client<'a, M>,
-    ) -> RwLockWriteGuard<'b, RawRwLock, ClientState<'a, M>> {
-        c.state().write()
-    }
-
-    fn dec_ref(&mut self) -> u32 {
-        let mut lock = self.aquire_write_lock();
-        lock.ref_count -= 1;
-        return lock.ref_count;
-    }
 }
 
 unsafe fn log_indigo_callback(client: *mut indigo_client, method: &str) {
@@ -766,11 +728,8 @@ where
         } else {
             Ok(Client {
                 sys,
-                model: &PhantomData,
+                _model: &PhantomData,
             })
         }
     }
 }
-
-#[cfg(test)]
-mod tests {}

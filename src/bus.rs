@@ -60,7 +60,7 @@ pub fn sys_to_lib<'a, T>(t: T, result: indigo_result, operation: &str) -> Indigo
 }
 
 /// Map a libindigo [IndigoResult] to a sys INDIGO [indigo_result].
-pub(crate) fn lib_to_sys(result: IndigoResult<()>, operation: &str) -> indigo_result {
+pub(crate) fn lib_to_sys(result: IndigoResult<()>, _operation: &str) -> indigo_result {
     match result {
         Ok(_) => indigo_result_INDIGO_OK,
         Err(e) => match e {

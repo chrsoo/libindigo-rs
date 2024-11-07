@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_variables)]
+// #![allow(dead_code, unused_variables)]
 #![cfg_attr(feature = "nightly", feature(mapped_lock_guards))]
 
 mod driver;
@@ -198,16 +198,6 @@ pub enum LogLevel {
 }
 }
 
-impl BusError {
-    fn from_indigo_result(result: indigo_result) -> Result<Self, String> {
-        if let Some(result) = BusError::from_u32(result) {
-            Ok(result)
-        } else {
-            Err(format!("Unknown INDIGO error result: {}", result))
-        }
-    }
-}
-
 // TODO create version that always succeeds and does not return Result..
 fn str_to_buf<const N: usize>(s: &str) -> Result<[c_char; N], IndigoError> {
     let s = CString::new(s).expect("a string without \\0 bytes");
@@ -243,13 +233,6 @@ fn const_to_string(name: &[u8]) -> String {
     // if the unwrap panics we are calling it with a faulty argument and it is a bug...
     let name = CStr::from_bytes_with_nul(name).unwrap();
     name.to_string_lossy().into_owned()
-}
-
-#[deprecated]
-fn const_to_str<'a>(message: &[u8]) -> IndigoResult<&'a str> {
-    let message = message.as_ptr();
-    let cstr = unsafe { CStr::from_ptr(message as *const i8) };
-    Ok(cstr.to_str()?)
 }
 
 fn ptr_to_string(message: *const c_char) -> Option<String> {
@@ -315,46 +298,54 @@ impl<'a, T> IndigoRequest2<'a, T> {
 mod tests {
     use super::*;
 
+    fn from_indigo_result(result: indigo_result) -> Result<BusError, String> {
+        if let Some(result) = BusError::from_u32(result) {
+            Ok(result)
+        } else {
+            Err(format!("Unknown INDIGO error result: {}", result))
+        }
+    }
+
     #[test]
     fn bus_error() {
         assert_eq!(
-            BusError::from_indigo_result(indigo_result_INDIGO_FAILED).unwrap(),
+            from_indigo_result(indigo_result_INDIGO_FAILED).unwrap(),
             BusError::Failed
         );
         assert_eq!(
-            BusError::from_indigo_result(indigo_result_INDIGO_BUSY).unwrap(),
+            from_indigo_result(indigo_result_INDIGO_BUSY).unwrap(),
             BusError::Busy
         );
         assert_eq!(
-            BusError::from_indigo_result(indigo_result_INDIGO_DUPLICATED).unwrap(),
+            from_indigo_result(indigo_result_INDIGO_DUPLICATED).unwrap(),
             BusError::Duplicated
         );
         assert_eq!(
-            BusError::from_indigo_result(indigo_result_INDIGO_GUIDE_ERROR).unwrap(),
+            from_indigo_result(indigo_result_INDIGO_GUIDE_ERROR).unwrap(),
             BusError::GuideError
         );
         assert_eq!(
-            BusError::from_indigo_result(indigo_result_INDIGO_LOCK_ERROR).unwrap(),
+            from_indigo_result(indigo_result_INDIGO_LOCK_ERROR).unwrap(),
             BusError::LockError
         );
         assert_eq!(
-            BusError::from_indigo_result(indigo_result_INDIGO_NOT_FOUND).unwrap(),
+            from_indigo_result(indigo_result_INDIGO_NOT_FOUND).unwrap(),
             BusError::NotFound
         );
         assert_eq!(
-            BusError::from_indigo_result(indigo_result_INDIGO_UNRESOLVED_DEPS).unwrap(),
+            from_indigo_result(indigo_result_INDIGO_UNRESOLVED_DEPS).unwrap(),
             BusError::UnresolvedDependency
         );
         assert_eq!(
-            BusError::from_indigo_result(indigo_result_INDIGO_UNSUPPORTED_ARCH).unwrap(),
+            from_indigo_result(indigo_result_INDIGO_UNSUPPORTED_ARCH).unwrap(),
             BusError::UnsupportedArchitecture
         );
         assert_eq!(
-            BusError::from_indigo_result(indigo_result_INDIGO_CANT_START_SERVER).unwrap(),
+            from_indigo_result(indigo_result_INDIGO_CANT_START_SERVER).unwrap(),
             BusError::CantStartServer
         );
         assert_eq!(
-            BusError::from_indigo_result(indigo_result_INDIGO_TOO_MANY_ELEMENTS).unwrap(),
+            from_indigo_result(indigo_result_INDIGO_TOO_MANY_ELEMENTS).unwrap(),
             BusError::TooManyElements
         );
     }
@@ -362,7 +353,7 @@ mod tests {
     #[test]
     fn bus_error_unknown_code() {
         assert_eq!(
-            BusError::from_indigo_result(indigo_result_INDIGO_OK).err(),
+            from_indigo_result(indigo_result_INDIGO_OK).err(),
             Some("Unknown INDIGO error result: 0".to_string())
         );
     }

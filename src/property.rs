@@ -116,9 +116,9 @@ impl Display for PropertyValue {
             } => {
                 write!(
                     f,
-                    "format: '{format}'; size: {size}; value: {}; url: '{}'",
+                    "format: '{format}'; size: {size}; value: {}; url: '{:?}'",
                     value.is_some(),
-                    "todo"
+                    url
                 )
             }
         }
@@ -368,6 +368,7 @@ pub enum BlobMode {
 }
 }
 
+#[allow(dead_code, unused_variables)]
 #[derive(Debug)]
 pub struct Blob {
     prop: PropertyKey,
@@ -525,23 +526,3 @@ impl<'a> IntoIterator for &'a Property {
     }
 }
 
-/// Iterator for all `PropertyItem` items of this `Property`.
-pub struct PropertyItemIterator<'a> {
-    property_type: &'a PropertyType,
-    items: &'a PropertyItem,
-    index: usize,
-}
-
-
-// impl<'a> Iterator for PropertyItemIterator<'a> {
-//     type Item = &'a PropertyItem;
-//     fn next(&mut self) -> Option<Self::Item> {
-//         if self.index < self.items.len() {
-//             let result = PropertyItem::sys(self.property_type, &self.items[self.index]);
-//             self.index += 1;
-//             Some(result)
-//         } else {
-//             None
-//         }
-//     }
-// }
