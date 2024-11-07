@@ -11,7 +11,7 @@ The INDIGO call for connecting to an INDIGO server is asynchronous (like everyth
 
 TODO: Better document the issues and raise bug issues with upstream INDIGO, if applicable.
 
-## libINDGO structural issues
+## Structural issues
 Apart from any bugs in the existing code base, the following structural issues are known and being worked on.
 
 ### Mapping of INDIGO constants
