@@ -1,4 +1,4 @@
-The `libindigo-sys` crate is a [bindgen](https://rust-lang.github.io/rust-bindgen) Rust API generated from the upstream [INDIGO](https://www.indigo-astronomy.org/) source code found on [GitHub](https://github.com/indigo-astronomy/indigo).
+The `libindigo-sys` crate is a [bindgen](https://rust-lang.github.io/rust-bindgen) generated FFI API from the upstream [INDIGO](https://www.indigo-astronomy.org/) source code found on [GitHub](https://github.com/indigo-astronomy/indigo).
 
 Using `libindigo-sys` means writing a lot of unsafe Rust code using C-pointers.
 
