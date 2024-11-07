@@ -5,11 +5,11 @@ mod device;
 use std::env;
 
 use device::{Device, DeviceCommand, DeviceEvent};
-use gtk::{glib::ExitCode, prelude::*, StackPage};
+use gtk::{glib::ExitCode, prelude::*};
 use log::{error, warn};
 use gtk::glib;
 use libindigo::{bus, Client, ClientCallbacks, ClientDevice, LogLevel, Property};
-use relm4::{factory::{FactoryHashMap, FactoryView}, Component, ComponentController, ComponentParts, ComponentSender, Controller, MessageBroker, RelmApp, RelmWidgetExt};
+use relm4::{factory::FactoryHashMap, Component, ComponentController, ComponentParts, ComponentSender, Controller, MessageBroker, RelmApp, RelmWidgetExt};
 use server::{IndigoServer, ServerCommand, ServerOutput};
 
 

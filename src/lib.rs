@@ -1,28 +1,28 @@
 #![allow(dead_code, unused_variables)]
 #![cfg_attr(feature = "nightly", feature(mapped_lock_guards))]
 
-mod client;
-mod device;
 mod driver;
 mod property;
 
 pub mod bus;
 pub mod server;
+pub mod client;
+pub mod device;
 
-pub use bus::Bus;
-pub use client::Client;
 pub use device::Device;
 pub use device::Interface;
+
+pub use client::Client;
 pub use client::ClientDevice;
 pub use client::ClientCallbacks;
 pub use client::ClientDeviceModel;
+
 pub use property::Property;
 pub use property::PropertyItem;
 pub use property::PropertyKey;
 pub use property::PropertyState;
 pub use property::PropertyType;
 pub use property::PropertyValue;
-pub use server::ServerConnection;
 
 use parking_lot::RwLockWriteGuard;
 use log::warn;

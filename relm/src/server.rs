@@ -1,7 +1,5 @@
-use std::borrow::BorrowMut;
-
 use gtk::{glib::{self}, prelude::*, EntryBuffer};
-use libindigo::ServerConnection;
+use libindigo::server::ServerConnection;
 use relm4::{
     gtk, Component, ComponentParts, ComponentSender, RelmWidgetExt
 };

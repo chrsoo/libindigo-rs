@@ -3,10 +3,12 @@
 > a first draft for how INDIDGO development could look like with Rust. Please refer
 > to the [known issues]](ISSUES.md) for details.
 
-The `libindigo-rs` API is consists of three main modules:
+The `libindigo-rs` API is consists of five public modules:
 
 * `libindigo` - Shared API for client and device driver development.
+* `libindigo/bus` - API related to controlling the INDIGO bus.
 * `libindigo/client` - API specific for developing INDIGO clients.
+* `libindigo/server` - API specific for INDIGO servers.
 * `libindigo/device` - API specific for developing INDIGO device drivers.
 
 The `client` and `device` modules contains implementations of traits defined in the `libindigo` API, notable `Device`
