@@ -2,7 +2,7 @@
 
 members = [
     ".",
-    "app", "relm",
+    "relm",
     "sys",
 ]
 
