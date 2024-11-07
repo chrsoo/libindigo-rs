@@ -3,29 +3,34 @@
 > a first draft for how INDIDGO development could look like with Rust. Please refer
 > to the [known issues]](ISSUES.md) for details.
 
+The `libindigo-rs` API is consists of three main modules:
+
+* `libindigo` - Shared API for client and device driver development.
+* `libindigo/client` - API specific for developing INDIGO clients.
+* `libindigo/device` - API specific for developing INDIGO device drivers.
+
+The `client` and `device` modules contains implementations of traits defined in the `libindigo` API, notable `Device`
+
 # File Structure
 ```bash
-➜  libindigo git:(master) ✗ tree --gitignore
+tree --gitignore
 # files elided for brevity
-...
-├── Cargo.toml                  # `libindigo` crate definition
-...
-├── src
+├── relm/...                    # Example Client APP crate for testing developed in Relm4
+├── src                         # libindigo-rs source code
 │   ├── bus.rs                  # internal bus module
-│   ├── client.rs               # internal client module
-│   ├── device.rs               # internal device module
-│   ├── lib.rs                  # libindigo public interface
+│   ├── client.rs               # public API specific to client development
+│   ├── device.rs               # public API specific for device and driver development
+│   ├── lib.rs                  # generic INDIGO code applicable for both devices and clients
+│   ├── property.rs             # internal property module
 │   └── server.rs               # internal server module
-├── sys
-...
-│   ├── Cargo.toml              # `libindigo-sys` crate definition
-...
-│   ├── build.rs                # builds the indigo static library
-...
+├── sys                         # INDIGO system level API crate
 │   ├── externals               # git submodules
 │   │   └── indigo              # -> https://github.com/indigo-astronomy/indigo.git
-│   └── src
-│       └── lib.rs              # libindigo public interface
-└── tests                       # integration tests
-    └── sanity.rs               # sanity tests, requires indigo running at localhost
+│   └── build.rs                # generates Rust API using `bindgen`
+├── tests                       # integration tests
+│   └── sanity.rs               # sanity tests, requires indigo running at localhost
+├── Cargo.toml                  # `libindigo` crate definition
+├── ISSUES.md                   # known issues
+├── NOTES.md                    # development notes
+└── READM.md                    # this file
 ```
