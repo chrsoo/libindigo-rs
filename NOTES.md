@@ -38,3 +38,6 @@ Settled on `relm` for the first tries of implementing a `libindigo-rs` GUI.
 ### One trait with all callback methods
 
 ### One trait per callback method
+
+# Release
+Install [cargo-release](https://github.com/crate-ci/cargo-release), follow the instructions.
