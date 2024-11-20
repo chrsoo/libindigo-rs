@@ -6,8 +6,9 @@ use enum_primitive::*;
 use libindigo_sys::{self, *};
 use log::warn;
 use url::Url;
+use number::NumberFormat;
 
-use crate::{buf_to_str, buf_to_string};
+use crate::{buf_to_str, buf_to_string, number};
 
 enum_from_primitive! {
     #[derive(Debug, Copy, Clone, PartialEq)]
@@ -58,9 +59,9 @@ enum_from_primitive! {
 pub enum PropertyValue {
     Text(String),
     Number {
-        // TODO convert number format to pritnf format type with support for sexagesimal
+        // TODO convert format value to pritnf format type with support for sexagesimal
         /// < item format (for number properties)
-        format: String,
+        format: NumberFormat,
         /// < item min value (for number properties)
         min: f64,
         /// < item max value (for number properties)
@@ -100,10 +101,9 @@ impl Display for PropertyValue {
                 value,
                 target,
             } => {
-                write!(
-                    f,
-                    "format: '{format}'; min: {min}; max: {max}; \
-                step: {step}; value: {value}; target: {target}"
+                write!(f,
+                    "format: '{format}'; min: {min}; max: {max}; step: {step};
+                     value: {}; target: {target}", format.format(*value)
                 )
             }
             PropertyValue::Switch(v) => write!(f, "{v}"),
@@ -165,7 +165,7 @@ impl PropertyValue {
 
     fn item_to_number(item: &indigo_item) -> PropertyValue {
         let num = unsafe { item.__bindgen_anon_1.number.as_ref() };
-        let format = buf_to_string(num.format);
+        let format = NumberFormat::try_from(&num.format).unwrap();
         let min = num.min;
         let max = num.max;
         let step = num.step;
@@ -525,4 +525,3 @@ impl<'a> IntoIterator for &'a Property {
         self.items.iter()
     }
 }
-

@@ -1,8 +1,10 @@
 // #![allow(dead_code, unused_variables)]
 #![cfg_attr(feature = "nightly", feature(mapped_lock_guards))]
 
+
 mod driver;
 mod property;
+mod number;
 
 pub mod bus;
 pub mod server;
@@ -26,6 +28,8 @@ pub use property::PropertyValue;
 
 use parking_lot::RwLockWriteGuard;
 use log::warn;
+use core::slice;
+use core::str;
 use std::collections::hash_map::Values;
 use std::collections::hash_map::ValuesMut;
 use std::collections::HashMap;
@@ -219,6 +223,12 @@ fn buf_to_string<const N: usize>(buf: [c_char; N]) -> String {
     let ptr = buf.as_ptr();
     let cstr = unsafe { CStr::from_ptr(ptr) };
     String::from_utf8_lossy(cstr.to_bytes()).to_string()
+}
+
+// TODO switch from buf_to_str to buf_to_str2
+fn buf_to_str2<'a, const N: usize>(buf: &'a[c_char; N]) -> &'a str {
+    let bytes = unsafe{ slice::from_raw_parts(buf.as_ptr() as *const u8, buf.len()) };
+    str::from_utf8(&bytes[0..N]).expect("expected utf-8 string")
 }
 
 fn buf_to_str<'a, const N: usize>(buf: [c_char; N]) -> &'a str {

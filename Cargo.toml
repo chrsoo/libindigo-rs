@@ -24,6 +24,9 @@ strum_macros = "0.26"
 parking_lot = "0.12.3"
 function_name = "0.3.0"
 fragile = "2.0.0"
+printf-wrap = "0.2.1"
+bitfield = "0.17.0"
+funty = "2.0.0"
 
 [dev-dependencies]
 test-log = "0.2.16"

@@ -236,7 +236,7 @@ impl<'a> DeviceDriver<'a> {
         } else {
             warn!(
                 "Spurius callback without a registered request for device '{}'",
-                buf_to_str((*device).name)
+                buf_to_str((&*device).name)
             );
             BusError::Failed as indigo_result
         }

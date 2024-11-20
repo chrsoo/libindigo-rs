@@ -1,8 +1,16 @@
-use gtk::{glib::{self}, prelude::*, EntryBuffer, Frame, Label};
+use std::sync::LazyLock;
+
+use gtk::{glib::{self}, prelude::*, EntryBuffer, Frame, Label, SizeGroup};
 use libindigo::{PropertyItem as IndigoPropertyItem, PropertyType, PropertyValue, Property as IndigoProperty};
 use relm4::{
     factory::{FactoryHashMap, FactoryVecDequeBuilder, FactoryView}, gtk, prelude::{DynamicIndex, FactoryComponent, FactoryVecDeque}, view, Component, ComponentParts, ComponentSender, FactorySender, RelmWidgetExt, SimpleComponent
 };
+
+thread_local! {
+    static PROP_COLUMN_1: SizeGroup = SizeGroup::new(gtk::SizeGroupMode::Horizontal);
+    static PROP_COLUMN_2: SizeGroup = SizeGroup::new(gtk::SizeGroupMode::Horizontal);
+    static PROP_COLUMN_3: SizeGroup = SizeGroup::new(gtk::SizeGroupMode::Horizontal);
+}
 
 pub(crate) struct Property {
     property: IndigoProperty,
@@ -32,18 +40,13 @@ impl FactoryComponent for Property {
 
     view! {
         #[root]
-        gtk::Box {
-            set_orientation: gtk::Orientation::Vertical,
-            set_spacing: 10,
-            gtk::Frame {
-                set_label: Some(self.property.label()),
-                self.items.widget() ->
-                &gtk::Box {
-                    set_orientation: gtk::Orientation::Vertical,
-                }
+        gtk::Frame {
+            set_label: Some(self.property.label()),
+            self.items.widget() ->
+            &gtk::Box {
+                set_orientation: gtk::Orientation::Vertical,
             }
-            // TODO add property items from factory
-        },
+        }
     }
 
     fn init_model(property: Self::Init, _index: &String, sender: FactorySender<Self>) -> Self {
@@ -109,22 +112,42 @@ impl FactoryComponent for PropertyItem {
                     gtk::Box {
                         set_orientation: gtk::Orientation::Horizontal,
                         set_spacing: 10,
-                        gtk::Label {
-                            #[watch]
-                            set_label: &self.item.name,
+                        gtk::Box {
+                            set_size_group: &PROP_COLUMN_1.with(|w| w.clone() ),
+                            gtk::Label {
+                                #[watch]
+                                set_label: &self.item.name,
+                            },
                         },
-                        gtk::Label {
-                            #[watch]
-                            set_label: s,
+                        gtk::Box {
+                            set_size_group: &PROP_COLUMN_2.with(|w| w.clone() ),
+                            gtk::Label {
+                                #[watch]
+                                set_label: s,
+                            }
                         }
                     }
                 }
                 // PropertyValue::Number{format, min, max, step, value, target} => {
-                PropertyValue::Number{..} => {
-                    gtk::Label {
-                        set_label: "TODO: render number property"
-                    }
-                }
+                PropertyValue::Number{format, value, ..} => {
+                    gtk::Box {
+                        set_orientation: gtk::Orientation::Horizontal,
+                        set_spacing: 10,
+                        gtk::Box {
+                            set_size_group: &PROP_COLUMN_1.with(|w| w.clone()),
+                            gtk::Label {
+                                #[watch]
+                                set_label: &self.item.name,
+                            },
+                        },
+                        gtk::Box {
+                            set_size_group: &PROP_COLUMN_2.with(|w| w.clone() ),
+                            gtk::Label {
+                                #[watch]
+                                set_label: &format.format(*value),
+                            }
+                        }
+                    }                }
                 PropertyValue::Light(_) => {
                     gtk::Label {
                         set_label: "TODO: render light property"

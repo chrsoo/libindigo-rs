@@ -260,7 +260,6 @@ impl<'a> ClientCallbacks<'a> for DeviceCallbackHandler {
 
         let name = p.name().to_string();
         let device = p.device().to_string();
-        // let p = Sticky::new(p);
         BROKER.send(AppCommand::DefineProperty(p));
         log::debug!("Device: '{device}'; Property '{name}'; DEFINED with message '{:?}'", msg);
         Ok(())
@@ -273,16 +272,17 @@ impl<'a> ClientCallbacks<'a> for DeviceCallbackHandler {
         p: libindigo::Property,
         msg: Option<String>,
     ) -> Result<(), libindigo::IndigoError> {
-        log::debug!(
-            "Device: '{}'; Property '{}'; UPDATED with message '{:?}'",
-            p.device(),
-            p.name(),
-            msg
-        );
 
-        let key = &p.key().name;
-        // let p = Sticky::new(p);
-        self.devices.send(key, DeviceCommand::UpdateProperty(p));
+        let device = p.device().to_string();
+        let name = p.name().to_string();
+        if let None = self.devices.get(&device) {
+            BROKER.send(AppCommand::DefineProperty(p));
+            log::debug!("Device: '{device}'; Property '{name}'; DEFINED with message '{:?}'", msg);
+        } else {
+            self.devices.send(&device, DeviceCommand::UpdateProperty(p));
+            log::debug!("Device: '{device}'; Property '{name}'; UPDATED with message '{:?}'", msg);
+        }
+
         Ok(())
     }
 
@@ -300,9 +300,10 @@ impl<'a> ClientCallbacks<'a> for DeviceCallbackHandler {
             msg
         );
 
-        let key = &p.key().name;
-        // let p = Sticky::new(p);
-        self.devices.send(key, DeviceCommand::DeleteProperty(p));
+        let device = p.device().to_string();
+        if let Some(_) = self.devices.get(&device) {
+            self.devices.send(&p.device().to_string(), DeviceCommand::DeleteProperty(p));
+        }
         Ok(())
     }
 

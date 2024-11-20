@@ -120,6 +120,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bitfield"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f798d2d157e547aa99aab0967df39edd0b70307312b6f8bd2848e6abe40896e0"
+
+[[package]]
 name = "bitflags"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -308,6 +314,12 @@ name = "function_name-proc-macro"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "673464e1e314dd67a0fd9544abc99e8eb28d0c7e3b69b033bcff9b2d00b87333"
+
+[[package]]
+name = "funty"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
 
 [[package]]
 name = "futures"
@@ -784,15 +796,18 @@ checksum = "97b3888a4aecf77e811145cadf6eef5901f4782c53886191b2f693f24761847c"
 name = "libindigo"
 version = "0.1.0+INDIGO.2.0.289"
 dependencies = [
+ "bitfield",
  "enum_primitive",
  "fragile",
  "function_name",
+ "funty",
  "hostname-validator",
  "lazy_static",
  "libindigo-sys",
  "log",
  "once_cell",
  "parking_lot",
+ "printf-wrap",
  "strum",
  "strum_macros",
  "test-log",
@@ -1042,6 +1057,12 @@ dependencies = [
  "proc-macro2",
  "syn",
 ]
+
+[[package]]
+name = "printf-wrap"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59f254776d131bd77a53a48ab4edbc299cd5280db6e1c4891bdb5e9a379b2b54"
 
 [[package]]
 name = "proc-macro-crate"

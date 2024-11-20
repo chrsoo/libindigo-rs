@@ -80,7 +80,7 @@ impl FactoryComponent for Device {
         }
     }
 
-    fn init_model(device: Self::Init, _index: &String, sender: FactorySender<Self>) -> Self {
+    fn init_model(device: Self::Init, _index: &String, _sender: FactorySender<Self>) -> Self {
         let props = FactoryHashMap::builder()
             .launch(gtk::Box::default())
             .detach();
