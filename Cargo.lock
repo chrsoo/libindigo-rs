@@ -818,7 +818,6 @@ dependencies = [
 name = "libindigo-relm"
 version = "0.1.0"
 dependencies = [
- "fragile",
  "glib_logger",
  "gtk4",
  "libindigo",

@@ -1,16 +1,20 @@
 [package]
 name = "libindigo-relm"
+description = "Example GTK4 app written in Relm4 for demonstring the viability of writing a libindigo client - not for production use!"
 version = "0.1.0"
+license = "MIT"
+repository = "https://github.com/chrsoo/libindigo-rs"
+readme = "README.md"
+keywords = [ "astronomy", "astrophotography", "indigo", "gtk", "relm" ]
+categories = [ "asynchronous", "gui", "hardware-support" ]
 edition = "2021"
 
 [dependencies]
 relm4 = "0.9.1"
 relm4-components = "0.9.1"
 tokio = { version = "1.40.0", features = ["rt", "time"] }
-# relm4-icons = "0.9.0"
-libindigo = { path = ".." }
+libindigo = { version = "0.1.0+INDIGO.2.0.289", path = ".." }
 log = "0.4.22"
 glib_logger = "0.1.0"
 gtk = { version = "0.9.2", package = "gtk4", features = ["v4_16"] }
 parking_lot = "0.12.3"
-fragile = "2.0.0"
