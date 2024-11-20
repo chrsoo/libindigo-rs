@@ -19,6 +19,10 @@ pub use client::ClientDevice;
 pub use client::ClientCallbacks;
 pub use client::ClientDeviceModel;
 
+pub use number::NumberFormat;
+pub use number::FormatFlags;
+pub use number::ParseError;
+
 pub use property::Property;
 pub use property::PropertyItem;
 pub use property::PropertyKey;
