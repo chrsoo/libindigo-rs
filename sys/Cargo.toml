@@ -8,6 +8,9 @@ readme = "README.md"
 keywords = [ "astronomy", "astrophotography", "indigo", "indi", "ffi" ]
 categories = [ "asynchronous", "external-ffi-bindings", "hardware-support" ]
 edition = "2021"
+exclude = [
+    "externals/indigo/build/*",
+]
 
 [dependencies]
 
