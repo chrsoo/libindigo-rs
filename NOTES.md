@@ -1,9 +1,9 @@
-## Usecases
+# Usecases
 
-### download all new files
+## download all new files
 Application subscribes to all file creation events and downloads each file to local storage.
 
-## Client interface options
+# Client interface options
 Requirements:
 * Active open-source community with stable code base.
 * Portable code with support for all major PC platforms (Mac, Linux, Windows).
@@ -35,9 +35,9 @@ Settled on `relm` for the first tries of implementing a `libindigo-rs` GUI.
 | Yew | 29.3k | 10.7k | Web/WebAssembly | No |
 | Xilem | 2.3k|–|Linux | No releases yet |
 
-### One trait with all callback methods
+## One trait with all callback methods
 
-### One trait per callback method
+## One trait per callback method
 
 # Release
 Install [cargo-release](https://github.com/crate-ci/cargo-release), follow the instructions.
