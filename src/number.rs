@@ -11,7 +11,6 @@
 use core::{slice, str};
 use bitfield::bitfield;
 use log::warn;
-use url::form_urlencoded::Parse;
 use std::{ffi::c_char, fmt::Display, num::{ParseFloatError, ParseIntError}, str::{FromStr, Utf8Error}};
 use funty::*;
 
@@ -77,23 +76,23 @@ fn parse_float(bytes: &[u8], i: usize, j: usize) -> Result<f64,ParseError<'stati
     Ok(utf_str.parse()?)
 }
 
-/// A `printf` C-style format specifier with support for the INDI sexagesimal extension
-/// based on the following template:
+/// A `printf` C-style format specifier with support for the INDI sexagesimal extension.
+/// NumberFormat is based on the following template:
 /// > ```text
 /// > %[flags][width][.precision][length]specifier
 /// > ```
-/// Unsupported  `printf` [format specifier](https://cplusplus.com/reference/cstdio/printf/):
-/// * `.*` for an unspecified precision
-/// * specfiers `cspn%`
+/// Unsupported  features of [printf](https://cplusplus.com/reference/cstdio/printf/):
+/// * `.*` (unspecified precision)
+/// * `cspn%` (format specifiers)
 ///
-/// Note: the `NumberFormat` struct is expected to be stand-alone, i.e. it must not be embedded
-/// in a string. The following formats are valid:
+/// Note: the `NumberFormat` string is expected to be stand-alone, i.e. it must not be embedded
+/// in a longer string. The following formats are valid:
 /// ```rust
-/// "&5f\0".parse::<NumberFormat>();
-/// "&05.1f\0".parse::<NumberFormat>();
-/// "&12.6m\0".parse::<NumberFormat>();
+/// "&5f".parse::<NumberFormat>();
+/// "&05.1f".parse::<NumberFormat>();
+/// "&12.6m".parse::<NumberFormat>();
 /// ```
-/// Sexagesimals are use the `m` specifier and are defined as follows, from the INDI Protocol
+/// Sexagesimals use the `m` specifier and are defined as follows, from the INDI Protocol
 /// [reference documentation](https://docs.indilib.org/protocol/INDI.pdf):
 /// > A numberFormat shall be any string that includes exactly one printf-style
 /// > format specification appropriate for C-type double or one INDI style "m" to
@@ -290,7 +289,7 @@ impl<const N: usize> TryFrom<&[c_char; N]> for NumberFormat {
     type Error = ParseError<'static>;
 
     fn try_from(value: &[c_char; N]) -> Result<Self, Self::Error> {
-        let bytes = unsafe{ slice::from_raw_parts(value.as_ptr() as *const u8, value.len()) };
+        let bytes = unsafe{ slice::from_raw_parts(value.as_ptr() as *const u8, N) };
         let utf_str = str::from_utf8(&bytes)?;
         NumberFormat::try_from(utf_str.as_bytes())
     }
@@ -418,12 +417,10 @@ impl TryFrom<&[u8]> for NumberFormat {
         }
         index += 1;
 
-        if index == value.len() {
-            return Err(ParseError::new(FMT_ERR_FORMAT_MUST_BE_ZERO_TERMINATED, index))
-        }
-
-        if value[index] as u8 as char != '\0' {
-            return Err(ParseError::new(FMT_ERR_TRAILING_CHARACTERS_AFTER_FORMAT, index))
+        if index != value.len() {
+            if value[index] as u8 as char != '\0' {
+                return Err(ParseError::new(FMT_ERR_TRAILING_CHARACTERS_AFTER_FORMAT, index))
+            }
         }
 
         Ok(NumberFormat {
@@ -480,7 +477,7 @@ mod tests {
 
         let nbr = parse_sexagesimal("-10:30:18").unwrap();
         assert_eq!(nbr, -10.505f64);
-        assert_eq!(format_sexagesimal(&"%9.6m\0".parse().unwrap(), nbr), "-10:30:18");
+        assert_eq!(format_sexagesimal(&"%9.6m".parse().unwrap(), nbr), "-10:30:18");
     }
 
     #[test]
@@ -525,84 +522,84 @@ mod tests {
 
     #[test]
     fn test_number_format() {
-        assert_format("%i\0", None, None, None, None, 'i');
-        assert_format("%d\0", None, None, None, None, 'd');
-        assert_format("%5i\0", None, Some(5), None, None, 'i');
-        assert_format("%10d\0", None, Some(10), None, None, 'd');
-        assert_format("%10f\0", None, Some(10), None, None, 'f');
-        assert_format("%10F\0", None, Some(10), None, None, 'F');
-        assert_format("%10g\0", None, Some(10), None, None, 'g');
-        assert_format("%10G\0", None, Some(10), None, None, 'G');
-        assert_format("%1.2f\0", None, Some(1), Some(2), None, 'f');
-        assert_format("%10.2f\0", None, Some(10), Some(2), None, 'f');
-        assert_format("%10.2F\0", None, Some(10), Some(2), None, 'F');
-        assert_format("%10.2g\0", None, Some(10), Some(2), None, 'g');
-        assert_format("%10.2G\0", None, Some(10), Some(2), None, 'G');
+        assert_format("%i", None, None, None, None, 'i');
+        assert_format("%d", None, None, None, None, 'd');
+        assert_format("%5i", None, Some(5), None, None, 'i');
+        assert_format("%10d", None, Some(10), None, None, 'd');
+        assert_format("%10f", None, Some(10), None, None, 'f');
+        assert_format("%10F", None, Some(10), None, None, 'F');
+        assert_format("%10g", None, Some(10), None, None, 'g');
+        assert_format("%10G", None, Some(10), None, None, 'G');
+        assert_format("%1.2f", None, Some(1), Some(2), None, 'f');
+        assert_format("%10.2f", None, Some(10), Some(2), None, 'f');
+        assert_format("%10.2F", None, Some(10), Some(2), None, 'F');
+        assert_format("%10.2g", None, Some(10), Some(2), None, 'g');
+        assert_format("%10.2G", None, Some(10), Some(2), None, 'G');
 
         // zero flag
-        assert_format("%0f\0", Some(FormatFlags(FormatFlags::ZERO)), None, None, None, 'f');
-        assert_format("%01f\0", Some(FormatFlags(FormatFlags::ZERO)), Some(1), None, None, 'f');
-        assert_format("%010f\0", Some(FormatFlags(FormatFlags::ZERO)), Some(10), None, None, 'f');
-        assert_format("%010.2f\0", Some(FormatFlags(FormatFlags::ZERO)), Some(10), Some(2), None, 'f');
-        assert_format("%0.0f\0", Some(FormatFlags(FormatFlags::ZERO)), None, Some(0), None, 'f');
-        assert_format("%0.2f\0", Some(FormatFlags(FormatFlags::ZERO)), None, Some(2), None, 'f');
-        assert_format("%010.f\0", Some(FormatFlags(FormatFlags::ZERO)), Some(10), None, None, 'f');
+        assert_format("%0f", Some(FormatFlags(FormatFlags::ZERO)), None, None, None, 'f');
+        assert_format("%01f", Some(FormatFlags(FormatFlags::ZERO)), Some(1), None, None, 'f');
+        assert_format("%010f", Some(FormatFlags(FormatFlags::ZERO)), Some(10), None, None, 'f');
+        assert_format("%010.2f", Some(FormatFlags(FormatFlags::ZERO)), Some(10), Some(2), None, 'f');
+        assert_format("%0.0f", Some(FormatFlags(FormatFlags::ZERO)), None, Some(0), None, 'f');
+        assert_format("%0.2f", Some(FormatFlags(FormatFlags::ZERO)), None, Some(2), None, 'f');
+        assert_format("%010.f", Some(FormatFlags(FormatFlags::ZERO)), Some(10), None, None, 'f');
 
         // space flag
-        assert_format("% 10i\0", Some(FormatFlags(FormatFlags::SPACE)), Some(10), None, None, 'i');
+        assert_format("% 10i", Some(FormatFlags(FormatFlags::SPACE)), Some(10), None, None, 'i');
         // minus flag
-        assert_format("%-10d\0", Some(FormatFlags(FormatFlags::MINUS)), Some(10), None, None, 'd');
+        assert_format("%-10d", Some(FormatFlags(FormatFlags::MINUS)), Some(10), None, None, 'd');
         // plus flag
-        assert_format("%+10x\0", Some(FormatFlags(FormatFlags::PLUS)), Some(10), None, None, 'x');
+        assert_format("%+10x", Some(FormatFlags(FormatFlags::PLUS)), Some(10), None, None, 'x');
         // hash flag
-        assert_format("%#10X\0", Some(FormatFlags(FormatFlags::HASH)), Some(10), None, None, 'X');
+        assert_format("%#10X", Some(FormatFlags(FormatFlags::HASH)), Some(10), None, None, 'X');
 
         let zero_plus = Some(FormatFlags(FormatFlags::ZERO|FormatFlags::PLUS));
-        assert_format("%+010f\0", zero_plus, Some(10), None, None, 'f'); // plus zero
-        assert_format("%0+10f\0", zero_plus, Some(10), None, None, 'f'); // zero plus
+        assert_format("%+010f", zero_plus, Some(10), None, None, 'f'); // plus zero
+        assert_format("%0+10f", zero_plus, Some(10), None, None, 'f'); // zero plus
 
-        assert_format("%10.0f\0", None, Some(10), Some(0), None, 'f');
-        assert_format("%10.f\0", None, Some(10), None, None, 'f');
+        assert_format("%10.0f", None, Some(10), Some(0), None, 'f');
+        assert_format("%10.f", None, Some(10), None, None, 'f');
 
-        assert_format_error("%c\0", FMT_ERR_UNSUPORTED_PRINTF_FORMAT, 1);
-        assert_format_error("%s\0", FMT_ERR_UNSUPORTED_PRINTF_FORMAT, 1);
-        assert_format_error("%p\0", FMT_ERR_UNSUPORTED_PRINTF_FORMAT, 1);
-        assert_format_error("%n\0", FMT_ERR_UNSUPORTED_PRINTF_FORMAT, 1);
-        assert_format_error("%%\0", FMT_ERR_UNSUPORTED_PRINTF_FORMAT, 1);
-        assert_format_error("%q\0", FMT_ERR_UNKNOWN_FORMAT_SPECIFIER, 1);
-        assert_format_error("%t\0", FMT_ERR_PREMATURE_END_OF_FORMAT_STRING, 2);
-
+        assert_format_error("%c", FMT_ERR_UNSUPORTED_PRINTF_FORMAT, 1);
+        assert_format_error("%s", FMT_ERR_UNSUPORTED_PRINTF_FORMAT, 1);
+        assert_format_error("%p", FMT_ERR_UNSUPORTED_PRINTF_FORMAT, 1);
+        assert_format_error("%n", FMT_ERR_UNSUPORTED_PRINTF_FORMAT, 1);
+        assert_format_error("%%", FMT_ERR_UNSUPORTED_PRINTF_FORMAT, 1);
+        assert_format_error("%q", FMT_ERR_UNKNOWN_FORMAT_SPECIFIER, 1);
+        assert_format_error("%t", FMT_ERR_NO_FORMAT_SPECIFIER, 2);
+        assert_format_error("%10\0.2g", FMT_ERR_PREMATURE_END_OF_FORMAT_STRING, 3);
         assert_format_error("%c", FMT_ERR_UNSUPORTED_PRINTF_FORMAT, 1);
         assert_format_error("%2a2c", FMT_ERR_TRAILING_CHARACTERS_AFTER_FORMAT, 3);
     }
 
     #[test]
     fn test_sexagesimal_format() {
-        // assert_format("%12.9m\0", None, Some(12), Some(9), None, 'm');
-        assert_format("%12.3m\0", None, Some(12), Some(3), None, 'm');
-        assert_format("%12.5m\0", None, Some(12), Some(5), None, 'm');
-        assert_format("%12.6m\0", None, Some(12), Some(6), None, 'm');
-        assert_format("%12.8m\0", None, Some(12), Some(8), None, 'm');
-        assert_format("%12.9m\0", None, Some(12), Some(9), None, 'm');
-        assert_format("%16.6m\0", None, Some(16), Some(6), None, 'm');
-        assert_format("%5.3m\0", None, Some(5), Some(3), None, 'm');
-        assert_format("%7.6m\0", None, Some(7), Some(6), None, 'm');
+        // assert_format("%12.9m", None, Some(12), Some(9), None, 'm');
+        assert_format("%12.3m", None, Some(12), Some(3), None, 'm');
+        assert_format("%12.5m", None, Some(12), Some(5), None, 'm');
+        assert_format("%12.6m", None, Some(12), Some(6), None, 'm');
+        assert_format("%12.8m", None, Some(12), Some(8), None, 'm');
+        assert_format("%12.9m", None, Some(12), Some(9), None, 'm');
+        assert_format("%16.6m", None, Some(16), Some(6), None, 'm');
+        assert_format("%5.3m", None, Some(5), Some(3), None, 'm');
+        assert_format("%7.6m", None, Some(7), Some(6), None, 'm');
 
-        assert_format_error("%12.1m\0", FMT_ERR_SEXAGESIMAL_FRACTION_MUST_BE_3_5_6_8_OR_9, 5);
-        assert_format_error("%12.2m\0", FMT_ERR_SEXAGESIMAL_FRACTION_MUST_BE_3_5_6_8_OR_9, 5);
-        assert_format_error("%12.4m\0", FMT_ERR_SEXAGESIMAL_FRACTION_MUST_BE_3_5_6_8_OR_9, 5);
-        assert_format_error("%12.7m\0", FMT_ERR_SEXAGESIMAL_FRACTION_MUST_BE_3_5_6_8_OR_9, 5);
+        assert_format_error("%12.1m", FMT_ERR_SEXAGESIMAL_FRACTION_MUST_BE_3_5_6_8_OR_9, 5);
+        assert_format_error("%12.2m", FMT_ERR_SEXAGESIMAL_FRACTION_MUST_BE_3_5_6_8_OR_9, 5);
+        assert_format_error("%12.4m", FMT_ERR_SEXAGESIMAL_FRACTION_MUST_BE_3_5_6_8_OR_9, 5);
+        assert_format_error("%12.7m", FMT_ERR_SEXAGESIMAL_FRACTION_MUST_BE_3_5_6_8_OR_9, 5);
 
-        // assert_format_error("%6.6m\0", FMT_ERR_FORMAT_MUST_BE_ZERO_TERMINATED, 5);
-        assert_format_error("%1.9m\0", FMT_ERR_SEXAGESIMAL_WIDTH_MUST_EQUAL_OR_EXCEED_PRECISION, 4);
+        // assert_format_error("%6.6m", FMT_ERR_FORMAT_MUST_BE_ZERO_TERMINATED, 5);
+        assert_format_error("%1.9m", FMT_ERR_SEXAGESIMAL_WIDTH_MUST_EQUAL_OR_EXCEED_PRECISION, 4);
 
-        assert_format_error("%.m\0", FMT_ERR_SEXAGESIMAL_FORMAT_MUST_SPECIFY_PRECISION, 2);
-        assert_format_error("%.9m\0", FMT_ERR_SEXAGESIMAL_FORMAT_MUST_SPECIFY_WIDTH, 3);
-        assert_format_error("%12.m\0", FMT_ERR_SEXAGESIMAL_FORMAT_MUST_SPECIFY_PRECISION, 4);
+        assert_format_error("%.m", FMT_ERR_SEXAGESIMAL_FORMAT_MUST_SPECIFY_WIDTH, 1);
+        assert_format_error("%.9m", FMT_ERR_SEXAGESIMAL_FORMAT_MUST_SPECIFY_WIDTH, 1);
+        assert_format_error("%12.m", FMT_ERR_SEXAGESIMAL_FORMAT_MUST_SPECIFY_PRECISION, 4);
 
-        assert_format_error("%12m\0", FMT_ERR_SEXAGESIMAL_FORMAT_MUST_SPECIFY_PRECISION, 3);
+        assert_format_error("%12m", FMT_ERR_SEXAGESIMAL_FORMAT_MUST_SPECIFY_PRECISION, 3);
 
-        assert_format_error("12.3m\0", FMT_ERR_FIRST_CHARACTER_MUST_BE_A_PERCENT_SIGN, 0);
-        assert_format_error("%12.3\0", FMT_ERR_PREMATURE_END_OF_FORMAT_STRING, 5);
+        assert_format_error("12.3m", FMT_ERR_FIRST_CHARACTER_MUST_BE_A_PERCENT_SIGN, 0);
+        assert_format_error("%12.3", FMT_ERR_NO_FORMAT_SPECIFIER, 5);
     }
 }
