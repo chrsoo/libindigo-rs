@@ -83,7 +83,7 @@ fn ensure_build_version(indigo_root: &PathBuf) -> std::io::Result<()>{
     Ok(())
 }
 
-fn taillog(root: &PathBuf, file: &str, limit: usize, err: bool) {
+fn taillog(file: &str, limit: usize, err: bool) {
     // let file = root.join(file);
     let file = File::open(file).unwrap();
 
@@ -124,10 +124,10 @@ fn main() -> std::io::Result<()> {
 
     if !status.success() {
         println!("libindigo-sys.log:\n...");
-        taillog(&indigo_root, "libindigo-sys.log", 10, false);
+        taillog("libindigo-sys.log", 10, false);
         println!("---");
         eprintln!("libindigo-sys.err:\n...");
-        taillog(&indigo_root, "libindigo-sys.err", 10, true);
+        taillog("libindigo-sys.err", 10, true);
         eprintln!("---");
         panic!("could not make {}", indigo_root.to_str().expect("indigo root not found"));
     }
