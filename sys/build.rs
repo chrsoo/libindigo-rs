@@ -84,21 +84,15 @@ fn ensure_build_version(indigo_root: &PathBuf) -> std::io::Result<()>{
 }
 
 fn taillog(root: &PathBuf, file: &str, limit: usize, err: bool) {
-    let file = root.join(file);
-    if !file.exists() {
-        eprint!("File {file:?} does not exist");
-        return
-    }
+    // let file = root.join(file);
     let file = File::open(file).unwrap();
+
     // https://stackoverflow.com/a/74282737/51016
     let buf = RevBufReader::new(file);
     let lines: Vec<String> = buf.lines().take(limit).map(|l| l.expect("Could not parse line")).collect();
+
     for line in lines {
-        if err { // ugly...
-            eprintln!("{line}");
-        } else {
-            println!("{line}");
-        }
+        if err { eprintln!("{line}") } else { println!("{line}") } // ugly...
     }
 }
 
