@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{prelude::*, LineWriter};
+use std::io::prelude::*;
 use std::env;
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -83,12 +83,23 @@ fn ensure_build_version(indigo_root: &PathBuf) -> std::io::Result<()>{
     Ok(())
 }
 
-fn taillog(root: &PathBuf, file: &str, limit: usize) -> Vec<String> {
+fn taillog(root: &PathBuf, file: &str, limit: usize, err: bool) {
     let file = root.join(file);
+    if !file.exists() {
+        eprint!("File {file:?} does not exist");
+        return
+    }
     let file = File::open(file).unwrap();
     // https://stackoverflow.com/a/74282737/51016
     let buf = RevBufReader::new(file);
-    buf.lines().take(limit).map(|l| l.expect("Could not parse line")).collect()
+    let lines: Vec<String> = buf.lines().take(limit).map(|l| l.expect("Could not parse line")).collect();
+    for line in lines {
+        if err { // ugly...
+            eprintln!("{line}");
+        } else {
+            println!("{line}");
+        }
+    }
 }
 
 fn main() -> std::io::Result<()> {
@@ -119,10 +130,10 @@ fn main() -> std::io::Result<()> {
 
     if !status.success() {
         println!("libindigo-sys.log:\n...");
-        taillog(&indigo_root, "libindigo-sys.log", 10);
+        taillog(&indigo_root, "libindigo-sys.log", 10, false);
         println!("---");
         eprintln!("libindigo-sys.err:\n...");
-        taillog(&indigo_root, "libindigo-sys.err", 10);
+        taillog(&indigo_root, "libindigo-sys.err", 10, true);
         eprintln!("---");
         panic!("could not make {}", indigo_root.to_str().expect("indigo root not found"));
     }
