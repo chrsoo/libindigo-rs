@@ -84,8 +84,8 @@ fn ensure_build_version(indigo_root: &PathBuf) -> std::io::Result<()>{
 }
 
 fn taillog(file: &str, limit: usize) -> Vec<String> {
-    println!("{}\n...", file);
     let file = File::create(file).unwrap();
+    // https://stackoverflow.com/a/74282737/51016
     let buf = RevBufReader::new(file);
     buf.lines().take(limit).map(|l| l.expect("Could not parse line")).collect()
 }
@@ -111,13 +111,15 @@ fn main() -> std::io::Result<()> {
     if !std::process::Command::new("make")
         .arg("all")
         .current_dir(&indigo_root)
-        .stdout(stdin)
-        .stderr(stderr)
+        // .stdout(stdin)
+        // .stderr(stderr)
         .status()
         .expect("could not spawn `make`")
         .success() {
-            taillog("libindigo-sys.log", 10);
-            taillog("libindigo-sys.err", 10);
+            // println!("libindigo-sys.log:\n...");
+            // taillog("libindigo-sys.log", 10);
+            // eprintln!("libindigo-sys.err:\n...");
+            // taillog("libindigo-sys.err", 10);
             panic!("could not make {}", indigo_root.to_str().expect("indigo root not found"));
         }
 
