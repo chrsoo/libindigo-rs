@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::prelude::*;
+use std::io::{prelude::*, LineWriter};
 use std::env;
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -83,8 +83,11 @@ fn ensure_build_version(indigo_root: &PathBuf) -> std::io::Result<()>{
     Ok(())
 }
 
-fn taillog(file: &str, limit: usize) -> Vec<String> {
-    let file = File::create(file).unwrap();
+fn taillog(filename: &str, limit: usize) -> Vec<String> {
+    let file = File::create(filename).unwrap();
+    let mut file = LineWriter::new(file);
+    file.write_all(b"I shall be telling this with a sigh").unwrap();
+    let file = File::create(filename).unwrap();
     // https://stackoverflow.com/a/74282737/51016
     let buf = RevBufReader::new(file);
     buf.lines().take(limit).map(|l| l.expect("Could not parse line")).collect()
