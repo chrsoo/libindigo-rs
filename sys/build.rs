@@ -1,7 +1,9 @@
+use std::fs::File;
 use std::io::prelude::*;
 use std::env;
 use std::io::BufReader;
 use std::path::PathBuf;
+use rev_buf_reader::RevBufReader;
 use semver::Version;
 use regex::Regex;
 
@@ -49,7 +51,7 @@ fn parse_indigo_version<'a>(indigo_root: &PathBuf) -> std::io::Result<Version> {
     let re_version = Regex::new(r"^INDIGO_VERSION *= *(\d+)\.(\d+) *$").unwrap();
     let re_build = Regex::new(r"^INDIGO_BUILD *= *(\d+) *$").unwrap();
 
-    if let Ok(file) = std::fs::File::open(m) {
+    if let Ok(file) = File::open(m) {
         let buf = BufReader::new(file);
         for l in buf.lines() {
             let s = l.unwrap();
@@ -81,6 +83,13 @@ fn ensure_build_version(indigo_root: &PathBuf) -> std::io::Result<()>{
     Ok(())
 }
 
+fn taillog(file: &str, limit: usize) -> Vec<String> {
+    println!("{}\n...", file);
+    let file = File::create(file).unwrap();
+    let buf = RevBufReader::new(file);
+    buf.lines().take(limit).map(|l| l.expect("Could not parse line")).collect()
+}
+
 fn main() -> std::io::Result<()> {
     let indigo_root: PathBuf = if env::var("INDIGO_ROOT").is_ok() {
         PathBuf::from(env::var("INDIGO_ROOT").expect("path defined by INDIGO_ROOT envar not found"))
@@ -93,8 +102,8 @@ fn main() -> std::io::Result<()> {
     // lib source directory in `indigo/indigo_libs`
     let indigo_libs: PathBuf = indigo_root.join("indigo_libs");
 
-    let log = std::fs::File::create("libindigo-sys.log").unwrap();
-    let err = std::fs::File::create("libindigo-sys.err").unwrap();
+    let log = File::create("libindigo-sys.log").unwrap();
+    let err = File::create("libindigo-sys.err").unwrap();
     let stdin = std::process::Stdio::from(log);
     let stderr = std::process::Stdio::from(err);
 
@@ -107,6 +116,8 @@ fn main() -> std::io::Result<()> {
         .status()
         .expect("could not spawn `make`")
         .success() {
+            taillog("libindigo-sys.log", 10);
+            taillog("libindigo-sys.err", 10);
             panic!("could not make {}", indigo_root.to_str().expect("indigo root not found"));
         }
 

@@ -18,3 +18,4 @@ exclude = [
 bindgen = "0.69.4"
 semver = "1.0.23"
 regex = "1.10.5"
+rev_buf_reader = "0.3.0"
