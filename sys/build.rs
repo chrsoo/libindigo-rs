@@ -108,20 +108,21 @@ fn main() -> std::io::Result<()> {
     let stderr = std::process::Stdio::from(err);
 
     // run make and write to build.out - panic if it fails
-    if !std::process::Command::new("make")
+    let status = std::process::Command::new("make")
         .arg("all")
         .current_dir(&indigo_root)
-        // .stdout(stdin)
-        // .stderr(stderr)
+        .stdout(stdin)
+        .stderr(stderr)
         .status()
-        .expect("could not spawn `make`")
-        .success() {
-            // println!("libindigo-sys.log:\n...");
-            // taillog("libindigo-sys.log", 10);
-            // eprintln!("libindigo-sys.err:\n...");
-            // taillog("libindigo-sys.err", 10);
-            panic!("could not make {}", indigo_root.to_str().expect("indigo root not found"));
-        }
+        .expect("could not spawn `make`");
+
+    if !status.success() {
+        println!("libindigo-sys.log:\n...");
+        taillog("libindigo-sys.log", 10);
+        eprintln!("libindigo-sys.err:\n...");
+        taillog("libindigo-sys.err", 10);
+        panic!("could not make {}", indigo_root.to_str().expect("indigo root not found"));
+    }
 
     let indigo_build = indigo_root.join("build");
     let indigo_build_libs = indigo_build.join("lib");
