@@ -38,3 +38,32 @@ To make rust-analyzer happy [the following line](https://github.com/rust-lang/ru
 ```
 "rust-analyzer.cargo.loadOutDirsFromCheck": true,
 ```
+
+## compiling on linux
+
+Build on a clean Ubuntu distro running in Docker (optional):
+```bash
+# TODO save image for reuse
+docker run --rm -it --name github-runner ubuntu:22.04
+```
+
+Install [INDIGO prerequisits](https://www.indigo-astronomy.org/for-developers.html):
+```bash
+apt-get update
+apt-get install build-essential autoconf autotools-dev libtool cmake libudev-dev libavahi-compat-libdnssd-dev libusb-1.0-0-dev libcurl4-gnutls-dev libgphoto2-dev libz-dev git curl patchelf
+```
+
+[Install rust](https://www.rust-lang.org/tools/install):
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+. "$HOME/.cargo/env" # todo add command for permanently adding to path
+```
+
+build [first time] (pthread issue)(https://github.com/indigo-astronomy/indigo/blob/master/README.md#no-pthread_yield):
+``` bash
+cargo build # building `sys` should fail with a QHY related error
+cd sys/externals/indigo/indigo_drivers/ccd_qhy/bin_externals/pthread_yield_compat
+make patchlib
+cd ~/src/libindigo-rs # change back to the libindigo source dir
+cargo build
+```
