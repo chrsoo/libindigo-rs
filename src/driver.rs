@@ -63,6 +63,8 @@ impl<'a> DeviceDriver<'a> {
             change_property: None,
             enable_blob: None,
             detach: Some(DeviceDriver::on_detach),
+            match_patterns: ptr::null_mut(),
+            match_patterns_count: 0,
         });
         let sys_ptr = Box::into_raw(sys);
 
