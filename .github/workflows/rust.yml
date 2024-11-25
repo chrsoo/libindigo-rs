@@ -18,7 +18,7 @@ jobs:
       # with:
         # submodules: 'true'
     - name: Setup
-      run: sudo echo "deb [trusted=yes] https://indigo-astronomy.github.io/indigo_ppa/ppa indigo main" >> /etc/apt/sources.list && sudo apt-get update && sudo apt-get install build-essential autoconf autotools-dev libtool cmake libudev-dev libavahi-compat-libdnssd-dev libusb-1.0-0-dev libcurl4-gnutls-dev libgphoto2-dev libz-dev git curl patchelf indigo
+      run: sudo apt-get update && sudo apt-get install build-essential autoconf autotools-dev libtool cmake libudev-dev libavahi-compat-libdnssd-dev libusb-1.0-0-dev libcurl4-gnutls-dev libgphoto2-dev libz-dev git curl patchelf indigo
     - name: Build
       run: cargo build
     - name: Run tests
