@@ -10,45 +10,43 @@ use rev_buf_reader::RevBufReader;
 use semver::Version;
 use regex::Regex;
 
+/// used for building INDIGO from source when defined
+const INDIGO_SOURCE_ENVAR: &str = "INDIGO_SOURCE";
+
+/// used for building INDIGO from source when checked out
+const GIT_SUBMODULE: &str = "externals/indigo";
+
+/// used to detect Linux system libraries
+const LINUX_INDIGO_VERSION_HEADER: &str = "/usr/include/indigo/indigo_version.h";
+const LINUX_INCLUDE: &str = "/usr/include";
+const LINUX_LIB: &str = "/usr/lib";
+
+
 fn main() -> std::io::Result<()> {
 
-    let include = if let Ok(envar) = env::var("INDIGO_SOURCE") { // build from source dir
+    let include = if let Ok(envar) = env::var(INDIGO_SOURCE_ENVAR) {
+        eprintln!("building INDIGO from source dir {:?} found in {:?}", envar, INDIGO_SOURCE_ENVAR);
         let indigo_source = PathBuf::from(envar);
         let indigo_source = indigo_source.canonicalize().expect("cannot canonicalize path");
         build_indigo(&indigo_source)?
-    } else if let Ok(submodule) = Path::new("externals/indigo").canonicalize() { // build from submodule
+
+    } else if let Ok(submodule) = Path::new(GIT_SUBMODULE).canonicalize() {
+        eprintln!("building INDIGO from submodule {:?}", GIT_SUBMODULE);
         build_indigo(&submodule)?
-    } else if Path::new("/usr/include/indigo/indigo_version.h").is_file() { // use system libraries
-        let include_dir = PathBuf::from("/usr/include");
 
-        let lib_dir = Path::new("/usr/lib");
+    } else if Path::new(LINUX_INDIGO_VERSION_HEADER).is_file() {
+        eprintln!("using system libraries");
+        let lib_dir = Path::new(LINUX_LIB).to_str().expect("could not find /usr/lib");
+        println!("cargo:rustc-link-search=native={}", lib_dir);
+        println!("cargo:rustc-link-lib=libindigo");
+        PathBuf::from(LINUX_INCLUDE)
 
-        let lib_dir_search = lib_dir.to_str().expect("could not find /usr/lib");
-        println!("cargo:rustc-link-search={}", lib_dir_search);
-        println!("cargo:rustc-link-search=native={}", lib_dir_search);
-
-        let libindigo = lib_dir.join("libindigo.a");
-        println!("cargo:rustc-link-lib=static={}", libindigo.to_str().expect("could not find /usr/lib/libindigo.a"));
-
-        include_dir
-    } else { // last ditch effort, checkout and build submodule
-        let outcome = std::process::Command::new("git")
-            .arg("submodule")
-            .arg("update")
-            .arg("--init")
-            .arg("--recursive")
-            // .current_dir(&indigo_root.join("indigo_libs"))
-            // .stdout(stdin)
-            // .stderr(stderr)
-            .status()
-            .expect("could not spawn `git`")
-            ;
-        if !outcome.success() {
-            panic!("could not checkout git submodule externals/indigo");
-        }
-
-        let submodule = Path::new("externals/indigo").canonicalize()?;
+    } else { // last ditch effort
+        eprintln!("checking out git submodule");
+        let submodule = init_indigo_submodule()?;
+        eprintln!("building INDIGO from submodule {}", submodule.to_str().expect("expected git submodule"));
         build_indigo(&submodule)?
+
     };
 
     // The bindgen::Builder is the main entry point
@@ -81,6 +79,24 @@ fn main() -> std::io::Result<()> {
         .expect("Couldn't write bindings!");
 
     Ok(())
+}
+
+fn init_indigo_submodule() -> Result<PathBuf>{
+    let outcome = std::process::Command::new("git")
+        .arg("submodule")
+        .arg("update")
+        .arg("--init")
+        .arg("--recursive")
+        // .current_dir(&indigo_root.join("indigo_libs"))
+        // .stdout(stdin)
+        // .stderr(stderr)
+        .status()
+        .expect("could not spawn `git`")
+        ;
+    if !outcome.success() {
+        panic!("could not checkout git submodule externals/indigo");
+    }
+    Path::new(GIT_SUBMODULE).canonicalize()
 }
 
 fn join_paths(base: &PathBuf, path: &str) -> String {
@@ -264,11 +280,10 @@ impl<'a> Build<'a> {
             .expect("could not spawn `clang`")
             ;
 
-        // assert!(target.exists(), "target files was not comppiled");
-
         let comp = Compilation { source: source.clone(), target };
 
         if output.status.success() {
+            assert!(comp.target.exists(), "target files was not comppiled");
             eprintln!("compiled {:?}", comp.source);
             self.targets.push(comp.target);
             Ok(self)
@@ -315,12 +330,12 @@ fn build_indigo(indigo_root: &PathBuf) -> Result<PathBuf> {
         .link()?
         ;
 
-    libindigo.set_extension("");
-    // let libindigo = libindigo.to_str().expect("could not convert OStr");
-    let libindigo = libindigo.file_name().unwrap().to_str().expect("could not convert OStr");
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR envar not defined"));
+    out_dir.canonicalize().expect("could not find OUT_DIR");
+    println!("cargo:rustc-link-search={}", out_dir.to_str().expect("could not conver OStr"));
 
-    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("could not find OUT_DIR"));
-    println!("cargo:rustc-link-search={}", out_dir.to_str().expect("could not find OUT_DIR"));
+    libindigo.set_extension("");
+    let libindigo = libindigo.file_name().expect("expected filename").to_str().expect("could not convert OStr");
     println!("cargo:rustc-link-lib={}", libindigo);
 
     Ok(source_dir)
