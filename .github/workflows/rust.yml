@@ -15,8 +15,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      # with:
-        # submodules: 'true'
+      with:
+        submodules: 'true'
     - name: Setup
       run: sudo apt-get update && sudo apt-get install build-essential autoconf autotools-dev libtool cmake libudev-dev libavahi-compat-libdnssd-dev libusb-1.0-0-dev libcurl4-gnutls-dev libgphoto2-dev libz-dev git curl patchelf
     - name: Build
