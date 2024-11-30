@@ -20,6 +20,6 @@ jobs:
     - name: Setup
       run: sudo apt-get update && sudo apt-get install build-essential autoconf autotools-dev libtool cmake libudev-dev libavahi-compat-libdnssd-dev libusb-1.0-0-dev libcurl4-gnutls-dev libgphoto2-dev libz-dev git curl patchelf
     - name: Build
-      run: cargo build
+      run: cargo build --workspace
     - name: Run tests
       run: cargo test
