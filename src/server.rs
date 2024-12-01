@@ -20,7 +20,7 @@ pub fn connect(name: &str, host: &str, port: c_int) -> IndigoResult<ServerConnec
         host: host,
         port: port,
         connection_id: 0,
-        thread: ptr::null_mut(),
+        thread: unsafe { std::mem::zeroed() },
         thread_started: false,
         socket: 0,
         protocol_adapter: ptr::null_mut(),
