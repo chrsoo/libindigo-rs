@@ -17,7 +17,7 @@ edition = "2021"
 log = "0.4.22"
 url = "2.5.2"
 hostname-validator = "1.1.1"
-libindigo-sys = { version = "2.0.301", path = "sys" }
+libindigo-sys = { path = "sys" }
 enum_primitive = "0.1.1"
 lazy_static = "1.5.0"
 once_cell = "1.19.0"
