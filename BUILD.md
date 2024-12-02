@@ -36,7 +36,11 @@ ARGS:
     <version>    Version should be a semver (https://semver.org/) string or the
                  position of the current version to increment: major, minor or patch.
 ```
-This has to be done once for each module, i.e. to release a patch, the follwing commands must be issued:
+To install bump:
+```
+cargo install cargo-bump
+```
+When creating a new version, the `cargo bump` command has to be applied once for each module of the cargo workspace:
 ```bash
 cargo bump patch
 cd sys
