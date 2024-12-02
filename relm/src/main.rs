@@ -184,7 +184,7 @@ impl IndigoApp {
     fn define_property(&mut self, property: Property) {
         let device = &property.device().to_string();
         if let None = self.devices.get(device) {
-            self.devices.insert(device.clone(), ClientDevice::new(device.clone()));
+            self.devices.insert(device.clone(), ClientDevice::new(device));
         }
         // self.devices.widget().add_titled(child, Some(property.name()), property.name());
         self.devices.send(&device, DeviceCommand::DefineProperty(property));
