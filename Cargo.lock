@@ -795,7 +795,7 @@ checksum = "97b3888a4aecf77e811145cadf6eef5901f4782c53886191b2f693f24761847c"
 
 [[package]]
 name = "libindigo"
-version = "0.1.0+INDIGO.2.0.301"
+version = "0.1.0+INDIGO.2.0.302"
 dependencies = [
  "bitfield",
  "enum_primitive",
@@ -831,7 +831,7 @@ dependencies = [
 
 [[package]]
 name = "libindigo-sys"
-version = "2.0.301"
+version = "1.0.0+INDIGO.2.0.302"
 dependencies = [
  "bindgen",
  "regex",
