@@ -1,7 +1,5 @@
 [workspace]
-
-# members = [ ".", "relm", "sys", ]
-members = [ ".", "sys", ]
+members = [ ".", "relm", "sys", ]
 
 [package]
 name = "libindigo"

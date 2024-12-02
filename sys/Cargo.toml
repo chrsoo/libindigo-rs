@@ -8,17 +8,18 @@ readme = "README.md"
 keywords = [ "astronomy", "astrophotography", "indigo", "indi", "ffi" ]
 categories = [ "asynchronous", "external-ffi-bindings", "hardware-support" ]
 edition = "2021"
-include = [
-    "/build.rs",
-    "/LICENSE.md",
-    "/NOTES.md",
-    "/README.md",
-    "/externals/README.md",
-    "/externals/indigo/LICENSE.md",
-    "7externals/indigo/AUTHORS.md",
-    "/externals/indigo/indigo_libs/",
-    "/src/",
-]
+# include = [
+#     "/build.rs",
+#     "/LICENSE.md",
+#     "/NOTES.md",
+#     "/README.md",
+#     "/externals/README.md",
+#     "/externals/indigo/LICENSE.md",
+#     "7externals/indigo/AUTHORS.md",
+#     "/externals/indigo/indigo_libs/",
+#     "/src/",
+# ]
+exclude = [ "/externals/ "]
 
 [dependencies]
 
