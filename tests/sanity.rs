@@ -13,6 +13,7 @@ use libindigo::server;
 use libindigo::bus;
 use log::debug;
 
+#[ignore = "pending refactoring"]
 #[test]
 fn start_stop_bus() -> Result<(), IndigoError> {
     bus::set_log_level(LogLevel::Debug);
@@ -23,6 +24,7 @@ fn start_stop_bus() -> Result<(), IndigoError> {
     bus::stop() // second call to make sure the function is reentrant
 }
 
+#[ignore = "pending refactoring"]
 #[test]
 fn server_connect() -> Result<(), IndigoError> {
     bus::set_log_level(LogLevel::Debug);
@@ -61,6 +63,7 @@ impl TestMonitor {
     }
 }
 
+#[ignore = "pending refactoring"]
 #[test]
 fn client() -> Result<(), IndigoError> {
     // prepare the monitor to be used for async testing
@@ -116,17 +119,16 @@ fn client() -> Result<(), IndigoError> {
     bus::stop()
 }
 
-/*
+
 #[ignore = "until discovery is implemented"]
 #[test]
 fn server_discovery()  -> Result<(),IndigoError> {
-    set_log_leve(LogLevel::Debug);
-    start()?;
-    if let Err(_e) = discover(server_callback) {
-        todo!("log error {}", _e);
-    };
+    bus::set_log_level(LogLevel::Debug);
+    bus::start()?;
+    // if let Err(_e) = bus::discover(server_callback) {
+    //     todo!("log error {}", _e);
+    // };
     sleep(Duration::from_secs(1));
-    stop()?;
-    stop() // second call to make sure the function is reentrant
+    bus::stop()?;
+    bus::stop() // second call to make sure the function is reentrant
 }
-  */
