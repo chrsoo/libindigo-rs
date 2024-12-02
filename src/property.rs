@@ -308,7 +308,7 @@ impl<'a> PropertyItem {
 /// From the [INDIGO client documentation](https://github.com/indigo-astronomy/indigo/blob/master/indigo_docs/CLIENT_DEVELOPMENT_BASICS.md#properties):
 /// > In case the client needs to check the values of some property item of a
 /// > specified device it is always a good idea to check if the property is in OK state:
-/// > ```rust
+/// > ```C
 /// > if (!strcmp(device->name, "CCD Imager Simulator @ indigosky") &&
 /// >     !strcmp(property->name, CCD_IMAGE_PROPERTY_NAME) &&
 /// >     property->state == INDIGO_OK_STATE) {
@@ -316,7 +316,7 @@ impl<'a> PropertyItem {
 /// > }
 /// > ```
 /// > And if the client needs to change some item value this code may help:
-/// > ```
+/// > ```C
 /// > static const char * items[] = { CCD_IMAGE_FORMAT_FITS_ITEM_NAME };
 /// > static bool values[] = { true };
 /// > indigo_change_switch_property(

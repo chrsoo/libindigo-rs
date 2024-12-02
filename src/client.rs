@@ -100,9 +100,9 @@ pub struct ClientDevice {
 // TODO move ClientDevice methods to Device trait
 impl ClientDevice {
 
-    pub fn new(name: String) -> Self {
+    pub fn new(name: &str) -> Self {
         Self {
-            name,
+            name: name.to_string(),
             props: HashMap::new(),
             // create_property_hook: None,
             // update_property_hook: None,
@@ -209,7 +209,7 @@ impl<'a> ClientCallbacks<'a> for ClientDeviceModel {
             .devices
             .entry(p.device().to_string())
             .or_insert_with(|| {
-                let device = ClientDevice::new(p.device().to_string());
+                let device = ClientDevice::new(p.device());
                 if let Some(hook) = self.create_device_hook.as_deref_mut() {
                     hook(&device)
                 }

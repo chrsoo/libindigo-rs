@@ -87,7 +87,8 @@ fn parse_float(bytes: &[u8], i: usize, j: usize) -> Result<f64,ParseError<'stati
 ///
 /// Note: the `NumberFormat` string is expected to be stand-alone, i.e. it must not be embedded
 /// in a longer string. The following formats are valid:
-/// ```rust
+/// ```
+/// use libindigo::NumberFormat;
 /// "&5f".parse::<NumberFormat>();
 /// "&05.1f".parse::<NumberFormat>();
 /// "&12.6m".parse::<NumberFormat>();

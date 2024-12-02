@@ -41,11 +41,15 @@ pub trait Device {
     /// is returned as an error. If the device is [Ok](PropertyState::Ok), the returned value can be used
     /// to determine the device's connection status.
     /// ```
-    /// let d = Device::new("TestDevice");
-    /// match d.connection_status() {
-    ///     Ok(true) => info!("Device {d} is CONNECTED."),
-    ///     Ok(false) => info!("Device {d} is DISCONNECTED."),
-    ///     Err(state) => warn!("Device {d} is in the {state}"),
+    /// use log::{warn, info};
+    /// use libindigo::ClientDevice;
+    /// use crate::libindigo::Device;
+    ///
+    /// let d = ClientDevice::new("TestDevice");
+    /// match d.connected() {
+    ///     Ok(true) => info!("Device {d:?} is CONNECTED."),
+    ///     Ok(false) => info!("Device {d:?} is DISCONNECTED."),
+    ///     Err(state) => warn!("Device {d:?} is in the {state:?}"),
     /// }
     /// ```
     fn connected(&self) -> Result<bool,&PropertyState> {
