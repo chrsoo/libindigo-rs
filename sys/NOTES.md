@@ -1,3 +1,5 @@
+> [!CAUTION]
+> At some point these raw notes should be upgraded to proper documentation.
 
 # bindgen
 
@@ -46,7 +48,7 @@ Build on a clean Ubuntu distro running in Docker (optional):
 # TODO save image for reuse
 docker run --rm -it --name github-runner ubuntu:22.04
 ```
-
+## building INDIGO for the first time
 Install [INDIGO prerequisits](https://www.indigo-astronomy.org/for-developers.html):
 ```bash
 apt-get update
