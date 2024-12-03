@@ -1,6 +1,3 @@
-// #![allow(dead_code, unused_variables)]
-#![cfg_attr(feature = "nightly", feature(mapped_lock_guards))]
-
 mod driver;
 mod property;
 mod number;

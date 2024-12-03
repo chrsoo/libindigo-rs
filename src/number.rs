@@ -10,9 +10,9 @@
 
 use core::{slice, str};
 use bitfield::bitfield;
+use funty::Numeric;
 use log::warn;
 use std::{ffi::c_char, fmt::Display, num::{ParseFloatError, ParseIntError}, str::{FromStr, Utf8Error}};
-use funty::*;
 
 const SEXAGESIMAL_FRACTIONS: &[usize] = &[3, 5, 6, 8, 9];
 

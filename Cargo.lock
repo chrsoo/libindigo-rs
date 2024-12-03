@@ -799,7 +799,6 @@ version = "0.1.2+INDIGO.2.0.300"
 dependencies = [
  "bitfield",
  "enum_primitive",
- "fragile",
  "function_name",
  "funty",
  "hostname-validator",

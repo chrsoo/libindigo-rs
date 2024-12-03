@@ -3,7 +3,6 @@ use strum_macros::{Display, EnumIter};
 
 use super::*;
 use enum_primitive::*;
-use libindigo_sys::{self, *};
 use log::warn;
 
 pub trait Device {
