@@ -1,4 +1,4 @@
-Rust API for writing client appliations and device drivers related to astronomy equipment that uses the [INDIGO](https://www.indigo-astronomy.org/index.html) protocol and architecture. It is based on the standard [INDIGO](https://github.com/indigo-astronomy/indigo) open source project that provides an API written in C and is ported to Rust through the [bindgen](https://rust-lang.github.io/rust-bindgen) generated FFI bindings.
+Rust API for writing client appliations and device drivers related to astronomy equipment that uses the [INDIGO](https://www.indigo-astronomy.org/index.html) protocol and architecture. It is based on the standard INDIGO [open source](https://github.com/indigo-astronomy/indigo) project that provides an API written in C and is ported to Rust through the [bindgen](https://rust-lang.github.io/rust-bindgen) generated FFI bindings.
 
 > [!CAUTION]
 > The current version of LibINDIGO-rs should be considered **alpha** quality, i.e.
