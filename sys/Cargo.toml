@@ -19,7 +19,7 @@ edition = "2021"
 #     "/externals/indigo/indigo_libs/",
 #     "/src/",
 # ]
-exclude = [ "/externals/ "]
+exclude = [ "/externals/indigo/ "]
 
 [dependencies]
 

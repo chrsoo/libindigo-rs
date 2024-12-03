@@ -10,6 +10,8 @@ use rev_buf_reader::RevBufReader;
 use semver::Version;
 use regex::Regex;
 
+/// used for cloning the INDIGO git repository when source is retrieved from a crate
+const INDIGO_GIT_REPOSITORY: &str = "https://github.com/indigo-astronomy/indigo";
 /// used for building INDIGO from source when defined
 const INDIGO_SOURCE_ENVAR: &str = "INDIGO_SOURCE";
 
@@ -81,19 +83,26 @@ fn main() -> std::io::Result<()> {
 }
 
 fn init_indigo_submodule() -> Result<PathBuf>{
-    let outcome = std::process::Command::new("git")
+    // check if we are in a crate package or if this a git repository
+    let outcome = if PathBuf::from(".git").exists() {
+        std::process::Command::new("git")
         .arg("submodule")
         .arg("update")
         .arg("--init")
         .arg("--recursive")
-        // .current_dir(&indigo_root.join("indigo_libs"))
-        // .stdout(stdin)
-        // .stderr(stderr)
         .status()
         .expect("could not spawn `git`")
-        ;
+    } else {
+        std::process::Command::new("git")
+        .arg("clone")
+        .arg(INDIGO_GIT_REPOSITORY)
+        .arg("externals/indigo")
+        .status()
+        .expect("could not spawn `git`")
+    };
+
     if !outcome.success() {
-        panic!("could not checkout git submodule externals/indigo");
+        panic!("could not clone or checkout git submodule externals/indigo");
     }
     Path::new(GIT_SUBMODULE).canonicalize()
 }

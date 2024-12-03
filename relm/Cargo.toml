@@ -9,6 +9,9 @@ keywords = [ "astronomy", "astrophotography", "indigo", "gtk", "relm" ]
 categories = [ "asynchronous", "gui", "hardware-support" ]
 edition = "2021"
 
+[features]
+sys = []
+
 [dependencies]
 relm4 = "0.9.1"
 relm4-components = "0.9.1"
