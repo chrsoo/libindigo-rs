@@ -1,5 +1,4 @@
 use gtk::{glib::{self}, prelude::*, EntryBuffer};
-use libindigo::server::ServerConnection;
 use relm4::{
     gtk, Component, ComponentParts, ComponentSender, RelmWidgetExt
 };
@@ -7,7 +6,7 @@ use relm4::{
 const DEFAULT_SERVER_NAME: &str = "INDIGO";
 // const DEFAULT_SERVER_HOSTNAME: &str = "indigosky.local";
 const DEFAULT_SERVER_HOST: &str = "localhost";
-const DEFAULT_SERVER_PORT: i32 = 7624;
+const DEFAULT_SERVER_PORT: u16 = 7624;
 
 const SERVER_CONNECT_MSG: &str = "Press play to connect";
 const SERVER_DISCONNECT_MSG: &str = "Press stop to disconnect";
@@ -266,7 +265,7 @@ fn text_entry<'a>(buffer: &EntryBuffer, default: String) -> String {
     }
 }
 
-fn port_entry<'a>(buffer: &EntryBuffer, default: i32) -> i32 {
+fn port_entry<'a>(buffer: &EntryBuffer, default: u16) -> u16 {
     let number = buffer.text().trim().to_string();
     if number.is_empty() {
         default

@@ -76,7 +76,7 @@ fn client() -> Result<(), IndigoError> {
     let mut connection = server::connect("INDIGO", "localhost", 7624)?;
 
     // create a client for the remove server
-    let mut client = Client::new("TestClient", ClientDeviceModel::new(), false);
+    let mut client = ClientController::new("TestClient", ClientDeviceModel::new(), false);
 
     // attach the client to the INDIGO bus with a callback reference to the monitor
     let m = monitor.clone();

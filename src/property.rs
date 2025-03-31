@@ -147,7 +147,7 @@ impl PartialOrd for Property {
 
 impl PropertyValue {
     fn item_to_text(item: &indigo_item) -> PropertyValue {
-        let v = unsafe { item.__bindgen_anon_1.text.as_ref() };
+        let v = unsafe { item.__bindgen_anon_1.text };
         let text: String = if v.long_value.is_null() {
             buf_to_string(v.value)
         } else {
@@ -164,7 +164,7 @@ impl PropertyValue {
     }
 
     fn item_to_number(item: &indigo_item) -> PropertyValue {
-        let num = unsafe { item.__bindgen_anon_1.number.as_ref() };
+        let num = unsafe { item.__bindgen_anon_1.number };
         let format = NumberFormat::try_from(&num.format).unwrap();
         let min = num.min;
         let max = num.max;
@@ -183,18 +183,18 @@ impl PropertyValue {
     }
 
     fn item_to_switch(item: &indigo_item) -> PropertyValue {
-        PropertyValue::Switch(unsafe { item.__bindgen_anon_1.sw.as_ref().value })
+        PropertyValue::Switch(unsafe { item.__bindgen_anon_1.sw.value })
     }
 
     fn item_to_light(item: &indigo_item) -> PropertyValue {
-        PropertyValue::Light(unsafe { item.__bindgen_anon_1.light.as_ref().value })
+        PropertyValue::Light(unsafe { item.__bindgen_anon_1.light.value })
     }
 
     fn item_to_blob(item: &indigo_item) -> PropertyValue {
-        let blob = unsafe { item.__bindgen_anon_1.blob.as_ref() };
+        let blob = unsafe { item.__bindgen_anon_1.blob };
         let format = buf_to_string(blob.format);
         let size = blob.size;
-        let url = match Url::parse(buf_to_str(blob.url)) {
+        let url = match Url::parse(buf_to_str(&blob.url)) {
             Ok(url) => Some(url),
             Err(e) => {
                 warn!("could not parse url: {}", e);

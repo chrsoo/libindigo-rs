@@ -1,19 +1,31 @@
-mod driver;
+// mod driver;
 mod property;
 mod number;
+mod msg;
+mod indigo;
+#[cfg(feature = "sys")]
+pub mod sys;
 
-pub mod bus;
-pub mod server;
-pub mod client;
-pub mod device;
+// mod bus;
+// mod server;
+#[cfg(feature = "std")]
+mod model;
+// mod device;
+mod spike;
 
-pub use device::Device;
-pub use device::Interface;
+pub mod name {
+    include!(concat!(env!("OUT_DIR"), "/name.rs"));
 
-pub use client::Client;
-pub use client::ClientDevice;
-pub use client::ClientCallbacks;
-pub use client::ClientDeviceModel;
+    #[cfg(test)]
+    mod tests {
+        use crate::name;
+
+        #[test]
+        fn names() {
+            assert_eq!(name::INFO_PROPERTY, "INFO");
+        }
+    }
+}
 
 pub use number::NumberFormat;
 pub use number::FormatFlags;
@@ -27,8 +39,7 @@ pub use property::PropertyType;
 pub use property::PropertyValue;
 
 use parking_lot::RwLockWriteGuard;
-use log::warn;
-use core::slice;
+use strum_macros::EnumIter;
 use core::str;
 use std::collections::hash_map::Values;
 use std::collections::hash_map::ValuesMut;
@@ -42,14 +53,80 @@ use std::str::Utf8Error;
 use std::sync::PoisonError;
 use std::{
     error::Error,
-    ffi::{CString, NulError},
+    ffi::NulError,
     fmt::{Debug, Display},
 };
 
 use enum_primitive::*;
+use strum::IntoEnumIterator;
 use libindigo_sys::{self, *};
 
 pub type StringMap<T> = HashMap<String, T>;
+
+
+enum_from_primitive! {
+#[derive(Debug, Copy, Clone, PartialEq, EnumIter, strum_macros::Display)]
+#[repr(u32)]
+// sys-doc: Device interface (value should be used for INFO_DEVICE_INTERFACE_ITEM->text.value)
+/// Each interface defines a set of well-known properties.
+pub enum Interface  {
+    Mount = indigo_device_interface_INDIGO_INTERFACE_MOUNT,
+    CCD = indigo_device_interface_INDIGO_INTERFACE_CCD,
+    Guider = indigo_device_interface_INDIGO_INTERFACE_GUIDER,
+    Focuser = indigo_device_interface_INDIGO_INTERFACE_FOCUSER,
+    Wheel = indigo_device_interface_INDIGO_INTERFACE_WHEEL,
+    Dome = indigo_device_interface_INDIGO_INTERFACE_DOME,
+    GPS = indigo_device_interface_INDIGO_INTERFACE_GPS,
+    AdaptiveOptics = indigo_device_interface_INDIGO_INTERFACE_AO,
+    Rotator = indigo_device_interface_INDIGO_INTERFACE_ROTATOR,
+    Agent = indigo_device_interface_INDIGO_INTERFACE_AGENT,
+    Auxiliary = indigo_device_interface_INDIGO_INTERFACE_AUX,
+    AuxJoystic = indigo_device_interface_INDIGO_INTERFACE_AUX_JOYSTICK,
+    Shutter = indigo_device_interface_INDIGO_INTERFACE_AUX_SHUTTER,
+    PowerBox = indigo_device_interface_INDIGO_INTERFACE_AUX_POWERBOX,
+    SQM = indigo_device_interface_INDIGO_INTERFACE_AUX_SQM,
+    DustCap = indigo_device_interface_INDIGO_INTERFACE_AUX_DUSTCAP,
+    LightBox = indigo_device_interface_INDIGO_INTERFACE_AUX_LIGHTBOX,
+    Weather = indigo_device_interface_INDIGO_INTERFACE_AUX_WEATHER,
+    /// General Purpose IO auxiliary interface
+    GPIO = indigo_device_interface_INDIGO_INTERFACE_AUX_GPIO,
+}
+}
+
+impl Interface {
+
+    /// Match the [Interface] against an INDIGO string encoded bitmap.
+    pub(crate) fn matches(self, ifs: &str) -> bool {
+        let ifs = Interface::convert(ifs);
+        self.matches_bitmap(ifs)
+    }
+
+    /// Match the [Interface] against an INDIGO bitmap.
+    pub(crate) fn matches_bitmap(self, ifs: u32) -> bool {
+        (self as u32 & ifs) == self as u32
+    }
+
+    /// Convert an INDIGO interface `String` to an u32 bitmap.
+    fn convert(ifs: &str) -> u32 {
+        unsafe { atoi(ifs.as_ptr() as *const _) as u32 }
+    }
+
+    /// Map a bitfield to the corresponding list of interfaces, returning [None]
+    /// if no interface.
+    fn map(bf: u32) -> Option<Vec<Interface>> {
+        let mut vec = Vec::new();
+        for i in Interface::iter() {
+            if i.matches_bitmap(bf) {
+                vec.push(i);
+            }
+        }
+        if vec.is_empty() {
+            None
+        } else {
+            Some(vec)
+        }
+    }
+}
 
 pub struct GuardedStringMap<'a, T> {
     lock: RwLockWriteGuard<'a, StringMap<T>>,
@@ -144,7 +221,7 @@ impl<T: 'static> From<PoisonError<T>> for IndigoError {
     }
 }
 
-/// opaque wrapper for the INDIGO access token
+/// Opaque wrapper for the INDIGO access token.
 pub struct AccessToken {
     tok: u64,
 }
@@ -202,57 +279,16 @@ pub enum LogLevel {
 }
 }
 
-// TODO create version that always succeeds and does not return Result..
-fn str_to_buf<const N: usize>(s: &str) -> Result<[c_char; N], IndigoError> {
-    let s = CString::new(s).expect("a string without \\0 bytes");
-    let mut buf = [0; N];
-    let bytes = s.as_bytes_with_nul();
-    if bytes.len() > N {
-        Err(IndigoError::Other(format!(
-            "The string's byte length + 1 must be less or equal to {N}"
-        )))
-    } else {
-        for (i, b) in bytes.iter().enumerate() {
-            buf[i] = *b as i8;
-        }
-        Ok(buf)
-    }
-}
-
 fn buf_to_string<const N: usize>(buf: [c_char; N]) -> String {
     let ptr = buf.as_ptr();
     let cstr = unsafe { CStr::from_ptr(ptr) };
     String::from_utf8_lossy(cstr.to_bytes()).to_string()
 }
 
-// TODO switch from buf_to_str to buf_to_str2
-fn buf_to_str2<'a, const N: usize>(buf: &'a[c_char; N]) -> &'a str {
-    let bytes = unsafe{ slice::from_raw_parts(buf.as_ptr() as *const u8, buf.len()) };
-    str::from_utf8(&bytes[0..N]).expect("expected utf-8 string")
-}
-
-fn buf_to_str<'a, const N: usize>(buf: [c_char; N]) -> &'a str {
-    let ptr = buf.as_ptr();
-    let cstr = unsafe { CStr::from_ptr(ptr) };
-    cstr.to_str()
-        .inspect_err(|e| warn!("{e}"))
-        .unwrap_or("<invalid>")
-}
-
-fn const_to_string(name: &[u8]) -> String {
+fn const_to_string(buf: &[u8]) -> String {
     // if the unwrap panics we are calling it with a faulty argument and it is a bug...
-    let name = CStr::from_bytes_with_nul(name).unwrap();
-    name.to_string_lossy().into_owned()
-}
-
-fn ptr_to_string(message: *const c_char) -> Option<String> {
-    if message == ptr::null() {
-        None
-    } else {
-        let cstr = unsafe { CStr::from_ptr(message) };
-        let s = String::from_utf8_lossy(cstr.to_bytes()).to_string();
-        Some(s)
-    }
+    let cstr = CStr::from_bytes_with_nul(buf).unwrap();
+    String::from_utf8_lossy(cstr.to_bytes()).to_string()
 }
 
 /*
@@ -370,6 +406,6 @@ mod tests {
 
     #[test]
     fn sys_constants() {
-        assert_eq!("INFO", const_to_string(INFO_PROPERTY_NAME));
+        assert_eq!("INFO", name::INFO_PROPERTY);
     }
 }

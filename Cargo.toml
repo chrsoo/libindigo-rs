@@ -14,8 +14,12 @@ categories = [ "api-bindings", "asynchronous", "external-ffi-bindings", "hardwar
 edition = "2021"
 
 [dependencies]
+#serde = { version = "1.0", default-features = false, features = ["alloc"] }
+serde = { version = "1.0", default-features = false }
+serde-json-core = "0.6.0"
 log = "0.4.22"
-url = "2.5.2"
+url = "2.5.2" # TODO replace all url::Url references with url_fork::Url
+url-fork = "3.0"
 hostname-validator = "1.1.1"
 libindigo-sys = { path = "sys" }
 enum_primitive = "0.1.1"
@@ -28,6 +32,27 @@ function_name = "0.3.0"
 printf-wrap = "0.2.1"
 bitfield = "0.17.0"
 funty = "2.0.0"
+chrono = "0.4"
+# dtd-rs = { git = "https://github.com/songww/dtd-rs.git", version = "0.1.0-alpha2" }
+# dtd-parser = { git = "https://github.com/songww/dtd-rs.git", version = "0.1.0-alpha3" }
+# dtd-macro = { git = "https://github.com/songww/dtd-rs.git", version = "0.1.0-alpha2" }
+
+#mime = "0.3"
+
+[build-dependencies]
+bindgen = "0.71"
+test-log = "0.2.16"
+env_logger = "*"
+#semver = "1.0.23"
+regex = "1.11"
+once_cell = "1.21"
 
 [dev-dependencies]
 test-log = "0.2.16"
+env_logger = "*"
+regex = "1.11"
+
+[features]
+default = ["sys", "std"]
+sys = []
+std = []

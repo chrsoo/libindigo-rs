@@ -1,0 +1,258 @@
+<!ELEMENT INDI (getProperties | defTextVector | defNumberVector | defSwitchVector | defLightVector | defBLOBVector | setTextVector | setNumberVector | setSwitchVector | setLightVector | setBLOBVector | message | delProperty | newTextVector | newNumberVector | newSwitchVector | newBLOBVector | enableBLOB)>
+
+<!ENTITY % propertyState "(Idle|Ok|Busy|Alert)">
+<!ENTITY % switchState "(Off|On)">
+<!ENTITY % switchRule "(OneOfMany|AtMostOne|AnyOfMany)">
+<!ENTITY % propertyPerm "(ro|wo|rw)">
+<!ENTITY % numberValue "(#PCDATA)">
+<!ENTITY % numberFormat "(#PCDATA)">
+<!ENTITY % labelValue "(#PCDATA)">
+<!ENTITY % nameValue "(#PCDATA)">
+<!ENTITY % textValue "(#PCDATA)">
+<!ENTITY % timeValue "(#PCDATA)">
+<!ENTITY % groupTag "(#PCDATA)">
+<!ENTITY % BLOBlength "(#PCDATA)">
+<!ENTITY % BLOBformat "(#PCDATA)">
+<!ENTITY % BLOBenable "(Never|Also|Only)">
+
+<!-- Commands from Device to Client -->
+
+<!ELEMENT getProperties EMPTY >
+<!ATTLIST getProperties
+    device %nameValue; #IMPLIED
+    name %nameValue; #IMPLIED
+>
+
+<!ELEMENT defTextVector (defText+) >
+<!ATTLIST defTextVector
+    device %nameValue; #REQUIRED
+    name %nameValue; #REQUIRED
+    label %labelValue; #IMPLIED
+    group %groupTag; #IMPLIED
+    state %propertyState; #REQUIRED
+    perm %propertyPerm; #REQUIRED
+    timeout %numberValue; #IMPLIED
+    timestamp %timeValue; #IMPLIED
+    message %textValue; #IMPLIED
+>
+
+<!ELEMENT defText %textValue >
+<!ATTLIST defText
+    name %nameValue; #REQUIRED
+    label %labelValue; #IMPLIED
+>
+
+<!ELEMENT defNumberVector (defNumber+) >
+<!ATTLIST defNumberVector
+    device %nameValue; #REQUIRED
+    name %nameValue; #REQUIRED
+    label %labelValue; #IMPLIED
+    group %groupTag; #IMPLIED
+    state %propertyState; #REQUIRED
+    perm %propertyPerm; #REQUIRED
+    timeout %numberValue; #IMPLIED
+    timestamp %timeValue; #IMPLIED
+    message %textValue; #IMPLIED
+>
+
+<!ELEMENT defNumber %numberValue >
+<!ATTLIST defNumber
+    name %nameValue; #REQUIRED
+    label %labelValue; #IMPLIED
+    format %numberFormat; #REQUIRED
+    min %numberValue; #REQUIRED
+    max %numberValue; #REQUIRED
+    step %numberValue; #REQUIRED
+>
+
+<!ELEMENT defSwitchVector (defSwitch+) >
+<!ATTLIST defSwitchVector
+    device %nameValue; #REQUIRED
+    name %nameValue; #REQUIRED
+    label %labelValue; #IMPLIED
+    group %groupTag; #IMPLIED
+    state %propertyState; #REQUIRED
+    perm %propertyPerm; #REQUIRED
+    rule %switchRule; #REQUIRED
+    timeout %numberValue; #IMPLIED
+    timestamp %timeValue; #IMPLIED
+    message %textValue; #IMPLIED
+>
+
+<!ELEMENT defSwitch %switchState >
+<!ATTLIST defSwitch
+    name %nameValue; #REQUIRED
+    label %labelValue; #IMPLIED
+>
+
+<!ELEMENT defLightVector (defLight+) >
+<!ATTLIST defLightVector
+    device %nameValue; #REQUIRED
+    name %nameValue; #REQUIRED
+    label %labelValue; #IMPLIED
+    group %groupTag; #IMPLIED
+    state %propertyState; #REQUIRED
+    timestamp %timeValue; #IMPLIED
+    message %textValue; #IMPLIED
+>
+
+<!ELEMENT defLight %propertyState >
+<!ATTLIST defLight
+    name %nameValue; #REQUIRED
+    label %labelValue; #IMPLIED
+>
+
+<!ELEMENT defBLOBVector (defBLOB+) >
+<!ATTLIST defBLOBVector
+    device %nameValue; #REQUIRED
+    name %nameValue; #REQUIRED
+    label %labelValue; #IMPLIED
+    group %groupTag; #IMPLIED
+    state %propertyState; #REQUIRED
+    perm %propertyPerm; #REQUIRED
+    timeout %numberValue; #IMPLIED
+    timestamp %timeValue; #IMPLIED
+    message %textValue; #IMPLIED
+>
+
+<!ELEMENT defBLOB EMPTY >
+<!ATTLIST defBLOB
+    name %nameValue; #REQUIRED
+    label %labelValue; #IMPLIED
+>
+
+<!ELEMENT setTextVector (oneText+) >
+<!ATTLIST setTextVector
+    device %nameValue; #REQUIRED
+    name %nameValue; #REQUIRED
+    state %propertyState; #IMPLIED
+    timeout %numberValue; #IMPLIED
+    timestamp %timeValue; #IMPLIED
+    message %textValue; #IMPLIED
+>
+
+<!ELEMENT setNumberVector (oneNumber+) >
+<!ATTLIST setNumberVector
+    device %nameValue; #REQUIRED
+    name %nameValue; #REQUIRED
+    state %propertyState; #IMPLIED
+    timeout %numberValue; #IMPLIED
+    timestamp %timeValue; #IMPLIED
+    message %textValue; #IMPLIED
+>
+
+<!ELEMENT setSwitchVector (oneSwitch+) >
+<!ATTLIST setSwitchVector
+    device %nameValue; #REQUIRED
+    name %nameValue; #REQUIRED
+    state %propertyState; #IMPLIED
+    timeout %numberValue; #IMPLIED
+    timestamp %timeValue; #IMPLIED
+    message %textValue; #IMPLIED
+>
+
+<!ELEMENT setLightVector (oneLight+) >
+<!ATTLIST setLightVector
+    device %nameValue; #REQUIRED
+    name %nameValue; #REQUIRED
+    state %propertyState; #IMPLIED
+    timestamp %timeValue; #IMPLIED
+    message %textValue; #IMPLIED
+>
+
+<!ELEMENT setBLOBVector (oneBLOB+) >
+<!ATTLIST setBLOBVector
+    device %nameValue; #REQUIRED
+    name %nameValue; #REQUIRED
+    state %propertyState; #IMPLIED
+    timeout %numberValue; #IMPLIED
+    timestamp %timeValue; #IMPLIED
+    message %textValue; #IMPLIED
+>
+
+<!ELEMENT message EMPTY>
+<!ATTLIST message
+    device %nameValue; #IMPLIED
+    timestamp %timeValue; #IMPLIED
+    message %textValue; #IMPLIED
+>
+
+<!ELEMENT delProperty EMPTY>
+<!ATTLIST delProperty
+    device %nameValue; #REQUIRED
+    name %nameValue; #IMPLIED
+     timestamp %timeValue; #IMPLIED
+    message %textValue; #IMPLIED
+>
+
+<!ELEMENT oneLight %propertyState >
+<!ATTLIST oneLight
+    name %nameValue; #REQUIRED
+>
+
+<!-- Commands from Client to Device -->
+
+<!ELEMENT getProperties EMPTY >
+<!ATTLIST getProperties
+    version %nameValue; #REQUIRED
+    device %nameValue; #IMPLIED
+    name %nameValue; #IMPLIED
+>
+
+<!ELEMENT enableBLOB %BLOBenable >
+<!ATTLIST enableBLOB
+    device %nameValue; #REQUIRED
+    name %nameValue; #IMPLIED
+>
+
+<!ELEMENT newTextVector (oneText+) >
+<!ATTLIST newTextVector
+    device %nameValue; #REQUIRED
+    name %nameValue; #REQUIRED
+     timestamp %timeValue; #IMPLIED
+>
+
+<!ELEMENT newNumberVector (oneNumber+) >
+<!ATTLIST newNumberVector
+    device %nameValue; #REQUIRED
+    name %nameValue; #REQUIRED
+     timestamp %timeValue; #IMPLIED
+>
+
+<!ELEMENT newSwitchVector (oneSwitch+) >
+<!ATTLIST newSwitchVector
+    device %nameValue; #REQUIRED
+    name %nameValue; #REQUIRED
+     timestamp %timeValue; #IMPLIED
+>
+
+<!ELEMENT newBLOBVector (oneBLOB+) >
+<!ATTLIST newBLOBVector
+    device %nameValue; #REQUIRED
+    name %nameValue; #REQUIRED
+    timestamp %timeValue; #IMPLIED
+>
+
+<!-- Elements describing vector member values -->
+
+<!ELEMENT oneText %textValue >
+<!ATTLIST oneText
+    name %nameValue; #REQUIRED
+>
+
+<!ELEMENT oneNumber %numberValue >
+<!ATTLIST oneNumber
+    name %nameValue; #REQUIRED
+>
+
+<!ELEMENT oneSwitch %switchState >
+<!ATTLIST oneSwitch
+    name %nameValue; #REQUIRED
+>
+
+<!ELEMENT oneBLOB %textValue >
+<!ATTLIST oneBLOB
+    name %nameValue; #REQUIRED
+    size %BLOBlength; #REQUIRED
+    format %BLOBformat; #REQUIRED
+>

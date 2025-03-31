@@ -48,7 +48,7 @@ impl<'a> DeviceDriver<'a> {
         let state_ptr = Box::into_raw(state);
 
         let sys = Box::new(indigo_device {
-            name: str_to_buf(name).unwrap(),
+            name: str_to_buf(name),
             lock: 0 as indigo_glock,
             is_remote: false,
             gp_bits: 0,
@@ -238,7 +238,7 @@ impl<'a> DeviceDriver<'a> {
         } else {
             warn!(
                 "Spurius callback without a registered request for device '{}'",
-                buf_to_str((&*device).name)
+                buf_to_str(&(&*device).name)
             );
             BusError::Failed as indigo_result
         }
@@ -271,7 +271,7 @@ impl<'a> TryFrom<*mut indigo_device> for DeviceDriver<'a> {
         if device.private_data == ptr::null_mut() {
             trace!(
                 "creating new state for device '{}'",
-                buf_to_str(device.name)
+                buf_to_str(&device.name)
             );
             device.private_data = DeviceState::new_lock_ptr();
         }

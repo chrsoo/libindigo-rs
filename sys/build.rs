@@ -64,7 +64,8 @@ fn main() -> std::io::Result<()> {
         .header(join_paths(&include, "indigo/indigo_config.h"))
         .header(join_paths(&include, "indigo/indigo_timer.h"))
         .header(join_paths(&include, "indigo/indigo_token.h"))
-        .no_copy(".*")
+        .derive_debug(true)
+        //.no_copy(".*")
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
@@ -107,14 +108,14 @@ fn init_indigo_submodule() -> Result<PathBuf>{
     Path::new(GIT_SUBMODULE).canonicalize()
 }
 
-fn join_paths(base: &PathBuf, path: &str) -> String {
+fn join_paths(base: &Path, path: &str) -> String {
     let p = base.join(path);
     let s = p.to_str().expect("path not found");
     String::from(s)
 }
 
 /// Parse the INDIGO Makefile and extract version and build numbers.
-fn _parse_indigo_version<'a>(indigo_root: &PathBuf) -> std::io::Result<Version> {
+fn _parse_indigo_version(indigo_root: &Path) -> std::io::Result<Version> {
     // TODO extract build from indigo_config.h - what about version?
     // let m = indigo_root.join("indigo_libs/indigo/indigo_config.h");
     let m = indigo_root.join("Makefile");
@@ -141,7 +142,7 @@ fn _parse_indigo_version<'a>(indigo_root: &PathBuf) -> std::io::Result<Version> 
 }
 
 /// Ensure that the Cargo package version string includes the correct INDIGO build number.
-fn _ensure_build_version(indigo_root: &PathBuf) -> std::io::Result<()>{
+fn _ensure_build_version(indigo_root: &Path) -> std::io::Result<()>{
     let indigo_version = _parse_indigo_version(indigo_root)?;
 
     if let Ok(v) = env::var("CARGO_PKG_VERSION") {
@@ -260,8 +261,8 @@ impl<'a> _Build<'a> {
         let source_dir = self._source_dir();
         paths.push(source_dir.clone());
 
-        fs::read_dir(&source_dir.join("externals")).unwrap().into_iter()
-            .filter_map(|r| if r.is_ok() { Some(r.unwrap().path()) } else { None })
+        fs::read_dir(source_dir.join("externals")).unwrap()
+            .filter_map(|r| if let Ok(r) = r { Some(r.path()) } else { None })
             .filter(|p| p.is_dir())
             .for_each(|d| paths.push(d))
             ;
@@ -278,7 +279,7 @@ impl<'a> _Build<'a> {
         args
     }
 
-    fn _target(name: &PathBuf) -> PathBuf {
+    fn _target(name: &Path) -> PathBuf {
         let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
         out_path.join(name.file_name().unwrap())
     }
@@ -313,7 +314,7 @@ impl<'a> _Build<'a> {
             _   => panic!("unsupported OS: '{}'", std::env::consts::OS)
         };
 
-        let target = _Build::_target(&source).with_extension("o");
+        let target = _Build::_target(source).with_extension("o");
         // -mmacosx-version-min=10.10 -fPIC -O3
         let output = std::process::Command::new("/usr/bin/clang")
             .args(os_args)
@@ -321,7 +322,7 @@ impl<'a> _Build<'a> {
             .arg("-c")
             .arg("-o")
             .arg(&target)
-            .arg(&source)
+            .arg(source)
             .output()
             .expect("could not spawn `clang`")
             ;
@@ -342,7 +343,7 @@ impl<'a> _Build<'a> {
     }
 
     fn _link(&self) -> Result<PathBuf> {
-        assert!(self.targets.len() > 0, "target object files missing");
+        assert!(!self.targets.is_empty(), "target object files missing");
 
         let lib_path = _Build::_target(&PathBuf::from("libindigo").with_extension("a"));
 
@@ -381,7 +382,7 @@ fn _build_indigo(indigo_root: &PathBuf) -> Result<PathBuf> {
     // ensure_build_version(&indigo_root)?;
 
     let source_dir = indigo_root.join("indigo_libs");
-    let build = _Build::_new(&indigo_root);
+    let build = _Build::_new(indigo_root);
 
     // eprintln!("INCLUDE='{:?}'", build.include_args());
 

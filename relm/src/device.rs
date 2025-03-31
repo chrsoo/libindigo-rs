@@ -1,7 +1,9 @@
+use std::collections::HashMap;
+
 use gtk::prelude::*;
 use gtk::StackPage;
 use libindigo::ClientDevice;
-use libindigo::Device as IndigoDevice;
+use libindigo::DeviceController as IndigoDevice;
 use libindigo::Property as IndigoProperty;
 use relm4::factory::CloneableFactoryComponent;
 use relm4::factory::FactoryHashMap;
@@ -13,7 +15,7 @@ use crate::property::Property;
 
 /// Relm model for a [ClientDevice].
 pub struct Device {
-    device: ClientDevice,
+    name: String,
     props: FactoryHashMap<String,Property>,
     message: Option<String>,
 }
@@ -55,7 +57,7 @@ pub enum DeviceEvent  {
 
 #[relm4::factory(pub)]
 impl FactoryComponent for Device {
-    type Init = ClientDevice;
+    type Init = String;
     type Input = DeviceCommand;
     type Output = DeviceEvent;
     type CommandOutput = DeviceEvent;
@@ -80,7 +82,7 @@ impl FactoryComponent for Device {
         }
     }
 
-    fn init_model(device: Self::Init, _index: &String, _sender: FactorySender<Self>) -> Self {
+    fn init_model(name: Self::Init, _index: &String, _sender: FactorySender<Self>) -> Self {
         let props = FactoryHashMap::builder()
             .launch(gtk::Box::default())
             .detach();
@@ -93,7 +95,7 @@ impl FactoryComponent for Device {
             //     DeviceEvent::Busy(d) => AppCommand::UpdateStatus(format!("Device is busy '{d}'")),
             // });
 
-        Self { device, props, message: None }
+        Self { name, props, message: None }
     }
 
     fn update(&mut self, message: Self::Input, sender: FactorySender<Self>) {
@@ -121,9 +123,9 @@ impl CloneableFactoryComponent for Device {
 impl Device {
 
     fn define_property(&mut self, p: IndigoProperty, sender: FactorySender<Self>) {
-        let name = p.name().to_string();
+        let name = p.name().to_owned();
         // self.device.upsert_property(p).unwrap();
-        self.props.insert(name.to_string(), p);
+        self.props.insert(name.to_owned(), p);
         sender.output(DeviceEvent::PropertyDefined(name)).unwrap();
     }
 
@@ -139,4 +141,40 @@ impl Device {
         sender.output(DeviceEvent::PropertyDeleted(name)).unwrap();
     }
 
+}
+
+
+/// A device as seen from a client implementation.
+#[derive(Debug,Clone)]
+pub struct ClientDevice {
+    // name: &'a str,
+    // props: &'a mut HashMap<String, Property>,
+    name: String,
+    props: HashMap<String,Property>,
+}
+
+// TODO move ClientDevice methods to Device trait
+impl ClientDevice {
+
+
+    pub fn upsert_property(&mut self, p: Property) -> IndigoResult<()> {
+        self.props
+        .entry(p.name().to_string())
+        .and_modify(|prop| prop.update(&p))
+        .or_insert(p);
+        // if let Some(hook) = self.create_property_hook.as_deref_mut() {
+        //     hook(self.props.get(&name).unwrap())
+        // }
+        Ok(())
+    }
+
+    pub fn delete_property(&mut self, p: Property) -> IndigoResult<Property> {
+        if let Some(prop) = self.props.remove(p.name()) {
+            Ok(prop)
+        } else {
+            Err(IndigoError::Message(
+                "Trying to delete an undefined property.",
+            ))
+        }
+    }
 }

@@ -6,19 +6,19 @@ use super::*;
 use libindigo_sys::{self, *};
 use log::{debug, info, trace};
 
-pub fn connect(name: &str, host: &str, port: c_int) -> IndigoResult<ServerConnection> {
+pub fn connect(name: &str, host: &str, port: u16) -> IndigoResult<ServerConnection> {
     trace!("Connecting to {host}:{port}...");
     if !hostname_validator::is_valid(host) {
         return Err(IndigoError::Other(format!("invalid hostname: '{host}'")))
     }
 
-    let name = str_to_buf(name)?;
-    let host = str_to_buf(host)?;
+    let name = str_to_buf(name);
+    let host = str_to_buf(host);
 
     let mut entry = indigo_server_entry {
         name: name,
         host: host,
-        port: port,
+        port: port as c_int,
         connection_id: 0,
         thread: unsafe { std::mem::zeroed() },
         thread_started: false,

@@ -199,7 +199,7 @@ pub struct ParseError<'a> {
 }
 
 impl<'a> ParseError<'a> {
-    fn new(msg: &'a str, index: usize) -> ParseError{
+    fn new(msg: &'a str, index: usize) -> ParseError<'a>{
         ParseError { msg, index }
     }
 }

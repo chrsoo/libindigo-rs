@@ -29,7 +29,7 @@ pub fn stop() -> IndigoResult<()> {
 
 pub fn log(msg: &str) -> IndigoResult<()> {
     debug!("Bus log message: '{}'.", msg);
-    let buf: [c_char; 256] = str_to_buf(msg)?;
+    let buf: [c_char; 256] = str_to_buf(msg);
     unsafe { indigo_log(buf.as_ptr()) };
     Ok(())
 }

@@ -2,13 +2,75 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
-use std::hash::Hash;
+use core::slice;
+use std::{ffi::{c_char, CStr, CString}, hash::Hash};
+
+use enum_primitive::*;
+use log::warn;
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
+pub const DEFAULT_PORT:u16 = 7624;
+pub const DEFAULT_HOST:&str = "indigo.local";
+
+/// convert an `i8` C string buffer of arbitrary length to a `&str` slice.
+pub fn buf_to_str<const N: usize>(buf: &[c_char; N]) -> &str {
+    let bytes = unsafe{ slice::from_raw_parts(buf.as_ptr() as *const u8, buf.len()) };
+    CStr::from_bytes_until_nul(&bytes[0..N]).expect("could not read CStr")
+        .to_str().expect("could not convert to UTF8 str")
+}
+
+pub fn str_to_buf<const N: usize>(s: &str) -> [c_char; N] {
+    let s = CString::new(s).expect("a string without \\0 bytes");
+    let mut buf = [0; N];
+    let bytes = s.as_bytes_with_nul();
+    for (i, b) in bytes.iter().enumerate() {
+        buf[i] = *b as c_char;
+    }
+    buf
+}
+
+/// Returns `Some(&str)` if the `message` pointer is not `null``, else `None``
+pub fn ptr_to_str<'a>(message: *const c_char) -> Option<&'a str> {
+    if message.is_null() {
+        None
+    } else {
+        let m = message;
+        match unsafe {CStr::from_ptr(m)}.to_str() {
+            Ok(s) => Some(s),
+            Err(e) => {
+                warn!("unsafe c-string to string conversion: {e}");
+                None
+            }
+        }
+    }
+}
+
+pub fn copy_from_str<const N: usize>(mut target: [i8;N], source: &str) {
+    let buf: [i8;N] = str_to_buf(source);
+    target.copy_from_slice(&buf);
+}
+
+impl PartialEq for indigo_client {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Hash for indigo_client {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+    }
+}
+
+impl Eq for indigo_client { }
+
+unsafe impl Sync for indigo_client { }
+unsafe impl Send for indigo_client { }
+
 #[cfg(test)]
 mod tests {
-    use std::{ffi::{CStr, CString}, ptr};
+    use core::{ffi::CStr, ptr};
 
     use super::*;
 
@@ -18,9 +80,9 @@ mod tests {
             indigo_log(c_msg.as_ptr());
             println!("attach client callback!");
             // Request property definitions
-            indigo_enumerate_properties(client, &INDIGO_ALL_PROPERTIES as *const _ as *mut indigo_property);
+            indigo_enumerate_properties(client, &raw mut INDIGO_ALL_PROPERTIES);
         }
-        return indigo_result_INDIGO_OK;
+        indigo_result_INDIGO_OK
     }
 
     unsafe extern "C" fn my_define_property(
@@ -30,7 +92,7 @@ mod tests {
         message: *const i8) -> indigo_result {
 
         // let d = CStr::from_bytes_until_nul(&(*device).name.map(|i| i as u8)).unwrap().to_str().unwrap();
-        if property != ptr::null_mut() {
+        if !property.is_null() {
             // let id = [0 as c_char; 256];
             // let rust_id = unsafe { CStr::from_ptr(id.as_ptr()) };
             // let rust_id = rust_id.to_owned();
@@ -42,34 +104,34 @@ mod tests {
             print!("property: {:?}", p);
         }
 
-        if message != ptr::null() {
+        if message.is_null() {
+            println!("; null message");
+        } else {
             let m = CStr::from_ptr(message).to_str().unwrap();
             println!("; message: {m}");
-        } else {
-            println!("; null message");
         }
 
         // println!("d: {d}; p: {p}; m: {m}");
 
-        return indigo_result_INDIGO_OK;
+        indigo_result_INDIGO_OK
     }
 
     unsafe extern "C" fn my_update_property(
-        client: *mut indigo_client,
-        device: *mut indigo_device,
-        property: *mut indigo_property,
-        message: *const i8) -> indigo_result {
+        _client: *mut indigo_client,
+        _device: *mut indigo_device,
+        _property: *mut indigo_property,
+        _message: *const i8) -> indigo_result {
 
         println!("update property callback!");
         // do something useful here ;)
-        return indigo_result_INDIGO_OK;
+        indigo_result_INDIGO_OK
     }
 
     unsafe extern "C" fn  my_detach(
-        client: *mut indigo_client ) -> indigo_result {
+        _client: *mut indigo_client ) -> indigo_result {
         let c_msg = std::ffi::CString::new("detached from INDIGO bus").unwrap();
         unsafe { indigo_log(c_msg.as_ptr()) };
-        return indigo_result_INDIGO_OK;
+        indigo_result_INDIGO_OK
     }
 
     fn map_indigo_result(code: u32) -> Result<(),u32> {
@@ -148,20 +210,3 @@ mod tests {
         }
     }
 }
-
-impl PartialEq for indigo_client {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-
-impl Hash for indigo_client {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-    }
-}
-
-impl Eq for indigo_client { }
-
-unsafe impl Sync for indigo_client { }
-unsafe impl Send for indigo_client { }

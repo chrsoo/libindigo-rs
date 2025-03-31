@@ -8,7 +8,7 @@ use device::{Device, DeviceCommand, DeviceEvent};
 use gtk::{glib::ExitCode, prelude::*};
 use log::{error, warn};
 use gtk::glib;
-use libindigo::{bus, Client, ClientCallbacks, ClientDevice, LogLevel, Property};
+use libindigo::{sys::{SysBus, SysClientController,LogLevel}, Bus, ClientController, BusController, ClientDelegate, NamedObject, Property};
 use relm4::{factory::FactoryHashMap, Component, ComponentController, ComponentParts, ComponentSender, Controller, MessageBroker, RelmApp, RelmWidgetExt};
 use server::{IndigoServer, ServerCommand, ServerOutput};
 
@@ -22,22 +22,22 @@ fn main() -> glib::ExitCode {
 
     // TODO make the INDIGO LogLevel configurable over GTK settings.
     // Set the log level and start the local INDIGO bus
-    bus::set_log_level(LogLevel::Debug);
-    if let Err(e) = bus::start() {
-        error!("Could not start the INDIGO bus: {e}");
-        return glib::ExitCode::FAILURE
+    match SysBus::start("indigoApp") {
+        Ok(bus)   => {
+            SysBus::enable_bus_log(LogLevel::Debug);
+
+            let app = RelmApp::new("se.jabberwocky.libindigo-rs-example-app");
+            app.with_broker(&BROKER).run::<IndigoApp>(bus);
+            // app.run::<IndigoApp>(());
+
+            ExitCode::SUCCESS
+        },
+        Err(e)  => {
+            error!("Could not start the INDIGO bus: {e}");
+            ExitCode::FAILURE
+        }
     }
 
-    let app = RelmApp::new("se.jabberwocky.libindigo-rs-example-app");
-    app.with_broker(&BROKER).run::<IndigoApp>(());
-    // app.run::<IndigoApp>(());
-
-    if let Err(e) = bus::stop() {
-        warn!("Error while stopping the INDIGO bus: {e}");
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -55,15 +55,16 @@ enum CommandOutput {
 }
 
 struct IndigoApp {
+    bus: SysBus,
     server: Controller<IndigoServer>,
-    client: Option<Client<'static, DeviceCallbackHandler>>,
+    client: Option<SysClientController<DeviceCallbackHandler>>,
     devices: FactoryHashMap<String,crate::device::Device>,
     status: String,
 }
 
 #[relm4::component]
 impl Component for IndigoApp {
-    type Init = ();
+    type Init = SysBus;
     type Input = AppCommand;
     type Output = ();
     type CommandOutput = CommandOutput;
@@ -109,7 +110,7 @@ impl Component for IndigoApp {
 
     /// Initialize the UI and model.
     fn init(
-        _counter: Self::Init,
+        bus: Self::Init,
         window: Self::Root,
         sender: ComponentSender<Self>,
     ) -> relm4::ComponentParts<Self> {
@@ -135,7 +136,7 @@ impl Component for IndigoApp {
             });
 
         // let devices = Arc::new(devices);
-        let model = IndigoApp { server, devices, client: None, status: String::new() };
+        let model = IndigoApp { bus, server, devices, client: None, status: String::new() };
 
         // local widget refs used in the view macro above.
         let device_stack = model.devices.widget();
@@ -193,42 +194,31 @@ impl IndigoApp {
     fn attach_client(&mut self, sender: ComponentSender<Self>) {
         self.status = format!("Attaching the client to the INDIGO bus...");
 
-        // let mut model = ClientDeviceModel::new();
-        // let mut devices = self.devices.clone();
-        // model.create_device_hook(move|device| {
-        //     devices.guard().push_back(device);
-        //     // noop
-        // });
-
         let devices = self.devices.clone();
-        let callback_handler = DeviceCallbackHandler::new(devices);
-        self.client = Some(Client::new("INDIGO", callback_handler, true));
-
-        let c = self.client.as_mut().unwrap();
-        let s = sender.clone();
-        if let Err(e) = c.attach(move |_c| {
-            s.input(AppCommand::UpdateStatus(
-                format!("Attached the client to the INDIGO bus.")
-            ));
-            Ok(())
-        }) {
-            sender.input(AppCommand::UpdateStatus(
-                format!("Failed attching the client to the INDIGO bus: {e}.")
-            ));
+        let callback_handler = DeviceCallbackHandler::new("INDIGO", devices);
+        match self.bus.attach_client(callback_handler) {
+            Ok(c)   => sender.input(AppCommand::UpdateStatus({
+                self.client = Some(c);
+                format!("Attached client to the INDIGO bus.")
+            })),
+            Err(e)  => sender.input(AppCommand::UpdateStatus({
+                self.client = None;
+                format!("Failed attching client to the INDIGO bus: {e}.")
+            })),
         }
+
     }
 
     fn detach_client(&mut self, sender: ComponentSender<Self>) {
         self.status = format!("Detaching the client from the INDIGO bus...");
 
-        if let Some(client) = self.client.as_mut() {
-            if let Err(e) = client.detach(move |_c| {
+        if let Some(client) = self.client.take() {
+            if let Err(e) = client.detach() {
+                self.status = format!("Failed detaching client from the INDIGO bus: {e}.");
+            } else {
                 sender.oneshot_command(async { CommandOutput::ClientDetached(
                     format!("Detached the client from the INDIGO bus.")
                 )});
-                Ok(())
-            }) {
-                self.status = format!("Failed detaching the client from the INDIGO bus: {e}.");
             }
         } else {
             self.status = format!("Error: trying to detach a non-exisisting client.");
@@ -238,21 +228,28 @@ impl IndigoApp {
 
 
 pub(crate) struct DeviceCallbackHandler {
+    name: String,
     devices: FactoryHashMap<String,Device>,
 }
 
 impl DeviceCallbackHandler {
-    pub(crate) fn new(devices: FactoryHashMap<String,Device>) -> Self {
-        Self {devices }
+    pub(crate) fn new(name: &str, devices: FactoryHashMap<String,Device>) -> Self {
+        Self { name: name.to_owned(), devices }
     }
 }
 
-impl<'a> ClientCallbacks<'a> for DeviceCallbackHandler {
+impl NamedObject for DeviceCallbackHandler {
+    fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl<'a> ClientDelegate<'a> for DeviceCallbackHandler {
     type M = DeviceCallbackHandler;
 
     fn on_define_property(
         &mut self,
-        _c: &mut libindigo::Client<'a, Self::M>,
+        _c: &mut libindigo::ClientController<'a, Self::M>,
         d: String,
         p: libindigo::Property,
         msg: Option<String>,
@@ -267,7 +264,7 @@ impl<'a> ClientCallbacks<'a> for DeviceCallbackHandler {
 
     fn on_update_property(
         &mut self,
-        _c: &mut libindigo::Client<'a, Self::M>,
+        _c: &mut libindigo::ClientController<'a, Self::M>,
         d: String,
         p: libindigo::Property,
         msg: Option<String>,
@@ -288,7 +285,7 @@ impl<'a> ClientCallbacks<'a> for DeviceCallbackHandler {
 
     fn on_delete_property(
         &mut self,
-        _c: &mut libindigo::Client<'a, Self::M>,
+        _c: &mut libindigo::ClientController<'a, Self::M>,
         d: String,
         p: libindigo::Property,
         msg: Option<String>,
@@ -309,7 +306,7 @@ impl<'a> ClientCallbacks<'a> for DeviceCallbackHandler {
 
     fn on_send_message(
         &mut self,
-        _c: &mut libindigo::Client<'a, Self::M>,
+        _c: &mut libindigo::ClientController<'a, Self::M>,
         d: String,
         msg: String,
     ) -> Result<(), libindigo::IndigoError> {
