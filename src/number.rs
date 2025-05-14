@@ -113,7 +113,7 @@ fn parse_float(bytes: &[u8], i: usize, j: usize) -> Result<f64,ParseError<'stati
 /// >        "-123:45"   %7.3m
 /// >        "  0:01:02" %9.6m
 /// > ```
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct NumberFormat {
     f: Option<FormatFlags>,
     w: Option<usize>,

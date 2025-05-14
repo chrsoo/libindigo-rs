@@ -3,21 +3,68 @@
 #![allow(non_snake_case)]
 
 use core::slice;
-use std::{ffi::{c_char, CStr, CString}, hash::Hash};
+use std::{
+    ffi::{c_char, CStr, CString},
+    hash::Hash,
+    ptr,
+};
 
 use enum_primitive::*;
 use log::warn;
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-pub const DEFAULT_PORT:u16 = 7624;
-pub const DEFAULT_HOST:&str = "indigo.local";
+pub const DEFAULT_PORT: u16 = 7624;
+pub const DEFAULT_HOST: &str = "indigo.local";
+
+impl indigo_property {
+    /// Create a new indigo_property with default values.
+    pub fn new(name: &str, device: &str, ptype: indigo_property_type) -> indigo_property {
+        indigo_property {
+            device: str_to_buf(device),
+            name: str_to_buf(name),
+            type_: ptype,
+            group: [0i8; 128],
+            label: [0i8; 512],
+            hints: [0i8; 512],
+            state: indigo_property_state::INDIGO_OK_STATE,
+            perm: indigo_property_perm::INDIGO_RW_PERM,
+            rule: indigo_rule::INDIGO_ANY_OF_MANY_RULE,
+            access_token: 0,
+            // FIXME ensure that indigo_version enum is an i16 or change version from i16 to type
+            version: indigo_version::INDIGO_VERSION_NONE.0 as i16,
+            hidden: false,
+            defined: false,
+            allocated_count: 0,
+            count: 0,
+            items: __IncompleteArrayField::new(),
+        }
+    }
+}
+
+impl Default for indigo_item {
+    fn default() -> Self {
+        let text = indigo_item__bindgen_ty_1__bindgen_ty_1 {
+            value: [0i8; 512],
+            long_value: ptr::null_mut(),
+            length: 0,
+        };
+        Self {
+            name: [0i8; 128],
+            label: [0i8; 512],
+            hints: [0i8; 512],
+            __bindgen_anon_1: indigo_item__bindgen_ty_1 { text },
+        }
+    }
+}
 
 /// convert an `i8` C string buffer of arbitrary length to a `&str` slice.
 pub fn buf_to_str<const N: usize>(buf: &[c_char; N]) -> &str {
-    let bytes = unsafe{ slice::from_raw_parts(buf.as_ptr() as *const u8, buf.len()) };
-    CStr::from_bytes_until_nul(&bytes[0..N]).expect("could not read CStr")
-        .to_str().expect("could not convert to UTF8 str")
+    let bytes = unsafe { slice::from_raw_parts(buf.as_ptr() as *const u8, buf.len()) };
+    CStr::from_bytes_until_nul(&bytes[0..N])
+        .expect("could not read CStr")
+        .to_str()
+        .expect("could not convert to UTF8 str")
 }
 
 pub fn str_to_buf<const N: usize>(s: &str) -> [c_char; N] {
@@ -36,7 +83,7 @@ pub fn ptr_to_str<'a>(message: *const c_char) -> Option<&'a str> {
         None
     } else {
         let m = message;
-        match unsafe {CStr::from_ptr(m)}.to_str() {
+        match unsafe { CStr::from_ptr(m) }.to_str() {
             Ok(s) => Some(s),
             Err(e) => {
                 warn!("unsafe c-string to string conversion: {e}");
@@ -46,8 +93,8 @@ pub fn ptr_to_str<'a>(message: *const c_char) -> Option<&'a str> {
     }
 }
 
-pub fn copy_from_str<const N: usize>(mut target: [i8;N], source: &str) {
-    let buf: [i8;N] = str_to_buf(source);
+pub fn copy_from_str<const N: usize>(mut target: [i8; N], source: &str) {
+    let buf: [i8; N] = str_to_buf(source);
     target.copy_from_slice(&buf);
 }
 
@@ -63,10 +110,10 @@ impl Hash for indigo_client {
     }
 }
 
-impl Eq for indigo_client { }
+impl Eq for indigo_client {}
 
-unsafe impl Sync for indigo_client { }
-unsafe impl Send for indigo_client { }
+unsafe impl Sync for indigo_client {}
+unsafe impl Send for indigo_client {}
 
 #[cfg(test)]
 mod tests {
@@ -82,15 +129,15 @@ mod tests {
             // Request property definitions
             indigo_enumerate_properties(client, &raw mut INDIGO_ALL_PROPERTIES);
         }
-        indigo_result_INDIGO_OK
+        indigo_result::INDIGO_OK
     }
 
     unsafe extern "C" fn my_define_property(
         _client: *mut indigo_client,
         _device: *mut indigo_device,
         property: *mut indigo_property,
-        message: *const i8) -> indigo_result {
-
+        message: *const i8,
+    ) -> indigo_result {
         // let d = CStr::from_bytes_until_nul(&(*device).name.map(|i| i as u8)).unwrap().to_str().unwrap();
         if !property.is_null() {
             // let id = [0 as c_char; 256];
@@ -113,29 +160,28 @@ mod tests {
 
         // println!("d: {d}; p: {p}; m: {m}");
 
-        indigo_result_INDIGO_OK
+        indigo_result::INDIGO_OK
     }
 
     unsafe extern "C" fn my_update_property(
         _client: *mut indigo_client,
         _device: *mut indigo_device,
         _property: *mut indigo_property,
-        _message: *const i8) -> indigo_result {
-
+        _message: *const i8,
+    ) -> indigo_result {
         println!("update property callback!");
         // do something useful here ;)
-        indigo_result_INDIGO_OK
+        indigo_result::INDIGO_OK
     }
 
-    unsafe extern "C" fn  my_detach(
-        _client: *mut indigo_client ) -> indigo_result {
+    unsafe extern "C" fn my_detach(_client: *mut indigo_client) -> indigo_result {
         let c_msg = std::ffi::CString::new("detached from INDIGO bus").unwrap();
         unsafe { indigo_log(c_msg.as_ptr()) };
-        indigo_result_INDIGO_OK
+        indigo_result::INDIGO_OK
     }
 
-    fn map_indigo_result(code: u32) -> Result<(),u32> {
-        if code == indigo_result_INDIGO_OK {
+    fn map_indigo_result(code: indigo_result) -> Result<(), indigo_result> {
+        if code == indigo_result::INDIGO_OK {
             Ok(())
         } else {
             Err(code)
@@ -143,36 +189,36 @@ mod tests {
     }
 
     #[test]
-    fn client_test() -> Result<(),u32> {
+    fn client_test() -> Result<(), indigo_result> {
         // let name = std::ffi::CString::new("MyClient").unwrap();
         // let bytes: [i8; name.len() + 1] = name.as_bytes_with_nul().iter().map(|b| *b as i8).collect();
         // let buf = [0i8;128];
         // buf[..bytes.len()].copy_from_slice(bytes);
 
         let name = b"MyClient\0".map(|b| b as i8);
-        let mut buf = [0i8;128];
+        let mut buf = [0i8; 128];
         buf[..name.len()].copy_from_slice(&name);
 
         let mut indigo_client = indigo_client {
-            name: buf,                                      // client name
-            is_remote: false,                               // is this a remote client "no" - this is us
-            client_context: ptr::null_mut(),                // we do not have client specific data
-            last_result: indigo_result_INDIGO_OK,           // result of last bus operation
-                                                            // - we just initialize it with ok
-            version: indigo_version_INDIGO_VERSION_CURRENT, // the client speaks current indigo version
-            enable_blob_mode_records: ptr::null_mut(),      // BLOB mode records -> Set this to NULL
+            name: buf,                             // client name
+            is_remote: false,                      // is this a remote client "no" - this is us
+            client_context: ptr::null_mut(),       // we do not have client specific data
+            last_result: indigo_result::INDIGO_OK, // result of last bus operation
+            // - we just initialize it with ok
+            version: indigo_version::INDIGO_VERSION_CURRENT, // the client speaks current indigo version
+            enable_blob_mode_records: ptr::null_mut(), // BLOB mode records -> Set this to NULL
             attach: Some(my_attach),
             define_property: Some(my_define_property),
             update_property: Some(my_update_property),
             delete_property: None,
             send_message: None,
-            detach: Some(my_detach)
+            detach: Some(my_detach),
         };
         unsafe {
             map_indigo_result(indigo_start())?;
 
             /* We want to see debug messages on the screen */
-            indigo_set_log_level(indigo_log_levels_INDIGO_LOG_DEBUG);
+            indigo_set_log_level(indigo_log_levels::INDIGO_LOG_DEBUG);
             map_indigo_result(indigo_attach_client(std::ptr::addr_of_mut!(indigo_client)))?;
 
             /* We want to connect to a remote indigo host indigosky.local:7624 */
@@ -195,7 +241,12 @@ mod tests {
             let mut srv_ptr = ptr::addr_of_mut!(server);
             let srv_ptr_ptr = ptr::addr_of_mut!(srv_ptr);
 
-            map_indigo_result(indigo_connect_server(server_name.as_ptr(), host.as_ptr(), 7624, srv_ptr_ptr))?;
+            map_indigo_result(indigo_connect_server(
+                server_name.as_ptr(),
+                host.as_ptr(),
+                7624,
+                srv_ptr_ptr,
+            ))?;
 
             /* We can do whatever we want here while we are waiting for
             the client to complete. For example we can call some GUI

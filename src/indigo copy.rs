@@ -10,7 +10,6 @@ use number::NumberFormat;
 use strum_macros::Display;
 use url_fork::Url;
 
-use crate::property::{PropertyItem, PropertyValue, Switch};
 use crate::{name, number, Interface};
 use core::error::Error;
 use core::result::Result;
@@ -87,10 +86,10 @@ pub trait NamedObject: Debug {
     }
 }
 
-/// Delegate receiving basic events for a [Bus].
-pub trait Delegate: NamedObject {
-    type Bus: Bus;
-    type BusController: Controller<Self::Bus>;
+/// Delegate attached to a [Bus] implemented for a given [Property] type.
+pub trait Delegate<P: Property>: NamedObject {
+    type Bus: Bus<P>;
+    type BusController: Controller<P,Self::Bus>;
 
     /// Called when the [AttachedObject] has been attached to a [Bus].
     fn on_attach(&mut self, controller: &mut Self::BusController) -> IndigoResult<()> {
@@ -172,6 +171,8 @@ pub trait Delegate: NamedObject {
 /// Defines [items](PropertyItem) holding the [values](PropertyValue) of the property for
 /// an INDIGO [device](crate::Device).
 pub trait Property: NamedObject {
+    type Item: PropertyItem;
+
     fn key(&self) -> PropertyKey<'_> {
         PropertyKey {
             dev: self.device(),
@@ -200,18 +201,18 @@ pub trait Property: NamedObject {
     /// `true` if `Property` is defined.
     fn defined(&self) -> bool;
 
-    fn items(&self) -> impl Iterator<Item = &PropertyItem>;
+    fn items(&self) -> impl Iterator<Item = &Self::Item>;
 
-    fn get_item<'a>(&'a self, name: &str) -> Option<&'a PropertyItem> {
+    fn get_item<'a>(&'a self, name: &str) -> Option<&'a Self::Item> {
         self.items().filter(|i| i.name() == name).nth(0)
     }
 
-    fn get_mut_item<'a>(&'a mut self, name: &str) -> Option<&'a PropertyItem> {
+    fn get_mut_item<'a>(&'a mut self, name: &str) -> Option<&'a Self::Item> {
         self.items().filter(|i| i.name() == name).nth(0)
     }
 
-    // /// Update this [Property] with the values of the provided [Property].
-    // fn update(&mut self, p: &Self);
+    /// Update this [Property] with the values of the provided [Property].
+    fn update(&mut self, p: &Self);
 
     /*
     #[doc = "< property version INDIGO_VERSION_NONE, INDIGO_VERSION_LEGACY or INDIGO_VERSION_2_0"]
@@ -220,7 +221,7 @@ pub trait Property: NamedObject {
 }
 
 enum_from_primitive! {
-    #[derive(Debug, Copy, Clone, PartialEq)]
+    #[derive(Debug, Copy, Clone, PartialEq, Display)]
     /// Possible states of a `Property`.
     pub enum PropertyState  {
         /// Property is passive (unused by INDIGO).
@@ -245,7 +246,7 @@ enum_from_primitive! {
 }
 
 enum_from_primitive! {
-    #[derive(Debug, Copy, Clone, PartialEq, Eq, Display)]
+    #[derive(Debug, Copy, Clone, PartialEq, Display)]
     /// Possible property types.
     pub enum PropertyType  {
         /// Strings of limited width.
@@ -261,11 +262,11 @@ enum_from_primitive! {
     }
 }
 
-// pub trait PropertyItem:
-//     NamedObject + TextItem + NumberItem + SwitchItem + LightItem + BlobItem + Display
-// {
-//     fn property_type(&self) -> PropertyType;
-// }
+pub trait PropertyItem:
+    NamedObject + TextItem + NumberItem + SwitchItem + LightItem + BlobItem + Display
+{
+    fn property_type(&self) -> PropertyType;
+}
 
 // #[derive(PartialEq, Debug, Clone)]
 // pub enum PropertyValue<'pv> {
@@ -300,7 +301,7 @@ enum_from_primitive! {
 
 /// An INDIGO property item identified by a name and displayed with a label.
 pub trait TextItem {
-    fn value(&self) -> &str;
+    fn text(&self) -> &str;
 }
 pub trait LightItem {
     fn state(&self) -> PropertyState;
@@ -310,8 +311,7 @@ pub trait SwitchItem {
 }
 pub trait NumberItem {
     fn value(&self) -> f64;
-    fn format(&self) -> &NumberFormat;
-    #[cfg(feature = "sys")]
+    fn format(&self) -> NumberFormat;
     fn formatted_number(&self) -> String {
         self.format().format(self.value())
     }
@@ -380,7 +380,7 @@ pub enum SwitchRule  {
 }
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, Copy, Hash)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub struct PropertyKey<'a> {
     pub dev: &'a str,
     pub name: &'a str,
@@ -398,7 +398,9 @@ pub enum BlobMode {
 
 // -- Bus ----------------------------------------------------------------------
 
-pub trait Bus: NamedObject {
+pub trait Bus<P: Property>: NamedObject {
+    type ClientController: ClientController<P, Self>;
+
     // fn remote() -> impl RemoteResource<Self>;
     // fn client<D: ClientDelegate>(d: D) -> impl ClientController<P,Self>;
     // fn device<D: DeviceDelegate>(d: D) -> impl DeviceController<P,Self>;
@@ -410,7 +412,7 @@ pub trait Bus: NamedObject {
     /// implementation specific; either an error is returned indicating that
     /// only one bus instance can run at any given time, or multiple instances
     /// are allowed and no error is returned.
-    fn start(name: &str) -> IndigoResult<impl Bus>;
+    fn start(name: &str) -> IndigoResult<impl Bus<P>>;
 
     /// Stop the [Bus].
     fn stop(&mut self) -> IndigoResult<()>;
@@ -418,10 +420,8 @@ pub trait Bus: NamedObject {
 
 // -- Controller ---------------------------------------------------------------
 
-pub trait Controller<B>: NamedObject
-where
-    B: Bus,
-{
+pub trait Controller<P,B>: NamedObject
+where P: Property, B: Bus<P> {
     /// Attach self to [Bus].
     fn attach(&mut self, bus: &mut B) -> IndigoResult<()>;
 
@@ -437,10 +437,8 @@ where
 
 // -- RemoteResource ----------------------------------------------------------
 
-pub trait RemoteResource<B>: Controller<B> + Clone + Sized
-where
-    B: Bus,
-{
+pub trait RemoteResource<P,B>: Controller<P,B> + Clone + Sized
+where P: Property, B: Bus<P> {
     /// Disconnect from a remote server returning an error if not connected or
     /// in the process of connecting to a remote server.
     fn disconnect(&mut self) -> IndigoResult<()>;
@@ -470,29 +468,28 @@ where
 
 /// Client that forwards [Property] events to a [ClientDelegate] and
 /// provides methods for publishing [Property] requests to the [Bus].
-pub trait ClientController<P, B>: Controller<B>
-where
-    P: Property,
-    B: Bus,
-{
+pub trait ClientController<P, B>: Controller<P,B>
+where P: Property, B: Bus<P> {
     /// Request the definition of a named [Property].
-    fn request_definition(&mut self, d: &str, p: &str) -> IndigoResult<()>;
+    fn request_definition(&mut self, d: &str, p: &P) -> IndigoResult<()>;
 
     /// Request the update of the [Property] and all its [property items](PropertyItem).
     fn request_update(&mut self, d: &str, p: &P) -> IndigoResult<()>;
 
     /// Request the update of a single [PropertyItem].
-    fn request_update_item(&mut self, d: &str, p: &P, i: &PropertyItem) -> IndigoResult<()>;
+    fn request_update_item(
+        &mut self,
+        d: &str,
+        p: &P,
+        i: &impl PropertyItem,
+    ) -> IndigoResult<()>;
     fn request_delete(&mut self, d: &str, p: &P) -> IndigoResult<()>;
-    fn request_delete_item(&mut self, d: &str, p: &P, i: &PropertyItem) -> IndigoResult<()>;
-
-    fn request_connect(&mut self, d: &str) -> IndigoResult<()> {
-        todo!("implement connection logic")
-    }
-
-    fn request_disconnect(&mut self, d: &str) -> IndigoResult<()> {
-        todo!("implement disconnection logic")
-    }
+    fn request_delete_item(
+        &mut self,
+        d: &str,
+        p: &P,
+        i: &impl PropertyItem,
+    ) -> IndigoResult<()>;
 
     // fn enable_blobs(&self) -> Result<Vec<Blob>, IndigoError>;
 
@@ -538,31 +535,21 @@ pub trait Device: NamedObject {
     ///         Err(state) => warn!("Device's CONNECTION property is in the {state:?}"),
     ///     }
     /// ```
-    fn connected(&self) -> Result<bool, &PropertyState> {
+    fn connected(&self) -> Result<bool,&PropertyState> {
         if let Some(connection) = self.get(CONNECTION_PROPERTY_NAME) {
             if connection.state() != &PropertyState::Ok {
                 return Err(connection.state());
             }
             for item in connection.items() {
                 let name = item.name();
-                if name == CONNECTION_CONNECTED_ITEM_NAME
-                    || name == CONNECTION_DISCONNECTED_ITEM_NAME
-                {
-                    return match item.value() {
-                        PropertyValue::Switch(sw) => {
-                            Ok(if name == CONNECTION_CONNECTED_ITEM_NAME {
-                                sw.on()
-                            } else {
-                                !sw.on()
-                            })
+                if name ==  CONNECTION_CONNECTED_ITEM_NAME || name == CONNECTION_DISCONNECTED_ITEM_NAME {
+                    return match item.property_type() {
+                        PropertyType::Switch => {
+                            Ok(if name == CONNECTION_CONNECTED_ITEM_NAME { item.on() } else { !item.on() })
                         }
                         _ => {
-                            warn!(
-                                "{}: expected switch value for item '{}', found '{:?}'",
-                                connection.name(),
-                                name,
-                                item.value()
-                            );
+                            warn!("{}: expected switch value for item '{}', found '{:?}'",
+                                connection.name(), name, item.value());
                             Err(&PropertyState::Alert)
                         }
                     };
@@ -576,11 +563,7 @@ pub trait Device: NamedObject {
             );
             return Err(&PropertyState::Alert);
         }
-        warn!(
-            "{}.{}: property not found",
-            self.name(),
-            CONNECTION_PROPERTY_NAME
-        );
+        warn!("{}.{}: property not found", self.name(), CONNECTION_PROPERTY_NAME);
         Err(&PropertyState::Alert)
     }
 
@@ -598,11 +581,7 @@ pub trait Device: NamedObject {
                 );
             }
         } else {
-            warn!(
-                "{} property not defined for device '{}'",
-                name::INFO_PROPERTY,
-                self.name()
-            );
+            warn!("{} property not defined for device '{}'", name::INFO_PROPERTY, self.name());
         }
         None
     }
@@ -612,8 +591,8 @@ pub trait Device: NamedObject {
     fn list_interfaces(&self) -> Option<Vec<Interface>> {
         let p = self.info()?;
         if let Some(item) = p.get_item(name::INFO_DEVICE_INTERFACE_ITEM) {
-            if let PropertyValue::Text(text) = item.value() {
-                if let Ok(code) = text.value().parse() {
+            if PropertyType::Text == item.property_type() {
+                if let Ok(code) = item.text().parse() {
                     Interface::map(code)
                 } else {
                     None
@@ -621,7 +600,7 @@ pub trait Device: NamedObject {
             } else {
                 warn!(
                     "DEVICE_INTERFACE item is not a text property value; found '{:?}'",
-                    item.value()
+                    item.property_type()
                 );
                 None
             }
@@ -635,11 +614,8 @@ pub trait Device: NamedObject {
 
 /// [Controller] that forwards [Property] requests to a [DeviceDelegate] and
 /// provides methods for publishing [Property] events to the [Bus].
-pub trait DeviceController<P, B>: Controller<B>
-where
-    P: Property,
-    B: Bus,
-{
+pub trait DeviceController<P, B>: Controller<P,B>
+where P: Property, B: Bus<P>, {
     /// Publish a [Property] definition event on the [Bus].
     fn define_property<'a>(&mut self, p: &'a P) -> IndigoResult<()>;
     /// Publish a [Property] update event on the [Bus].
@@ -653,16 +629,15 @@ where
 // -- ClientDelegate ----------------------------------------------------------
 
 /// Receives [Property] events forwarded by a [ClientController] attached to the [Bus].
-pub trait ClientDelegate: Delegate {
-    type Property: Property;
-    type ClientController: ClientController<Self::Property, Self::Bus>;
+pub trait ClientDelegate<P:Property>: Delegate<P> {
+    type ClientController: ClientController<P, Self::Bus>;
 
     /// Called each time the [Property] of a [Device] is defined.
     fn on_define_property<'a>(
         &'a mut self,
         c: &mut Self::ClientController,
         d: &'a str,
-        p: Self::Property,
+        p: P,
         msg: Option<&'a str>,
     ) -> IndigoResult<()> {
         debug!("'{}': '{}' property defined ", p.device(), p.name());
@@ -674,7 +649,7 @@ pub trait ClientDelegate: Delegate {
         &mut self,
         c: &mut Self::ClientController,
         d: &'a str,
-        p: Self::Property,
+        p: P,
         msg: Option<&'a str>,
     ) -> IndigoResult<()> {
         debug!("'{}': '{}' property updated ", p.device(), p.name());
@@ -686,7 +661,7 @@ pub trait ClientDelegate: Delegate {
         &mut self,
         c: &mut Self::ClientController,
         d: &'a str,
-        p: Self::Property,
+        p: P,
         msg: Option<&'a str>,
     ) -> IndigoResult<()> {
         debug!("'{}': '{}' property deleted ", p.device(), p.name());
@@ -698,7 +673,7 @@ pub trait ClientDelegate: Delegate {
         &mut self,
         c: &mut Self::ClientController,
         d: &'a str,
-        msg: &'a str,
+        msg: &'a str
     ) -> IndigoResult<()> {
         debug!("'{}': '{}'", d, msg);
         Ok::<(), IndigoError>(())
@@ -708,23 +683,18 @@ pub trait ClientDelegate: Delegate {
 // -- DeviceDelegate ----------------------------------------------------------
 
 /// Receive [Property] requests forwarded by a [DeviceController] attached to the [Bus].
-pub trait DeviceDelegate: Delegate {
-    type Property: Property;
-    type DeviceController: DeviceController<Self::Property, Self::Bus>;
+pub trait DeviceDelegate<P: Property>: Delegate<P> {
+    type DeviceController: DeviceController<P, Self::Bus>;
 
     /// Called when a request to enumerate all properties is made, returning the [Result::Ok] on success.
-    fn on_enumeration_request<'a>(
-        &mut self,
-        c: Self::DeviceController,
-        p: &'a Self::Property,
-    ) -> IndigoResult<()>;
+    fn on_enumeration_request<'a>(&mut self, c: Self::DeviceController, p: &'a P) -> IndigoResult<()>;
 
     /// Called when a request to define a property is made, returning the [PropertyState].
-    fn on_definition_request<'a>(&mut self, p: &'a Self::Property) -> IndigoResult<()>;
+    fn on_definition_request<'a>(&mut self, p: &'a P) -> IndigoResult<()>;
 
     /// Called when a request to update a property is made, returning [Result::Ok] on success.
-    fn on_update_request<'a>(&mut self, p: &'a Self::Property) -> IndigoResult<()>;
+    fn on_update_request<'a>(&mut self, p: &'a P) -> IndigoResult<()>;
 
     /// Called when a request to delete a property is made, returning [Result::Ok] on success.
-    fn on_deletion_request<'a>(&mut self, p: &'a Self::Property) -> IndigoResult<()>;
+    fn on_deletion_request<'a>(&mut self, p: &'a P) -> IndigoResult<()>;
 }

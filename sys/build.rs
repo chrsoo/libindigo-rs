@@ -64,6 +64,13 @@ fn main() -> std::io::Result<()> {
         .header(join_paths(&include, "indigo/indigo_config.h"))
         .header(join_paths(&include, "indigo/indigo_timer.h"))
         .header(join_paths(&include, "indigo/indigo_token.h"))
+        .use_core()
+        .formatter( bindgen::Formatter::Prettyplease )
+        .generate_cstr(true)
+        .default_enum_style(bindgen::EnumVariation::NewType {
+            is_bitfield: false, is_global: false
+        })
+        .bitfield_enum("indigo_device_interface")
         .derive_debug(true)
         //.no_copy(".*")
         // Tell cargo to invalidate the built crate whenever any of the

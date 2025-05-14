@@ -2,24 +2,39 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
-use crate::{indigo::*, NumberFormat};
+use crate::{
+    indigo::*,
+    property::{Number, PropertyData, PropertyItem, PropertyValue, Text},
+    NumberFormat,
+};
 /// INDI v2 implementation enabled by the `sys` feature and based on the
 /// [INDIGO](https://github.com/indigo-astronomy)system library
-use core::str;
-use std::{any::Any, str::Utf8Error};
+use core::{slice, str};
 use enum_primitive::*;
 use function_name::named;
 use libindigo_sys::*;
 use log::{debug, error, info, trace, warn};
 use parking_lot::{RwLock, RwLockWriteGuard};
-use core::{
-    ffi::{c_uint, c_void, CStr}, fmt::{Debug, Display}, marker::PhantomData, ptr, usize,error::Error
+use regex::Regex;
+use serde_json_core::from_slice;
+use std::{
+    collections::HashMap,
+    ops::DerefMut,
+    str::{FromStr, Utf8Error},
 };
-use url_fork::Url;
+
+use core::{
+    error::Error,
+    ffi::{c_uint, c_void, CStr},
+    fmt::{Debug, Display},
+    marker::PhantomData,
+    ptr,
+};
+use url_fork::{ParseError, Url};
 
 // -- Utility -----------------------------------------------------------------
 
-fn log_result<'a,T>(manager: &str, op: &str, result: &'a IndigoResult<T,impl Error>) {
+fn log_result<T>(manager: &str, op: &str, result: &IndigoResult<T>) {
     if let Err(e) = &result {
         debug!("'{}': {} {}", manager, op, e);
     } else {
@@ -27,8 +42,12 @@ fn log_result<'a,T>(manager: &str, op: &str, result: &'a IndigoResult<T,impl Err
     }
 }
 
-fn log_and_return_code<'a,T>(manager: &str, op: &str, result: &'a IndigoResult<T,impl Error>) -> u32 {
-    log_result(manager, op, result);
+fn log_and_return_code<'a, T>(
+    object: &str,
+    op: &str,
+    result: &'a IndigoResult<T>,
+) -> indigo_result {
+    log_result(object, op, result);
     lib_result_to_sys_code(result)
 }
 
@@ -55,7 +74,6 @@ pub struct SysError {
 }
 
 impl SysError {
-
     pub fn new(msg: &'static str) -> SysError {
         SysError { msg }
     }
@@ -65,27 +83,20 @@ impl SysError {
     }
 }
 
-impl From<BusError> for SysError {
+impl From<BusError> for IndigoError {
     fn from(value: BusError) -> Self {
         match value {
-            BusError::Failed => SysError::new("unspecified error"),
-            BusError::TooManyElements => SysError::new("too many elements"),
-            BusError::LockError => SysError::new("lock error"),
-            BusError::NotFound => SysError::new("not found"),
-            BusError::CantStartServer => SysError::new("network server start error"),
-            BusError::Duplicated => SysError::new("duplicated objects"),
-            BusError::Busy => SysError::new("resource is busy"),
-            BusError::GuideError => SysError::new("guide process errror"),
-            BusError::UnsupportedArchitecture => SysError::new("unsupported architecture"),
-            BusError::UnresolvedDependency => SysError::new("unresolved dependency"),
+            BusError::Failed => IndigoError::new("unspecified error"),
+            BusError::TooManyElements => IndigoError::new("too many elements"),
+            BusError::LockError => IndigoError::new("lock error"),
+            BusError::NotFound => IndigoError::new("not found"),
+            BusError::CantStartServer => IndigoError::new("network server start error"),
+            BusError::Duplicated => IndigoError::new("duplicated objects"),
+            BusError::Busy => IndigoError::new("resource is busy"),
+            BusError::GuideError => IndigoError::new("guide process errror"),
+            BusError::UnsupportedArchitecture => IndigoError::new("unsupported architecture"),
+            BusError::UnresolvedDependency => IndigoError::new("unresolved dependency"),
         }
-    }
-}
-
-impl From<Utf8Error> for SysError {
-    fn from(value: Utf8Error) -> Self {
-        warn!("failed UTF8 conversion: {value}");
-        SysError::new("failed UTF8 conversion")
     }
 }
 
@@ -107,25 +118,25 @@ enum_from_primitive! {
 /// Bus operation return status.
 pub enum BusError {
     /// unspecified error
-    Failed = indigo_result_INDIGO_FAILED,
+    Failed = indigo_result::INDIGO_FAILED.0,
     /// too many clients/devices/properties/items etc.
-    TooManyElements = indigo_result_INDIGO_TOO_MANY_ELEMENTS,
+    TooManyElements = indigo_result::INDIGO_TOO_MANY_ELEMENTS.0,
     /// mutex lock error
-    LockError = indigo_result_INDIGO_LOCK_ERROR,
+    LockError = indigo_result::INDIGO_LOCK_ERROR.0,
     /// unknown client/device/property/item etc.
-    NotFound = indigo_result_INDIGO_NOT_FOUND,
+    NotFound = indigo_result::INDIGO_NOT_FOUND.0,
     /// network server start failure
-    CantStartServer = indigo_result_INDIGO_CANT_START_SERVER,
+    CantStartServer = indigo_result::INDIGO_CANT_START_SERVER.0,
     /// duplicated items etc.
-    Duplicated = indigo_result_INDIGO_DUPLICATED,
+    Duplicated = indigo_result::INDIGO_DUPLICATED.0,
     /// operation failed because the resourse is busy.
-    Busy = indigo_result_INDIGO_BUSY,
+    Busy = indigo_result::INDIGO_BUSY.0,
     /// Guide process error (srar lost, SNR too low etc..).
-    GuideError = indigo_result_INDIGO_GUIDE_ERROR,
+    GuideError = indigo_result::INDIGO_GUIDE_ERROR.0,
     /// Unsupported architecture.
-    UnsupportedArchitecture = indigo_result_INDIGO_UNSUPPORTED_ARCH,
+    UnsupportedArchitecture = indigo_result::INDIGO_UNSUPPORTED_ARCH.0,
     /// Unresolved dependencies (missing library, executable, ...).
-    UnresolvedDependency = indigo_result_INDIGO_UNRESOLVED_DEPS,
+    UnresolvedDependency = indigo_result::INDIGO_UNRESOLVED_DEPS.0,
 }
 }
 
@@ -135,35 +146,81 @@ impl Into<c_uint> for BusError {
     }
 }
 
-pub fn sys_code_to_lib_result<'a,T>(t: T, op: &str, code: indigo_result) -> IndigoResult<T,SysError> {
-    if code == indigo_result_INDIGO_OK {
-        return Ok(t);
-    }
-
-    if let Some(e) = BusError::from_u32(code) {
-        match e {
-            BusError::Failed => Err(SysError::new("unspecified error")),
-            BusError::TooManyElements => Err(SysError::new("too many elements")),
-            BusError::LockError => Err(SysError::new("lock error")),
-            BusError::NotFound => Err(SysError::new("not found")),
-            BusError::CantStartServer => Err(SysError::new("network server start error")),
-            BusError::Duplicated => Err(SysError::new("duplicated objects")),
-            BusError::Busy => Err(SysError::new("resource is busy")),
-            BusError::GuideError => Err(SysError::new("guide process errror")),
-            BusError::UnsupportedArchitecture => Err(SysError::new("unsupported architecture")),
-            BusError::UnresolvedDependency => Err(SysError::new("unresolved dependency")),
+pub fn sys_code_to_lib_result<'a, T>(t: T, op: &str, code: indigo_result) -> IndigoResult<T> {
+    match code {
+        indigo_result::INDIGO_OK => Ok(t),
+        indigo_result::INDIGO_FAILED => Err(IndigoError::new("unspecified error")),
+        indigo_result::INDIGO_TOO_MANY_ELEMENTS => Err(IndigoError::new("too many elements")),
+        indigo_result::INDIGO_LOCK_ERROR => Err(IndigoError::new("lock error")),
+        indigo_result::INDIGO_NOT_FOUND => Err(IndigoError::new("not found")),
+        indigo_result::INDIGO_CANT_START_SERVER => {
+            Err(IndigoError::new("network server start error"))
         }
-    } else {
-        warn!("{}: unknown bus result code {}", op, code);
-        Err(SysError::new("unknown bus result code, please refer see log output!"))
+        indigo_result::INDIGO_DUPLICATED => Err(IndigoError::new("duplicated objects")),
+        indigo_result::INDIGO_BUSY => Err(IndigoError::new("resource is busy")),
+        indigo_result::INDIGO_GUIDE_ERROR => Err(IndigoError::new("guide process errror")),
+        indigo_result::INDIGO_UNSUPPORTED_ARCH => Err(IndigoError::new("unsupported architecture")),
+        indigo_result::INDIGO_UNRESOLVED_DEPS => Err(IndigoError::new("unresolved dependency")),
+        _ => {
+            warn!("{}: unknown bus result code {}", op, code.0);
+            Err(IndigoError::new("unknown bus result code"))
+        }
     }
 }
 
-fn lib_result_to_sys_code<'a, T>(result: &'a IndigoResult<T,impl Error>) -> u32 {
+fn lib_result_to_sys_code<'a, T>(result: &'a IndigoResult<T>) -> indigo_result {
     if let Err(_) = result {
-        indigo_result_INDIGO_FAILED
+        indigo_result::INDIGO_FAILED
     } else {
-        indigo_result_INDIGO_OK
+        indigo_result::INDIGO_OK
+    }
+}
+
+impl Into<indigo_property_state> for &PropertyState {
+    fn into(self) -> indigo_property_state {
+        match self {
+            PropertyState::Idle => indigo_property_state::INDIGO_IDLE_STATE,
+            PropertyState::Ok => indigo_property_state::INDIGO_OK_STATE,
+            PropertyState::Busy => indigo_property_state::INDIGO_BUSY_STATE,
+            PropertyState::Alert => indigo_property_state::INDIGO_ALERT_STATE,
+        }
+    }
+}
+
+impl TryFrom<indigo_property_state> for PropertyState {
+    type Error = IndigoError;
+
+    fn try_from(value: indigo_property_state) -> Result<Self, Self::Error> {
+        match value {
+            indigo_property_state::INDIGO_OK_STATE => Ok(PropertyState::Ok),
+            indigo_property_state::INDIGO_IDLE_STATE => Ok(PropertyState::Idle),
+            indigo_property_state::INDIGO_BUSY_STATE => Ok(PropertyState::Busy),
+            indigo_property_state::INDIGO_ALERT_STATE => Ok(PropertyState::Alert),
+            _ => {
+                warn!("unknown property state: {}", value.0);
+                Err(IndigoError::new("unknown property state"))
+            }
+        }
+    }
+}
+
+impl Into<indigo_property_perm> for &PropertyPermission {
+    fn into(self) -> indigo_property_perm {
+        match self {
+            PropertyPermission::ReadOnly => indigo_property_perm::INDIGO_RO_PERM,
+            PropertyPermission::ReadWrite => indigo_property_perm::INDIGO_RW_PERM,
+            PropertyPermission::WriteOnly => indigo_property_perm::INDIGO_WO_PERM,
+        }
+    }
+}
+
+impl Into<indigo_rule> for &SwitchRule {
+    fn into(self) -> indigo_rule {
+        match self {
+            SwitchRule::OneOfMany => indigo_rule::INDIGO_ONE_OF_MANY_RULE,
+            SwitchRule::AtMostOne => indigo_rule::INDIGO_AT_MOST_ONE_RULE,
+            SwitchRule::AnyOfMany => indigo_rule::INDIGO_ANY_OF_MANY_RULE,
+        }
     }
 }
 
@@ -171,22 +228,51 @@ enum_from_primitive! {
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(i32)]
 pub enum LogLevel {
-    Plain = indigo_log_levels_INDIGO_LOG_PLAIN,
-    Error = indigo_log_levels_INDIGO_LOG_ERROR,
-    Info = indigo_log_levels_INDIGO_LOG_INFO,
-    Debug = indigo_log_levels_INDIGO_LOG_DEBUG,
-    TraceBus = indigo_log_levels_INDIGO_LOG_TRACE_BUS,
-    Trace = indigo_log_levels_INDIGO_LOG_TRACE,
+    Plain = indigo_log_levels::INDIGO_LOG_PLAIN.0,
+    Error = indigo_log_levels::INDIGO_LOG_ERROR.0,
+    Info = indigo_log_levels::INDIGO_LOG_INFO.0,
+    Debug = indigo_log_levels::INDIGO_LOG_DEBUG.0,
+    TraceBus = indigo_log_levels::INDIGO_LOG_TRACE_BUS.0,
+    Trace = indigo_log_levels::INDIGO_LOG_TRACE.0,
 }
+}
+
+impl Into<indigo_log_levels> for LogLevel {
+    fn into(self) -> indigo_log_levels {
+        match self {
+            LogLevel::Plain => indigo_log_levels::INDIGO_LOG_PLAIN,
+            LogLevel::Error => indigo_log_levels::INDIGO_LOG_ERROR,
+            LogLevel::Info => indigo_log_levels::INDIGO_LOG_INFO,
+            LogLevel::Debug => indigo_log_levels::INDIGO_LOG_DEBUG,
+            LogLevel::TraceBus => indigo_log_levels::INDIGO_LOG_TRACE_BUS,
+            LogLevel::Trace => indigo_log_levels::INDIGO_LOG_TRACE,
+        }
+    }
 }
 
 impl From<&PropertyState> for u32 {
     fn from(s: &PropertyState) -> Self {
         match s {
-            PropertyState::Idle => indigo_property_state_INDIGO_IDLE_STATE,
-            PropertyState::Ok => indigo_property_state_INDIGO_OK_STATE,
-            PropertyState::Busy => indigo_property_state_INDIGO_BUSY_STATE,
-            PropertyState::Alert => indigo_property_state_INDIGO_ALERT_STATE,
+            PropertyState::Idle => indigo_property_state::INDIGO_IDLE_STATE.0,
+            PropertyState::Ok => indigo_property_state::INDIGO_OK_STATE.0,
+            PropertyState::Busy => indigo_property_state::INDIGO_BUSY_STATE.0,
+            PropertyState::Alert => indigo_property_state::INDIGO_ALERT_STATE.0,
+        }
+    }
+}
+
+impl TryFrom<indigo_log_levels> for LogLevel {
+    type Error = IndigoError;
+
+    fn try_from(value: indigo_log_levels) -> Result<Self, IndigoError> {
+        match value {
+            indigo_log_levels::INDIGO_LOG_PLAIN => Ok(LogLevel::Plain),
+            indigo_log_levels::INDIGO_LOG_TRACE => Ok(LogLevel::Trace),
+            indigo_log_levels::INDIGO_LOG_TRACE_BUS => Ok(LogLevel::TraceBus),
+            indigo_log_levels::INDIGO_LOG_DEBUG => Ok(LogLevel::Debug),
+            indigo_log_levels::INDIGO_LOG_INFO => Ok(LogLevel::Info),
+            indigo_log_levels::INDIGO_LOG_ERROR => Ok(LogLevel::Error),
+            _ => Err(IndigoError::new("unknown log level")),
         }
     }
 }
@@ -194,11 +280,11 @@ impl From<&PropertyState> for u32 {
 impl From<&PropertyType> for u32 {
     fn from(t: &PropertyType) -> Self {
         match t {
-            PropertyType::Text => indigo_property_type_INDIGO_TEXT_VECTOR,
-            PropertyType::Number => indigo_property_type_INDIGO_NUMBER_VECTOR,
-            PropertyType::Switch => indigo_property_type_INDIGO_SWITCH_VECTOR,
-            PropertyType::Light => indigo_property_type_INDIGO_LIGHT_VECTOR,
-            PropertyType::Blob => indigo_property_type_INDIGO_BLOB_VECTOR,
+            PropertyType::Text => indigo_property_type::INDIGO_TEXT_VECTOR.0,
+            PropertyType::Number => indigo_property_type::INDIGO_NUMBER_VECTOR.0,
+            PropertyType::Switch => indigo_property_type::INDIGO_SWITCH_VECTOR.0,
+            PropertyType::Light => indigo_property_type::INDIGO_LIGHT_VECTOR.0,
+            PropertyType::Blob => indigo_property_type::INDIGO_BLOB_VECTOR.0,
         }
     }
 }
@@ -206,9 +292,9 @@ impl From<&PropertyType> for u32 {
 impl From<&PropertyPermission> for u32 {
     fn from(p: &PropertyPermission) -> Self {
         match p {
-            PropertyPermission::ReadOnly => indigo_property_perm_INDIGO_RO_PERM,
-            PropertyPermission::ReadWrite => indigo_property_perm_INDIGO_RW_PERM,
-            PropertyPermission::WriteOnly => indigo_property_perm_INDIGO_WO_PERM,
+            PropertyPermission::ReadOnly => indigo_property_perm::INDIGO_RO_PERM.0,
+            PropertyPermission::ReadWrite => indigo_property_perm::INDIGO_RW_PERM.0,
+            PropertyPermission::WriteOnly => indigo_property_perm::INDIGO_WO_PERM.0,
         }
     }
 }
@@ -216,9 +302,9 @@ impl From<&PropertyPermission> for u32 {
 impl From<&SwitchRule> for u32 {
     fn from(r: &SwitchRule) -> Self {
         match r {
-            SwitchRule::OneOfMany => indigo_rule_INDIGO_ONE_OF_MANY_RULE,
-            SwitchRule::AtMostOne => indigo_rule_INDIGO_AT_MOST_ONE_RULE,
-            SwitchRule::AnyOfMany => indigo_rule_INDIGO_ANY_OF_MANY_RULE,
+            SwitchRule::OneOfMany => indigo_rule::INDIGO_ONE_OF_MANY_RULE.0,
+            SwitchRule::AtMostOne => indigo_rule::INDIGO_AT_MOST_ONE_RULE.0,
+            SwitchRule::AnyOfMany => indigo_rule::INDIGO_ANY_OF_MANY_RULE.0,
         }
     }
 }
@@ -250,35 +336,181 @@ impl From<&SwitchRule> for u32 {
 /// >   values
 /// > );
 /// > ```
-pub struct SysProperty<'a> {
+pub struct SysProperty {
     sys: *mut indigo_property,
-    property_type: PropertyType,
-    items: Vec<SysPropertyItem<'a>>,
+    type_: PropertyType,
+    items: Vec<PropertyItem>,
 }
 
-impl<'a> TryFrom<*mut indigo_property> for SysProperty<'a> {
-    type Error = SysError;
+impl SysProperty {
+    fn new(name: &str, ptype: PropertyType, device: &str) -> SysProperty {
+        let sys = Box::new(indigo_property::new(name, device, (&ptype).into()));
 
-    fn try_from(value: *mut indigo_property) -> Result<Self, Self::Error> {
+        // let n = sys.count as usize;
+        // let items = unsafe { sys.items.as_slice(n) }
+        //     .iter()
+        //     .map(|i| SysPropertyItem::new(i, &ptype))
+        //     .collect();
+
+        SysProperty {
+            sys: Box::into_raw(sys),
+            type_: ptype,
+            items: Vec::new(),
+        }
+    }
+}
+
+impl Debug for SysProperty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SysProperty")
+            .field("sys", &self.sys)
+            .field("property_type", &self.type_)
+            // .field("items", &self.items())
+            .finish()
+    }
+}
+/// Convert an [indigo_property] to a [SysProperty] failing on first error.
+impl TryFrom<*mut indigo_property> for SysProperty {
+    type Error = IndigoError;
+    fn try_from(value: *mut indigo_property) -> IndigoResult<Self> {
         let sys = unsafe { &*value };
-        let property_type = PropertyType::from_u32(sys.type_)
-            .ok_or(SysError::new("could not convert property type"))?;
-
+        let type_ = PropertyType::try_from(sys.type_)?;
         let n = sys.count as usize;
-        let items = unsafe { sys.items.as_slice(n) }
+
+        let items: Result<Vec<_>, _> = unsafe { sys.items.as_slice(n) }
             .iter()
-            .map(|i| SysPropertyItem::new(i, &property_type))
+            .map(|i| -> Result<PropertyItem, IndigoError> {
+                let name = buf_to_str(&i.name);
+                let value = unsafe {
+                    match type_ {
+                        PropertyType::Text => PropertyValue::try_from(i.__bindgen_anon_1.text)?,
+                        PropertyType::Number => PropertyValue::try_from(i.__bindgen_anon_1.number)?,
+                        PropertyType::Switch => PropertyValue::try_from(i.__bindgen_anon_1.sw)?,
+                        PropertyType::Light => PropertyValue::try_from(i.__bindgen_anon_1.light)?,
+                        PropertyType::Blob => PropertyValue::try_from(i.__bindgen_anon_1.blob)?,
+                    }
+                };
+                Ok(PropertyItem::new(name, value))
+            })
             .collect();
 
         Ok(SysProperty {
             sys: value,
-            property_type,
-            items,
+            type_,
+            items: items?,
         })
     }
 }
 
-impl<'a> NamedObject for SysProperty<'a> {
+/// Convert INDIGO text to [PropertyValue].
+impl TryFrom<indigo_item__bindgen_ty_1__bindgen_ty_1> for PropertyValue {
+    type Error = IndigoError;
+    fn try_from(text: indigo_item__bindgen_ty_1__bindgen_ty_1) -> Result<Self, Self::Error> {
+        let value = if text.long_value.is_null() {
+            buf_to_str(&text.value)
+        } else {
+            let n = text.length as usize;
+            let ptr = text.long_value as *const u8;
+            let bytes = unsafe { slice::from_raw_parts(ptr, n) };
+            CStr::from_bytes_until_nul(&bytes[0..n])
+                .expect("could not read CStr")
+                .to_str()
+                .expect("could not convert to UTF8 str")
+        };
+        Ok(PropertyValue::text(value))
+    }
+}
+
+/// Convert INDIGO number to [PropertyValue].
+impl TryFrom<indigo_item__bindgen_ty_1__bindgen_ty_2> for PropertyValue {
+    type Error = IndigoError;
+    fn try_from(number: indigo_item__bindgen_ty_1__bindgen_ty_2) -> Result<Self, Self::Error> {
+        let fmt = buf_to_str(&number.format);
+        let fmt = NumberFormat::new(fmt);
+
+        Ok(PropertyValue::number(
+            number.value,
+            number.target,
+            fmt,
+            number.min,
+            number.max,
+            number.step,
+        ))
+    }
+}
+
+/// Convert INDIGO switch to [PropertyValue].
+impl TryFrom<indigo_item__bindgen_ty_1__bindgen_ty_3> for PropertyValue {
+    type Error = IndigoError;
+    fn try_from(switch: indigo_item__bindgen_ty_1__bindgen_ty_3) -> Result<Self, Self::Error> {
+        Ok(PropertyValue::switch(switch.value))
+    }
+}
+
+/// Convert INDIGO light to [PropertyValue].
+impl TryFrom<indigo_item__bindgen_ty_1__bindgen_ty_4> for PropertyValue {
+    type Error = IndigoError;
+    fn try_from(light: indigo_item__bindgen_ty_1__bindgen_ty_4) -> Result<Self, Self::Error> {
+        if let Some(value) = PropertyState::from_u32(light.value.0) {
+            Ok(PropertyValue::light(value))
+        } else {
+            Err(IndigoError::new("missing light value"))
+        }
+    }
+}
+
+impl From<ParseError> for IndigoError {
+    fn from(value: ParseError) -> Self {
+        IndigoError::new(value.to_string().as_str())
+    }
+}
+
+/// Convert INDIGO blob to [PropertyValue].
+impl TryFrom<indigo_item__bindgen_ty_1__bindgen_ty_5> for PropertyValue {
+    type Error = IndigoError;
+    fn try_from(blob: indigo_item__bindgen_ty_1__bindgen_ty_5) -> Result<Self, Self::Error> {
+        let s = buf_to_str(&blob.url);
+        let url = if s.is_empty() {
+            None
+        } else {
+            Some(Url::from_str(s)?)
+        };
+
+        let ext = buf_to_str(&blob.format);
+        let size = blob.size as usize;
+        let value = unsafe {
+            if blob.value.is_null() || size == 0 {
+                None
+            } else {
+                Some(Vec::from_raw_parts(blob.value as *mut u8, size, size))
+            }
+        };
+
+        Ok(PropertyValue::blob(size, ext, value, url))
+    }
+    // fn url(&self) -> Option<&Url> {
+    //     Option::as_ref(&self.url)
+    // }
+
+    // fn data(&self) -> Option<&[u8]> {
+    //     let v = unsafe { self.sys.__bindgen_anon_1.blob };
+    //     if v.value.is_null() {
+    //         None
+    //     } else {
+    //         Some(unsafe { slice::from_raw_parts(v.value as *const u8, v.size as usize) })
+    //     }
+    // }
+
+    // fn extension(&self) -> &str {
+    //     buf_to_str(unsafe { &self.sys.__bindgen_anon_1.blob.format })
+    // }
+
+    // fn size(&self) -> usize {
+    //     unsafe { self.sys.__bindgen_anon_1.blob.size as usize }
+    // }
+}
+
+impl NamedObject for SysProperty {
     fn name(&self) -> &str {
         unsafe { buf_to_str(&(*self.sys).name) }
     }
@@ -288,9 +520,7 @@ impl<'a> NamedObject for SysProperty<'a> {
     }
 }
 
-impl<'a> Property for SysProperty<'a> {
-    type Item = SysPropertyItem<'a>;
-
+impl Property for SysProperty {
     fn device(&self) -> &str {
         unsafe { buf_to_str(&(*self.sys).device) }
     }
@@ -305,33 +535,33 @@ impl<'a> Property for SysProperty<'a> {
 
     fn state(&self) -> &PropertyState {
         match unsafe { (*self.sys).state } {
-            indigo_property_state_INDIGO_IDLE_STATE => &PropertyState::Idle,
-            indigo_property_state_INDIGO_OK_STATE => &PropertyState::Ok,
-            indigo_property_state_INDIGO_BUSY_STATE => &PropertyState::Busy,
-            indigo_property_state_INDIGO_ALERT_STATE => &PropertyState::Alert,
-            s => unimplemented!("property state '{}' not implemented", s),
+            indigo_property_state::INDIGO_IDLE_STATE => &PropertyState::Idle,
+            indigo_property_state::INDIGO_OK_STATE => &PropertyState::Ok,
+            indigo_property_state::INDIGO_BUSY_STATE => &PropertyState::Busy,
+            indigo_property_state::INDIGO_ALERT_STATE => &PropertyState::Alert,
+            s => unimplemented!("property state '{}' not implemented", s.0),
         }
     }
 
     fn property_type(&self) -> &PropertyType {
-        &self.property_type
+        &self.type_
     }
 
     fn perm(&self) -> &PropertyPermission {
         match unsafe { (*self.sys).perm } {
-            indigo_property_perm_INDIGO_RO_PERM => &PropertyPermission::ReadOnly,
-            indigo_property_perm_INDIGO_RW_PERM => &PropertyPermission::ReadWrite,
-            indigo_property_perm_INDIGO_WO_PERM => &PropertyPermission::WriteOnly,
-            p => unimplemented!("property permission '{}' not implemented", p),
+            indigo_property_perm::INDIGO_RO_PERM => &PropertyPermission::ReadOnly,
+            indigo_property_perm::INDIGO_RW_PERM => &PropertyPermission::ReadWrite,
+            indigo_property_perm::INDIGO_WO_PERM => &PropertyPermission::WriteOnly,
+            p => unimplemented!("property permission '{}' not implemented", p.0),
         }
     }
 
     fn rule(&self) -> &SwitchRule {
         match unsafe { (*self.sys).rule } {
-            indigo_rule_INDIGO_ANY_OF_MANY_RULE => &SwitchRule::AnyOfMany,
-            indigo_rule_INDIGO_AT_MOST_ONE_RULE => &SwitchRule::AtMostOne,
-            indigo_rule_INDIGO_ONE_OF_MANY_RULE => &SwitchRule::OneOfMany,
-            r => unimplemented!("switch rule '{}' not implemented", r),
+            indigo_rule::INDIGO_ANY_OF_MANY_RULE => &SwitchRule::AnyOfMany,
+            indigo_rule::INDIGO_AT_MOST_ONE_RULE => &SwitchRule::AtMostOne,
+            indigo_rule::INDIGO_ONE_OF_MANY_RULE => &SwitchRule::OneOfMany,
+            r => unimplemented!("switch rule '{}' not implemented", r.0),
         }
     }
 
@@ -343,39 +573,39 @@ impl<'a> Property for SysProperty<'a> {
         unsafe { (*self.sys).defined }
     }
 
-    fn items<'b>(&'b self) -> impl Iterator<Item = &'b Self::Item> {
+    fn items(&self) -> impl Iterator<Item = &PropertyItem> {
         self.items.iter()
     }
 
-    fn update<'b>(&mut self, p: &'b Self) {
-        if self.sys == p.sys {
-            trace!("skipping update of same property instance");
-            return;
-        }
-        trace!("updating property by copying values");
-        let sys = unsafe { &mut *self.sys };
+    // fn update(&mut self, p: &Self) {
+    //     if self.sys == p.sys {
+    //         trace!("skipping update of same property instance");
+    //         return;
+    //     }
+    //     trace!("updating property by copying values");
+    //     let sys = unsafe { &mut *self.sys };
 
-        copy_from_str(sys.device, p.device());
-        copy_from_str(sys.device, p.device());
-        copy_from_str(sys.group, p.group());
-        copy_from_str(sys.hints, p.hints());
-        sys.state = u32::from(p.state());
-        sys.type_ = u32::from(p.property_type());
-        sys.perm = u32::from(p.perm());
-        sys.rule = u32::from(p.rule());
-        sys.hidden = p.hidden();
-        sys.defined = p.defined();
+    //     copy_from_str(sys.device, p.device());
+    //     copy_from_str(sys.device, p.device());
+    //     copy_from_str(sys.group, p.group());
+    //     copy_from_str(sys.hints, p.hints());
+    //     sys.state = p.state().into();
+    //     sys.type_ = p.property_type().into();
+    //     sys.perm = p.perm().into();
+    //     sys.rule = p.rule().into();
+    //     sys.hidden = p.hidden();
+    //     sys.defined = p.defined();
 
-        // let all: HashSet<&Self::Item> = self.items().collect();
-        // for item in &mut self.items {
-        //     item.update()
-        // }
+    //     // let all: HashSet<&Self::Item> = self.items().collect();
+    //     // for item in &mut self.items {
+    //     //     item.update()
+    //     // }
 
-        /* TODO items */
-    }
+    //     /* TODO items */
+    // }
 }
 
-impl<'a> Display for SysProperty<'a> {
+impl Display for SysProperty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -393,159 +623,148 @@ impl<'a> Display for SysProperty<'a> {
     }
 }
 
-pub struct SysPropertyItem<'s> {
-    sys: &'s indigo_item,
-    property_type: PropertyType,
+impl From<SysProperty> for PropertyData {
+    fn from(p: SysProperty) -> Self {
+        let items = p.items()
+            .map(|i| i.to_owned())
+            .collect()
+            ;
+        PropertyData::new(
+            p.name(),
+            p.device(),
+            p.group(),
+            p.hints(),
+            p.state().to_owned(),
+            p.property_type().to_owned(),
+            p.perm().to_owned(),
+            p.rule().to_owned(),
+            p.hidden(),
+            p.defined(),
+            items,
+        )
+    }
 }
 
-impl<'s> SysPropertyItem<'s> {
-    fn new(sys: &'s indigo_item, property_type: &PropertyType) -> Self {
-        Self {
-            sys,
-            property_type: property_type.to_owned(),
+impl TryFrom<indigo_property_type> for PropertyType {
+    type Error = IndigoError;
+
+    fn try_from(value: indigo_property_type) -> Result<Self, Self::Error> {
+        match value {
+            indigo_property_type::INDIGO_TEXT_VECTOR => Ok(PropertyType::Text),
+            indigo_property_type::INDIGO_NUMBER_VECTOR => Ok(PropertyType::Number),
+            indigo_property_type::INDIGO_LIGHT_VECTOR => Ok(PropertyType::Light),
+            indigo_property_type::INDIGO_SWITCH_VECTOR => Ok(PropertyType::Switch),
+            indigo_property_type::INDIGO_BLOB_VECTOR => Ok(PropertyType::Blob),
+            t => {
+                warn!("unknonwn property type: {}", t.0);
+                Err(IndigoError::new("unknown property type"))
+            }
         }
     }
 }
 
-impl<'s> Debug for SysPropertyItem<'s> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SysPropertyItem")
-            .field("name", &self.name())
-            .field("label", &self.label())
-            .finish()
-    }
-}
-
-impl<'s> NamedObject for SysPropertyItem<'s> {
-    fn name(&self) -> &str {
-        buf_to_str(&self.sys.name)
-    }
-
-    fn label(&self) -> &str {
-        buf_to_str(&self.sys.label)
-    }
-}
-
-impl<'s> PropertyItem for SysPropertyItem<'s> {
-    fn property_type(&self) -> PropertyType {
-        self.property_type
-    }
-}
-
-impl<'s> SwitchItem for SysPropertyItem<'s> {
-    fn on(&self) -> bool {
-        unsafe { self.sys.__bindgen_anon_1.sw.value }
-    }
-}
-
-impl<'s> TextItem for SysPropertyItem<'s> {
-    fn text(&self) -> &str {
-        // let v = unsafe { sys.__bindgen_anon_1.text };
-        // let text = if v.long_value.is_null() {
-        //     buf_to_str(&v.value)
-        // } else {
-        //     ptr_to_str(v.long_value).unwrap()
-        // };
-        todo!()
-    }
-}
-
-impl<'s> LightItem for SysPropertyItem<'s> {
-    fn state(&self) -> PropertyState {
-        PropertyState::from_u32(unsafe { self.sys.__bindgen_anon_1.light.value })
-            .expect("unknown property state")
-    }
-}
-
-impl<'s> BlobItem for SysPropertyItem<'s> {
-    fn url(&self) -> Option<&Url> {
-        todo!()
-    }
-
-    fn data(&self) -> Option<&[u8]> {
-        todo!()
-    }
-
-    fn format(&self) -> &str {
-        buf_to_str(unsafe { &self.sys.__bindgen_anon_1.blob.format })
-    }
-
-    fn size(&self) -> usize {
-        unsafe { self.sys.__bindgen_anon_1.blob.size as usize }
-    }
-}
-
-impl<'s> NumberItem for SysPropertyItem<'s> {
-    fn value(&self) -> f64 {
-        unsafe { self.sys.__bindgen_anon_1.number.value }
-    }
-
-    fn format(&self) -> NumberFormat {
-        NumberFormat::new(buf_to_str(unsafe {
-            &self.sys.__bindgen_anon_1.number.format
-        }))
-    }
-
-    fn min(&self) -> f64 {
-        unsafe { self.sys.__bindgen_anon_1.number.min }
-    }
-
-    fn max(&self) -> f64 {
-        unsafe { self.sys.__bindgen_anon_1.number.max }
-    }
-
-    fn step(&self) -> f64 {
-        unsafe { self.sys.__bindgen_anon_1.number.step }
-    }
-
-    fn target(&self) -> f64 {
-        unsafe { self.sys.__bindgen_anon_1.number.target }
+impl Into<indigo_property_type> for &PropertyType {
+    fn into(self) -> indigo_property_type {
+        match self {
+            PropertyType::Text => indigo_property_type::INDIGO_TEXT_VECTOR,
+            PropertyType::Number => indigo_property_type::INDIGO_NUMBER_VECTOR,
+            PropertyType::Switch => indigo_property_type::INDIGO_SWITCH_VECTOR,
+            PropertyType::Light => indigo_property_type::INDIGO_LIGHT_VECTOR,
+            PropertyType::Blob => indigo_property_type::INDIGO_BLOB_VECTOR,
+        }
     }
 }
 
 // -- SysClientController -----------------------------------------------------
-
 /// Client to manage devices attached to the INDIGO [Bus].
-pub struct SysClientController<'s,C>
-where C: ClientDelegate<SysProperty<'s>> {
+pub struct SysClientController<D>
+where
+    D: ClientDelegate<Property = SysProperty, Bus = SysBus>,
+{
     sys: *mut indigo_client,
-    _phantom: &'s PhantomData<C>,
+    delegate: PhantomData<D>,
 }
 
-impl<'s,C> NamedObject for SysClientController<'s,C>
-where C: ClientDelegate<SysProperty<'s>> {
+impl<'s, D> NamedObject for SysClientController<D>
+where
+    D: ClientDelegate<
+        Property = SysProperty,
+        Bus = SysBus,
+        BusController = Self,
+        ClientController = Self,
+    >,
+{
     fn name(&self) -> &str {
         buf_to_str(unsafe { &(*self.sys).name })
     }
 }
 
-impl<'s,C> AttachedObject for SysClientController<'s, C>
-where C: ClientDelegate<SysProperty<'s>> {}
+type BUS_CALLBACK<'a, D: ClientDelegate> =
+    fn(delegate: &'a mut D, controller: &mut D::BusController) -> IndigoResult<()>;
 
-impl<'s,C> BusController for SysClientController<'s, C>
-where C: ClientDelegate<SysProperty<'s>> {
-    fn detach(self) -> std::result::Result<(), impl core::error::Error> {
+impl<D> Controller<SysBus> for SysClientController<D>
+where
+    D: ClientDelegate<
+        Property = SysProperty,
+        Bus = SysBus,
+        BusController = Self,
+        ClientController = Self,
+    >,
+{
+    /// Attach the self to the [Bus].
+    fn attach(&mut self, _: &mut SysBus) -> IndigoResult<()> {
+        trace!("attaching '{}' client from bus...", self.name());
+        let code = unsafe { indigo_attach_client(self.sys) };
+        let name = self.name().to_owned();
+
+        sys_code_to_lib_result((), "indigo_attach_client", code)
+            .inspect(|_| info!("detached '{}' client from bus", name))
+            .inspect_err(|e| warn!("'{}': {}", name, e))
+    }
+
+    fn detach(&mut self) -> IndigoResult<()> {
         trace!("detaching '{}' client from bus...", self.name());
         let code = unsafe { indigo_detach_client(self.sys) };
+        let name = self.name().to_owned();
+
         sys_code_to_lib_result((), "indigo_detach_client", code)
-            .inspect(|_| info!("detached '{}' client from bus", self.name()))
-            .inspect_err(|e| warn!("'{}': {}", self.name(), e))
+            .inspect(|_| info!("detached '{}' client from bus", name))
+            .inspect_err(|e| warn!("'{}': {}", name, e))
     }
 }
 
-impl<'s, C: ClientDelegate<SysProperty<'s>>> Drop for SysClientController<'s, C> {
-    fn drop(&mut self) {
-        let client = unsafe { Box::from_raw(self.sys) };
-        let state = unsafe { Box::from_raw(client.client_context) };
-        drop(state);
-        drop(client);
-    }
-}
+// impl<'s, D: ClientDelegate<SysProperty,SysBus,Self>> Drop for SysClientController<D> {
+//     fn drop(&mut self) {
+//         if !self.sys.is_null() {
+//             let client = unsafe { Box::from_raw(self.sys) };
+//             if !client.client_context.is_null() {
+//                 let state = unsafe { Box::from_raw(client.client_context) };
+//                 drop(state);
+//             }
+//             drop(client);
+//         }
+//     }
+// }
 
-impl<'s,C> SysClientController<'s,C>
-where C: ClientDelegate<SysProperty<'s>> {
+type PROPERTY_CALLBACK<D: ClientDelegate> = fn(
+    delegate: &mut D,
+    controller: &mut D::ClientController,
+    device: &str,
+    property: D::Property,
+    message: Option<&str>,
+) -> IndigoResult<()>;
+
+impl<D> SysClientController<D>
+where
+    D: ClientDelegate<
+        Property = SysProperty,
+        Bus = SysBus,
+        BusController = Self,
+        ClientController = Self,
+    >,
+{
     /// Create new [SysClient] mapping INDGO system callbacks to a [ClientObject].
-    fn new(c: C) -> Self {
+    pub fn new(c: D) -> Self {
         let name = str_to_buf(c.name());
         let state = Box::new(RwLock::new(c));
         let indigo_client = Box::new(indigo_client {
@@ -554,8 +773,8 @@ where C: ClientDelegate<SysProperty<'s>> {
             // unbox the mutex state and create a raw ptr to the state mutex
             client_context: Box::into_raw(state) as *mut c_void,
             // last result of a bus operation, assume all is OK from the beginning
-            last_result: indigo_result_INDIGO_OK,
-            version: indigo_version_INDIGO_VERSION_CURRENT,
+            last_result: indigo_result::INDIGO_OK,
+            version: indigo_version::INDIGO_VERSION_CURRENT,
             enable_blob_mode_records: ptr::null_mut(),
             attach: Some(Self::on_attach),
             detach: Some(Self::on_detach),
@@ -569,16 +788,28 @@ where C: ClientDelegate<SysProperty<'s>> {
         let sys = Box::into_raw(indigo_client);
         SysClientController {
             sys,
-            _phantom: &PhantomData,
+            delegate: PhantomData,
         }
     }
 
     /// Acquire a lock on the client state held in the `client_context` of sys.
-    fn write_lock<'b>(client: *mut indigo_client) -> RwLockWriteGuard<'b, C> {
+    fn write_lock2<'b>(&self) -> RwLockWriteGuard<'b, D> {
+        let c = unsafe { &*(self.sys) };
+        let name = buf_to_str(&c.name);
+        // https://stackoverflow.com/a/24191977/51016
+        let state = unsafe { &mut *(c.client_context as *mut RwLock<D>) };
+
+        trace!("'{}': acquiring delegate write lock...", name);
+        let lock = state.write();
+        trace!("'{}': delegate write lock acquired.", name);
+        lock
+    }
+    /// Acquire a lock on the client state held in the `client_context` of sys.
+    fn write_lock<'b>(client: *mut indigo_client) -> RwLockWriteGuard<'b, D> {
         let c = unsafe { &*client };
         let name = buf_to_str(&c.name);
         // https://stackoverflow.com/a/24191977/51016
-        let state = unsafe { &mut *(c.client_context as *mut RwLock<C>) };
+        let state = unsafe { &mut *(c.client_context as *mut RwLock<D>) };
 
         trace!("'{}': acquiring delegate write lock...", name);
         let lock = state.write();
@@ -591,13 +822,13 @@ where C: ClientDelegate<SysProperty<'s>> {
         d: *mut indigo_device,
         p: *mut indigo_property,
         m: *const i8,
-    ) -> Result<(
-        RwLockWriteGuard<'b, C>,
+    ) -> IndigoResult<(
+        RwLockWriteGuard<'b, D>,
         &'b str,
         &'b str,
-        SysProperty<'b>,
+        SysProperty,
         Option<&'b str>,
-    ), SysError> {
+    )> {
         let object = Self::write_lock(c);
         let c = buf_to_str(&(unsafe { &*c }).name);
         let d = buf_to_str(&(unsafe { &*d }).name);
@@ -605,12 +836,17 @@ where C: ClientDelegate<SysProperty<'s>> {
         let m = if m.is_null() {
             None
         } else {
-            unsafe {
-                Some(CStr::from_ptr(m).to_str()?)
-            }
+            unsafe { Some(CStr::from_ptr(m).to_str()?) }
         };
 
         Ok((object, c, d, p, m))
+    }
+
+    fn controller(sys: *mut indigo_client) -> SysClientController<D> {
+        SysClientController {
+            sys,
+            delegate: PhantomData::<D>,
+        }
     }
 
     // -- libindigo-sys unsafe callback methods that delegate to the CallbackHandler implementation.
@@ -620,11 +856,12 @@ where C: ClientDelegate<SysProperty<'s>> {
     unsafe extern "C" fn on_attach(c: *mut indigo_client) -> indigo_result {
         log_sys_callback(c, function_name!(), ptr::null());
 
-        let mut delegate = Self::write_lock(c);
-        let c = buf_to_str(&(unsafe { &*c }).name);
+        let controller = &mut Self::controller(c);
+        let mut delegate = Self::write_lock(controller.sys);
 
-        let result = delegate.on_attach();
-        log_and_return_code(c, function_name!(), &result)
+        let result = delegate.on_attach(controller);
+
+        log_and_return_code(controller.name(), function_name!(), &result)
     }
 
     #[named]
@@ -632,11 +869,12 @@ where C: ClientDelegate<SysProperty<'s>> {
     unsafe extern "C" fn on_detach(c: *mut indigo_client) -> indigo_result {
         log_sys_callback(c, function_name!(), ptr::null());
 
-        let mut delegate = Self::write_lock(c);
-        let c = buf_to_str(&(unsafe { &*c }).name);
+        let controller = &mut Self::controller(c);
+        let mut delegate = Self::write_lock(controller.sys);
 
-        let result = delegate.on_detach();
-        log_and_return_code(c, function_name!(), &result)
+        let result = delegate.on_detach(controller);
+
+        log_and_return_code(controller.name(), function_name!(), &result)
     }
 
     #[named]
@@ -648,14 +886,7 @@ where C: ClientDelegate<SysProperty<'s>> {
         m: *const i8,
     ) -> indigo_result {
         log_sys_callback(c, function_name!(), m);
-        let result = SysClientController::<C>::map_param(c, d, p, m);
-        if let Ok((mut delegate, c, d, p, m)) = result {
-            let result = delegate.on_define_property(d, p, m);
-            log_and_return_code(c, function_name!(), &result)
-        } else {
-            let c = buf_to_str(&(unsafe { &*c }).name);
-            log_and_return_code(c, function_name!(), &result)
-        }
+        SysClientController::<D>::delegate_property_event(D::on_define_property, c, d, p, m)
     }
 
     #[named]
@@ -667,14 +898,7 @@ where C: ClientDelegate<SysProperty<'s>> {
         m: *const i8,
     ) -> indigo_result {
         log_sys_callback(c, function_name!(), m);
-        let result = SysClientController::<C>::map_param(c, d, p, m);
-        if let Ok((mut delegate, c, d, p, m)) = result {
-            let result = delegate.on_update_property(d, p, m);
-            log_and_return_code(c, function_name!(), &result)
-        } else {
-            let c = buf_to_str(&(unsafe { &*c }).name);
-            log_and_return_code(c, function_name!(), &result)
-        }
+        SysClientController::<D>::delegate_property_event(D::on_update_property, c, d, p, m)
     }
 
     #[named]
@@ -686,14 +910,7 @@ where C: ClientDelegate<SysProperty<'s>> {
         m: *const i8,
     ) -> indigo_result {
         log_sys_callback(c, function_name!(), m);
-        let result = SysClientController::<C>::map_param(c, d, p, m);
-        if let Ok((mut delegate, c, d, p, m)) = result {
-            let result = delegate.on_delete_property(d, p, m);
-            log_and_return_code(c, function_name!(), &result)
-        } else {
-            let c = buf_to_str(&(unsafe { &*c }).name);
-            log_and_return_code(c, function_name!(), &result)
-        }
+        SysClientController::<D>::delegate_property_event(D::on_delete_property, c, d, p, m)
     }
 
     #[named]
@@ -705,34 +922,75 @@ where C: ClientDelegate<SysProperty<'s>> {
     ) -> indigo_result {
         log_sys_callback(c, function_name!(), m);
 
-        let mut delegate = Self::write_lock(c);
-        let c = buf_to_str(&(unsafe { &*c }).name);
-        let d = buf_to_str(&(unsafe { &*d }).name);
-        let m = ptr_to_str(m);
+        let controller = &mut Self::controller(c);
 
-        let result = delegate.on_message_broadcast(d, m.unwrap());
-        log_and_return_code(c, function_name!(), &result)
+        let mut delegate = Self::write_lock(c);
+        let client_name = buf_to_str(&(unsafe { &*c }).name);
+        let device = buf_to_str(&(unsafe { &*d }).name);
+        let message = CStr::from_ptr(m)
+            .to_str()
+            .inspect_err(|e| warn!("could not read message: {e}"))
+            .expect("valid UTF8 string");
+
+        let result = delegate.on_message_broadcast(controller, device, message);
+        log_and_return_code(client_name, function_name!(), &result)
+    }
+
+    #[named]
+    fn delegate_property_event(
+        f: PROPERTY_CALLBACK<D>,
+        c: *mut indigo_client,
+        d: *mut indigo_device,
+        p: *mut indigo_property,
+        m: *const i8,
+    ) -> indigo_result {
+        let controller = &mut Self::controller(c);
+        let client_name = buf_to_str(&(unsafe { &*c }).name);
+
+        let device = buf_to_str(&(unsafe { &*d }).name);
+        let property = SysProperty::try_from(p)
+            .inspect_err(|e| warn!("could not create property: {e}"))
+            .expect("valid system property");
+        let message = if m.is_null() {
+            None
+        } else {
+            unsafe {
+                let msg = CStr::from_ptr(m)
+                    .to_str()
+                    .inspect_err(|e| warn!("could not read message: {e}"))
+                    .expect("valid UTF8 string");
+                Some(msg)
+            }
+        };
+        // delegate property event handling to callback method
+        let result = f(
+            &mut Self::write_lock(c),
+            controller,
+            device,
+            property,
+            message,
+        );
+
+        log_and_return_code(client_name, function_name!(), &result)
     }
 }
 
-impl<'s,C> ClientController<SysProperty<'s>, C> for SysClientController<'s, C>
-where C: ClientDelegate<SysProperty<'s>> {
-    fn request_definition<'a>(
-        &mut self,
-        _d: &'a str,
-        p: &'a SysProperty
-    ) -> IndigoResult<(),impl Error> {
-
-        let code = unsafe { indigo_enumerate_properties(self.sys, p.sys) };
+impl<D> ClientController<SysProperty, SysBus> for SysClientController<D>
+where
+    D: ClientDelegate<
+        Property = SysProperty,
+        Bus = SysBus,
+        BusController = Self,
+        ClientController = Self,
+    >,
+{
+    fn request_definition<'a>(&mut self, d: &'a str, p: &'a str) -> IndigoResult<()> {
+        let sys = &mut indigo_property::new(p, d, indigo_property_type::INDIGO_TEXT_VECTOR);
+        let code = unsafe { indigo_enumerate_properties(self.sys, sys) };
         sys_code_to_lib_result((), "indigo_enumerate_properties", code)
     }
 
-    fn request_update<'a>(
-        &mut self, _d:
-        &'a str,
-        p: &'a SysProperty
-    ) -> IndigoResult<(),impl Error> {
-
+    fn request_update<'a>(&mut self, _d: &'a str, p: &'a SysProperty) -> IndigoResult<()> {
         let code = unsafe { indigo_change_property(self.sys, p.sys) };
         sys_code_to_lib_result((), "indigo_enumerate_properties", code)
     }
@@ -741,16 +999,12 @@ where C: ClientDelegate<SysProperty<'s>> {
         &mut self,
         _d: &'a str,
         _p: &'a SysProperty,
-        _i: &'a impl PropertyItem,
-    ) -> IndigoResult<(),SysError> {
+        _i: &'a PropertyItem,
+    ) -> IndigoResult<()> {
         todo!()
     }
 
-    fn request_delete<'a>(
-        &mut self,
-        _d: &'a str,
-        _p: &'a SysProperty
-    ) -> IndigoResult<(),SysError> {
+    fn request_delete<'a>(&mut self, _d: &'a str, _p: &'a SysProperty) -> IndigoResult<()> {
         todo!()
     }
 
@@ -758,16 +1012,13 @@ where C: ClientDelegate<SysProperty<'s>> {
         &mut self,
         _d: &'a str,
         _p: &'a SysProperty,
-        _i: &'a impl PropertyItem,
-    ) -> IndigoResult<(),SysError> {
+        _i: &'a PropertyItem,
+    ) -> IndigoResult<()> {
         todo!()
     }
 
-    fn request_enumeration(
-        &mut self,
-        _d: Option<&str>
-    ) -> IndigoResult<usize,impl Error> {
-
+    fn request_enumeration(&mut self, _d: Option<&str>) -> IndigoResult<usize> {
+        debug!("requested property enumeration");
         let code = unsafe { indigo_enumerate_properties(self.sys, &raw mut INDIGO_ALL_PROPERTIES) };
         sys_code_to_lib_result(0, "indigo_enumerate_properties", code)
     }
@@ -777,15 +1028,35 @@ where C: ClientDelegate<SysProperty<'s>> {
     // }
 }
 
+impl<D> Debug for SysClientController<D>
+where
+    D: ClientDelegate<
+        Property = SysProperty,
+        Bus = SysBus,
+        BusController = Self,
+        ClientController = Self,
+    >,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SysClientController")
+            .field("sys", &self.sys)
+            .field("delegate", &self.delegate)
+            .finish()
+    }
+}
+
 // -- SysDeviceController -----------------------------------------------------
 
-struct SysDeviceController<'s, D: DeviceDelegate<SysProperty<'s>>> {
+struct SysDeviceController<D>
+where
+    D: DeviceDelegate<Property = SysProperty, Bus = SysBus>,
+{
     sys: *mut indigo_device,
-    _phantom: &'s PhantomData<D>,
+    _phantom: PhantomData<D>,
 }
 
 // impl<'s,D> Display for SysDeviceController<'s,D>
-// where D: DeviceDelegate<SysProperty<'s>> {
+// where D: DeviceDelegate<SysProperty> {
 //     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 //         let status = self.connected().map_or_else(
 //             |e| format!("{:?}", e),
@@ -811,8 +1082,10 @@ struct SysDeviceController<'s, D: DeviceDelegate<SysProperty<'s>>> {
 //     }
 // }
 
-impl<'s, D> SysDeviceController<'s, D>
-where D: DeviceDelegate<SysProperty<'s>> {
+impl<'s, D> SysDeviceController<D>
+where
+    D: DeviceDelegate<Property = SysProperty, Bus = SysBus>,
+{
     fn new(d: D) -> Self {
         let sys = Box::new(indigo_device {
             name: str_to_buf(d.name()),
@@ -822,8 +1095,8 @@ where D: DeviceDelegate<SysProperty<'s>> {
             device_context: ptr::null_mut(),
             private_data: ptr::null_mut(),
             master_device: ptr::null_mut(),
-            last_result: indigo_result_INDIGO_OK,
-            version: indigo_version_INDIGO_VERSION_CURRENT,
+            last_result: indigo_result::INDIGO_OK,
+            version: indigo_version::INDIGO_VERSION_CURRENT,
             access_token: 0,
             match_patterns: ptr::null_mut(),
             match_patterns_count: 0,
@@ -836,7 +1109,7 @@ where D: DeviceDelegate<SysProperty<'s>> {
         let sys = Box::into_raw(sys);
         Self {
             sys,
-            _phantom: &PhantomData,
+            _phantom: PhantomData,
         }
     }
 
@@ -851,7 +1124,7 @@ where D: DeviceDelegate<SysProperty<'s>> {
         // let result = delegate.on_attach();
         // log_and_return_code(c, function_name!(), &result)
         info!("device attached");
-        indigo_result_INDIGO_OK
+        indigo_result::INDIGO_OK
     }
 
     #[named]
@@ -865,69 +1138,74 @@ where D: DeviceDelegate<SysProperty<'s>> {
 
         // let result = delegate.on_attach();
         // log_and_return_code(c, function_name!(), &result)
-        indigo_result_INDIGO_OK
+        indigo_result::INDIGO_OK
     }
 }
 
-impl<'s,D> NamedObject for SysDeviceController<'s, D>
-where D: DeviceDelegate<SysProperty<'s>> {
+impl<'s, D> Debug for SysDeviceController<D>
+where
+    D: DeviceDelegate<Property = SysProperty, Bus = SysBus>,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SysDeviceController")
+            .field("sys", &self.sys)
+            // .field("_phantom", &self._phantom)
+            .finish()
+    }
+}
+
+impl<'s, D> NamedObject for SysDeviceController<D>
+where
+    D: DeviceDelegate<Property = SysProperty, Bus = SysBus>,
+{
     fn name(&self) -> &str {
         unsafe { buf_to_str(&(*self.sys).name) }
     }
 }
 
-impl<'s,D> Drop for SysDeviceController<'s, D>
-where D: DeviceDelegate<SysProperty<'s>>{
+impl<'s, D> Drop for SysDeviceController<D>
+where
+    D: DeviceDelegate<Property = SysProperty, Bus = SysBus>,
+{
     fn drop(&mut self) {
         let sys = unsafe { Box::from_raw(self.sys) };
         drop(sys);
     }
 }
 
-impl<'s,D> AttachedObject for SysDeviceController<'s, D>
-where D: DeviceDelegate<SysProperty<'s>> {}
+impl<'s, D> Controller<SysBus> for SysDeviceController<D>
+where
+    D: DeviceDelegate<Property = SysProperty, Bus = SysBus>,
+{
+    fn attach<'a>(&mut self, _: &'a mut SysBus) -> IndigoResult<()> {
+        todo!()
+    }
 
-impl<'s,D> BusController for SysDeviceController<'s, D>
-where D: DeviceDelegate<SysProperty<'s>> {
-    fn detach(self) -> IndigoResult<(),impl Error> {
-        Err(SysError::new("FIXME: not yet implemented"))
+    fn detach(&mut self) -> IndigoResult<()> {
+        todo!()
     }
 }
 
-impl<'s,D> DeviceController<'s,SysProperty<'s>, D> for SysDeviceController<'s, D>
-where D: DeviceDelegate<SysProperty<'s>> {
-    fn define_property<'a>(
-        &mut self,
-        p: &'a SysProperty
-    ) -> IndigoResult<(),impl Error> {
-
+impl<'s, D> DeviceController<SysProperty, SysBus> for SysDeviceController<D>
+where
+    D: DeviceDelegate<Property = SysProperty, Bus = SysBus>,
+{
+    fn define_property<'a>(&mut self, p: &'a SysProperty) -> IndigoResult<()> {
         let code = unsafe { indigo_update_property(self.sys, p.sys, ptr::null()) };
         sys_code_to_lib_result((), "indigo_enumerate_properties", code)
     }
 
-    fn update_property<'a>(
-        &mut self,
-        p: &'a SysProperty
-    ) -> IndigoResult<(),impl Error> {
-
+    fn update_property<'a>(&mut self, p: &'a SysProperty) -> IndigoResult<()> {
         let code = unsafe { indigo_update_property(self.sys, p.sys, ptr::null()) };
         sys_code_to_lib_result((), "indigo_update_property", code)
     }
 
-    fn delete_property<'a>(
-        &mut self,
-        p: &'a SysProperty
-    ) -> IndigoResult<(),impl Error> {
-
+    fn delete_property<'a>(&mut self, p: &'a SysProperty) -> IndigoResult<()> {
         let code = unsafe { indigo_update_property(self.sys, p.sys, ptr::null()) };
         sys_code_to_lib_result((), "indigo_update_property", code)
     }
 
-    fn broadcast_message(
-        &mut self,
-        msg: &str
-    ) -> IndigoResult<(),impl Error> {
-
+    fn broadcast_message(&mut self, msg: &str) -> IndigoResult<()> {
         let msg: [i8; 256] = str_to_buf(msg);
         let code = unsafe { indigo_send_message(self.sys, &raw const msg as *const i8) };
         sys_code_to_lib_result((), "indigo_send_message", code)
@@ -955,17 +1233,20 @@ where D: DeviceDelegate<SysProperty<'s>> {
 
 // -- SysRemoteResource -------------------------------------------------------
 
+#[derive(Clone)]
 pub struct SysRemoteResource {
     name: String,
     url: Url,
     sys: *mut indigo_server_entry,
 }
 
-// impl Default for SysRemoteResource {
-//     fn default() -> Self {
-//         SysRemoteResource::new("INDIGO", "localhost", INDIGO_DEFAULT_PORT).expect("expected valid defaults")
-//     }
-// }
+impl Default for SysRemoteResource {
+    fn default() -> Self {
+        let url = format!("tcp://{INDIGO_DEFAULT_PORT}:{INDIGO_DEFAULT_PORT}");
+        let url = Url::parse(&url).expect("indigo url");
+        SysRemoteResource::new("INDIGO", url).expect("valid defaults")
+    }
+}
 
 impl Drop for SysRemoteResource {
     fn drop(&mut self) {
@@ -985,28 +1266,24 @@ impl SysRemoteResource {
         self.url.port().unwrap_or(DEFAULT_PORT)
     }
 
-    fn new<'a>(
-        name: &str,
-        url: Url
-    ) -> IndigoResult<Self,impl Error> {
-
+    pub fn new<'a>(name: &str, url: Url) -> IndigoResult<Self> {
         if url.scheme() != "tcp" {
-            return Err(SysError::new("the url scheme must be 'tcp'"));
+            return Err(IndigoError::new("the url scheme must be 'tcp'"));
         }
 
         let name = name.trim().to_owned();
         if name.is_empty() {
-            return Err(SysError::new(
+            return Err(IndigoError::new(
                 "name of remote resource must not be empty or blank",
             ));
         }
 
         let host = url
             .host_str()
-            .ok_or(SysError::new("indigo url does not have a hostname"))?;
+            .ok_or(IndigoError::new("indigo url does not have a hostname"))?;
         if !hostname_validator::is_valid(&host) {
             // is this necessary, are URL hostnames always valid? Probably...
-            return Err(SysError::new("invalid hostname"));
+            return Err(IndigoError::new("invalid hostname"));
         }
 
         Ok(Self {
@@ -1016,8 +1293,7 @@ impl SysRemoteResource {
         })
     }
 
-    fn is_connected<'a>(&self) -> IndigoResult<bool,SysError> {
-
+    fn is_connected(&self) -> IndigoResult<bool> {
         let msg_buf = [0i8; 256].as_mut_ptr();
         let connected = unsafe { indigo_connection_status(self.sys, msg_buf) };
         if connected {
@@ -1028,7 +1304,7 @@ impl SysRemoteResource {
         if s.is_empty() {
             Ok(false)
         } else {
-            Err(SysError::new(s.to_str()?))
+            Err(IndigoError::new(s.to_str()?))
         }
     }
 }
@@ -1069,18 +1345,28 @@ impl NamedObject for SysRemoteResource {
     }
 }
 
-impl AttachedObject for SysRemoteResource {}
+impl Controller<SysBus> for SysRemoteResource {
+    fn attach<'a>(&mut self, _: &'a mut SysBus) -> IndigoResult<()> {
+        trace!("attaching remote resource '{}'", self.name);
 
-impl BusController for SysRemoteResource {
-    fn detach(mut self) -> Result<(),impl Error> {
+        if let Err(e) = self.reconnect() {
+            error!("could not attach remote resource: {e}");
+            return Err(IndigoError::new("could not attach remote resource"));
+        }
 
+        Ok(())
+    }
+
+    fn detach(&mut self) -> IndigoResult<()> {
         trace!("detaching remote resource '{}'", self.name);
+
         if let Err(e) = self.disconnect() {
             error!("could not detach remote resource: {e}");
-            Err(SysError::new("could not detach remote resource"))
-        } else {
-            Ok(())
+            return Err(IndigoError::new("could not detach remote resource"));
         }
+
+        trace!("detached remote resource '{}'", self.name);
+        Ok(())
 
         // let name = format!("@ {}", self.name);
         // let name = "@ Server";
@@ -1097,25 +1383,27 @@ impl BusController for SysRemoteResource {
     }
 }
 
-impl RemoteResource for SysRemoteResource {
-
-    fn disconnect(&mut self) -> IndigoResult<(), impl Error> {
-
+impl RemoteResource<SysBus> for SysRemoteResource {
+    fn disconnect(&mut self) -> IndigoResult<()> {
         if !self.is_connected()? {
-            return Err(SysError::new("not connected"));
+            return Err(IndigoError::new("not connected"));
         }
 
         trace!("discconnecting from {}...", self.url);
-        let code = unsafe { indigo_disconnect_server(self.sys) };
+
+        let code = unsafe {
+            (*self.sys).shutdown = true;
+            indigo_disconnect_server(self.sys)
+        };
 
         sys_code_to_lib_result((), "indigo_disconnect_server", code)
             .inspect(|_| info!("disconnected from {}", self.url))
             .inspect_err(|e| info!("failed to disconnect {}: {}", self.url, e))
     }
 
-    fn reconnect(&mut self) -> IndigoResult<(), impl Error> {
+    fn reconnect(&mut self) -> IndigoResult<()> {
         if self.is_connected()? {
-            return Err(SysError::new("already connected"));
+            return Err(IndigoError::new("already connected"));
         }
 
         trace!("connecting to {:?}...", self.url);
@@ -1182,19 +1470,29 @@ pub struct SysBus {
     name: String,
 }
 
+impl SysBus {
+    /// Enable INDIGO sys bus logging at the provided level.
+    pub fn enable_bus_log(level: LogLevel) {
+        unsafe { indigo_set_log_level(level.into()) };
+    }
+
+    /// Return the INDIGO sys bus log level.
+    pub fn bus_log() -> LogLevel {
+        let level = unsafe { indigo_get_log_level() };
+        LogLevel::try_from(level).expect("expected a valid log level")
+    }
+}
+
 impl NamedObject for SysBus {
     fn name(&self) -> &str {
         &self.name
     }
 }
 
-impl<'s,C,D> Bus<SysProperty<'s>,C,D> for SysBus
-where C: ClientDelegate<SysProperty<'s>> +'s, D: DeviceDelegate<SysProperty<'s>> +'s
-{
-
+impl Bus for SysBus {
     #[named]
     #[allow(refining_impl_trait)]
-    fn start(name: &str) -> IndigoResult<SysBus,impl Error> {
+    fn start(name: &str) -> IndigoResult<SysBus> {
         trace!("configuring INDIGO log message handler...");
         unsafe {
             indigo_log_message_handler = Some(log_message_handler);
@@ -1212,7 +1510,7 @@ where C: ClientDelegate<SysProperty<'s>> +'s, D: DeviceDelegate<SysProperty<'s>>
     }
 
     #[named]
-    fn stop(&mut self) -> IndigoResult<(),impl Error> {
+    fn stop(&mut self) -> IndigoResult<()> {
         trace!("stopping INDIGO system bus...");
         let code = unsafe { indigo_stop() };
         sys_code_to_lib_result((), function_name!(), code)
@@ -1224,39 +1522,31 @@ where C: ClientDelegate<SysProperty<'s>> +'s, D: DeviceDelegate<SysProperty<'s>>
     //     Ok(SysDeviceController::new(d))
     // }
 
-    fn attach_remote(
-        &mut self,
-        name: &str,
-        url: &Url
-    ) -> IndigoResult<impl RemoteResource,impl Error> {
+    // fn attach_remote(
+    //     &mut self,
+    //     name: &str,
+    //     url: &Url
+    // ) -> IndigoResult<impl RemoteResource,impl Error> {
 
-        match SysRemoteResource::new(name, url.clone()) {
-            Ok(mut remote) => {
-                if let Err(e) = remote.reconnect() {
-                    error!("connection to '{name}' failed: {e}");
-                    return Err(SysError::new("could not attach to remote resource"))
-                }
-                Ok(remote)
-            },
-            Err(e) => {
-                error!("could not create resource '{name}' for {url}: {e}");
-                Err(SysError::new("could not attach remote resource"))
-            }
-        }
-    }
-
-    fn attach_client(
-        &mut self,
-        delegate: C,
-    ) -> IndigoResult<impl ClientController<SysProperty<'s>, C>, impl Error> {
-        let client = SysClientController::new(delegate);
-        Ok::<SysClientController<'s,C>,SysError>(client)
-    }
+    //     match SysRemoteResource::new(name, url.clone()) {
+    //         Ok(mut remote) => {
+    //             if let Err(e) = remote.reconnect() {
+    //                 error!("connection to '{name}' failed: {e}");
+    //                 return Err(IndigoError::new("could not attach to remote resource"))
+    //             }
+    //             Ok(remote)
+    //         },
+    //         Err(e) => {
+    //             error!("could not create resource '{name}' for {url}: {e}");
+    //             Err(IndigoError::new("could not attach remote resource"))
+    //         }
+    //     }
+    // }
 
     // fn attach_device(
     //     &mut self,
     //     delegate: D,
-    // ) -> IndigoResult<impl DeviceController<SysProperty<'s>, D>, impl Error> {
+    // ) -> IndigoResult<impl DeviceController<SysProperty, D>, impl Error> {
     //     let device = SysDeviceController::new(delegate);
     //     Ok::<SysDeviceController<'s,D>,SysError>(device)
     // }
@@ -1272,16 +1562,9 @@ where C: ClientDelegate<SysProperty<'s>> +'s, D: DeviceDelegate<SysProperty<'s>>
     // }
 }
 
-impl SysBus {
-    /// Enable INDIGO sys bus logging at the provided level.
-    pub fn enable_bus_log(level: LogLevel) {
-        unsafe { indigo_set_log_level(level as i32) };
-    }
-
-    /// Return the INDIGO sys bus log level.
-    pub fn bus_log() -> LogLevel {
-        let level = unsafe { indigo_get_log_level() };
-        LogLevel::from_i32(level).expect("expected a valid log level")
+impl Debug for SysBus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SysBus").field("name", &self.name).finish()
     }
 }
 
@@ -1301,13 +1584,13 @@ unsafe extern "C" fn log_message_handler(
     let msg = msg.get_or_insert("<emtpy log message>");
 
     match level {
-        indigo_log_levels_INDIGO_LOG_PLAIN => info!("{}", msg),
-        indigo_log_levels_INDIGO_LOG_ERROR => error!("{}", msg),
-        indigo_log_levels_INDIGO_LOG_INFO => info!("{}", msg),
-        indigo_log_levels_INDIGO_LOG_DEBUG => debug!("{}", msg),
-        indigo_log_levels_INDIGO_LOG_TRACE_BUS => trace!("{}", msg),
-        indigo_log_levels_INDIGO_LOG_TRACE => trace!("{}", msg),
-        _ => warn!("[UNKNOWN LOG LEVEL: {}]: {}", level, msg),
+        indigo_log_levels::INDIGO_LOG_PLAIN => info!("{}", msg),
+        indigo_log_levels::INDIGO_LOG_ERROR => error!("{}", msg),
+        indigo_log_levels::INDIGO_LOG_INFO => info!("{}", msg),
+        indigo_log_levels::INDIGO_LOG_DEBUG => debug!("{}", msg),
+        indigo_log_levels::INDIGO_LOG_TRACE_BUS => trace!("{}", msg),
+        indigo_log_levels::INDIGO_LOG_TRACE => trace!("{}", msg),
+        _ => warn!("[UNKNOWN LOG LEVEL: {}]: {}", level.0, msg),
     }
 }
 
@@ -1326,11 +1609,14 @@ unsafe extern "C" fn log_message_handler(
 #[cfg(test)]
 mod tests {
 
-    use std::thread::sleep;
+    use std::sync::Arc;
+
     use std::time::Duration;
 
     use libindigo_sys::{__IncompleteArrayField, indigo_property};
     use log::LevelFilter;
+    use parking_lot::Condvar;
+    use parking_lot::Mutex;
 
     use crate::indigo::*;
     use crate::sys::*;
@@ -1341,7 +1627,7 @@ mod tests {
 
     fn init_test(level: LevelFilter) {
         let _ = env_logger::builder()
-            .target(env_logger::Target::Stdout)
+            // .target(env_logger::Target::Stdout)
             .filter_level(level)
             .is_test(true)
             .try_init();
@@ -1354,10 +1640,10 @@ mod tests {
             group: str_to_buf("group"),
             label: str_to_buf("label"),
             hints: str_to_buf("clueless"),
-            state: 42,
-            type_: 64,
-            perm: 888,
-            rule: 666,
+            state: indigo_property_state::INDIGO_OK_STATE,
+            type_: indigo_property_type::INDIGO_TEXT_VECTOR,
+            perm: indigo_property_perm::INDIGO_RW_PERM,
+            rule: indigo_rule::INDIGO_ANY_OF_MANY_RULE,
             access_token: 32000,
             version: 1,
             hidden: true,
@@ -1370,7 +1656,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sys_property<'a>() -> IndigoResult<(),SysError>{
+    fn test_sys_property() -> IndigoResult<()> {
         let sys = create_prop();
         let prop: SysProperty = SysProperty::try_from(sys)?;
         assert_eq!(prop.name(), "prop");
@@ -1386,51 +1672,135 @@ mod tests {
         Ok(())
     }
 
-    struct TestClient {
-        name: String,
+    struct TestMonitor {
+        condvar: Condvar,
+        lock: Mutex<u8>,
     }
-    impl NamedObject for TestClient {
+    impl TestMonitor {
+        fn new() -> TestMonitor {
+            TestMonitor {
+                condvar: Condvar::new(),
+                lock: Mutex::new(0),
+            }
+        }
+        /// wait until done or a timeout occurs
+        fn wait(&self, limit: u8, timeout: Duration) -> u8 {
+            let mut pcount = self.lock.lock();
+            while *pcount < limit {
+                self.condvar.wait_for(&mut pcount, timeout);
+            }
+            *pcount
+        }
+        fn inc(&self) -> IndigoResult<()> {
+            let mut pcount = self.lock.lock();
+            *pcount += 1;
+            self.condvar.notify_all();
+            Ok(())
+        }
+    }
+
+    struct TestDelegate {
+        name: String,
+        monitor: Arc<TestMonitor>,
+        _phantom: PhantomData<SysProperty>,
+    }
+
+    impl Debug for TestDelegate {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("TestDelegate")
+                .field("name", &self.name)
+                // .field("monitor", &self.monitor)
+                // .field("_phantom", &self._phantom)
+                .finish()
+        }
+    }
+
+    impl NamedObject for TestDelegate {
         fn name(&self) -> &str {
             &self.name
         }
     }
 
-    impl AttachedObject for TestClient {}
+    impl TestDelegate {
+        /// Creates a [TestDelegate] from the [Arc<Condvar>] instance.
+        fn new(name: &str, monitor: Arc<TestMonitor>) -> TestDelegate {
+            TestDelegate {
+                name: name.to_owned(),
+                monitor: monitor.clone(),
+                _phantom: PhantomData,
+            }
+        }
+    }
 
-    impl<'s> ClientDelegate<SysProperty<'s>> for TestClient {}
+    impl<'s> Delegate for TestDelegate {
+        type Bus = SysBus;
+        type BusController = SysClientController<Self>;
 
-    type TestBus<'s> = SysBus<'s,TestClient,TestDevice>;
+        fn on_attach(&mut self, c: &mut SysClientController<Self>) -> IndigoResult<()> {
+            debug!("attached '{}'", self.name());
+            Ok(())
+        }
+    }
 
+    impl<'s> ClientDelegate for TestDelegate {
+        type Property = SysProperty;
+        type ClientController = SysClientController<Self>;
+
+        fn on_define_property<'a>(
+            &'a mut self,
+            _c: &mut SysClientController<Self>,
+            _d: &'a str,
+            p: SysProperty,
+            _msg: Option<&'a str>,
+        ) -> IndigoResult<()> {
+            debug!("'{}': '{}' property defined ", p.device(), p.name());
+            for item in p.items() {
+                debug!("'{}': '{}'  ", item.name(), item);
+            }
+            self.monitor.inc()?;
+            Ok(())
+        }
+    }
+
+    /// Test assumes an INDIGO server running on localhost on the default port.
     #[test]
-    fn test_sys_bus() {
-        init_test(LevelFilter::Debug);
+    fn test_sys_bus() -> IndigoResult<()> {
+        init_test(LevelFilter::Trace);
+
         SysBus::enable_bus_log(LogLevel::Debug);
-        assert_eq!(LogLevel::Debug, SysBus::bus_log());
+        // assert_eq!(LogLevel::Trace, SysBus::bus_log());
 
-        let mut bus = SysBus::start("Bus").expect("bus instance");
-        let client = TestClient {
-            name: "Client".to_owned(),
-        };
-        let client = bus
-            .attach_client(client)
-            .expect("expected a client instance");
+        let monitor = Arc::new(TestMonitor::new());
 
-        let url = Url::parse("tcp://localhost").expect("url to be valid");
-        let server = bus
-            .attach_remote("Server", &url)
-            .expect("attached server");
+        let bus = &mut SysBus::start("TestBus").expect("bus instance");
+        let delegate_delegate = TestDelegate::new("TestClient", monitor.clone());
+        let client_controller = &mut SysClientController::new(delegate_delegate);
 
-        // client.request_enumeration(None).expect("expected bus to enumerate the properties");
+        let url = Url::parse("tcp://localhost").expect("valid url");
+        let remote = &mut SysRemoteResource::new("TestRemote", url).expect("remote instance");
 
-        sleep(Duration::new(1, 0));
-        server
-            .detach()
-            .expect("expected server to be detached from the bus");
-        client
-            .detach()
-            .expect("expected client to be detached from the bus");
-        //sleep(Duration::new(1,0));
+        remote.attach(bus).expect("attached remote");
+        client_controller.attach(bus).expect("attached client");
 
-        bus.stop().expect("expected bus to stop");
+        client_controller
+            .request_enumeration(None)
+            .expect("enumeration request");
+        assert_eq!(monitor.wait(5, Duration::from_secs(10)), 5);
+
+        remote.detach().expect("detached remote");
+        client_controller.detach().expect("detached controller");
+
+        info!("testing, testing");
+
+        bus.stop(); // FIXME ensure that the remote is detached
+                    // bus.stop().expect("stopped bus");
+
+        // while let Err(e) = bus.stop() {
+        //     info!("failed stopping bus: {e}");
+        //     log::logger().flush();
+        //     sleep(Duration::from_secs(1));
+        // }
+
+        Ok(())
     }
 }

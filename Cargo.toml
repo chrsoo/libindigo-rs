@@ -18,21 +18,22 @@ edition = "2021"
 serde = { version = "1.0", default-features = false }
 serde-json-core = "0.6.0"
 log = "0.4.22"
-url = "2.5.2" # TODO replace all url::Url references with url_fork::Url
+# url = "2.5.2" # TODO replace all url::Url references with url_fork::Url
 url-fork = "3.0"
 hostname-validator = "1.1.1"
 libindigo-sys = { path = "sys" }
 enum_primitive = "0.1.1"
 lazy_static = "1.5.0"
 once_cell = "1.19.0"
-strum = "0.26.3"
-strum_macros = "0.26"
+strum = "0.27"
+strum_macros = "0.27"
 parking_lot = "0.12.3"
 function_name = "0.3.0"
 printf-wrap = "0.2.1"
 bitfield = "0.17.0"
 funty = "2.0.0"
 chrono = "0.4"
+regex = "1.11"
 # dtd-rs = { git = "https://github.com/songww/dtd-rs.git", version = "0.1.0-alpha2" }
 # dtd-parser = { git = "https://github.com/songww/dtd-rs.git", version = "0.1.0-alpha3" }
 # dtd-macro = { git = "https://github.com/songww/dtd-rs.git", version = "0.1.0-alpha2" }

@@ -1,7 +1,5 @@
-use std::sync::LazyLock;
-
 use gtk::{glib::{self}, prelude::*, EntryBuffer, Frame, Label, SizeGroup};
-use libindigo::{PropertyItem as IndigoPropertyItem, PropertyType, PropertyValue, Property as IndigoProperty};
+use libindigo::{property::{PropertyData, PropertyItem}, BlobItem, NamedObject as _, NumberItem, Property as IndigoProperty, PropertyItem as IndigoPropertyItem, PropertyType, SwitchItem as _, TextItem};
 use relm4::{
     factory::{FactoryHashMap, FactoryVecDequeBuilder, FactoryView}, gtk, prelude::{DynamicIndex, FactoryComponent, FactoryVecDeque}, view, Component, ComponentParts, ComponentSender, FactorySender, RelmWidgetExt, SimpleComponent
 };
@@ -12,26 +10,27 @@ thread_local! {
     static PROP_COLUMN_3: SizeGroup = SizeGroup::new(gtk::SizeGroupMode::Horizontal);
 }
 
+#[derive(Debug)]
 pub(crate) struct Property {
-    property: IndigoProperty,
+    property: PropertyData,
     items: FactoryVecDeque<PropertyItem>,
 }
 
 
 #[derive(Debug, Clone)]
 pub(crate) enum PropertyInput {
-    UpdateProperty(IndigoProperty),
-    DeleteProperty(IndigoProperty),
+    UpdateProperty(PropertyData),
 }
 
 #[derive(Debug, Clone)]
 pub(crate) enum PropertyOutput {
-    UpdateItem(PropertyItem),
+    RequestPropertyUpdate(PropertyData),
+    RequestItemUpdate(PropertyItem),
 }
 
 #[relm4::factory(pub)]
 impl FactoryComponent for Property {
-    type Init = IndigoProperty;
+    type Init = PropertyData;
     type Input = PropertyInput;
     type Output = PropertyOutput;
     type CommandOutput = ();
@@ -77,8 +76,7 @@ impl FactoryComponent for Property {
 
     fn update(&mut self, message: Self::Input, sender: FactorySender<Self>) {
         match message {
-            PropertyInput::UpdateProperty(p) => todo!(),
-            PropertyInput::DeleteProperty(p) => todo!(),
+            PropertyInput::UpdateProperty(p) => self.property.update(&p),
         }
     }
 
@@ -86,7 +84,7 @@ impl FactoryComponent for Property {
 
 #[derive(Debug, Clone)]
 struct PropertyItem {
-    item: IndigoPropertyItem,
+    item: PropertyItem,
 }
 
 #[derive(Debug)]
@@ -94,11 +92,16 @@ pub enum PropertyItemInput {
     Toggle,
 }
 
+#[derive(Debug)]
+pub enum PropertyItemOutput {
+    Toggle,
+}
+
 #[relm4::factory]
 impl FactoryComponent for PropertyItem {
-    type Init = IndigoPropertyItem;
+    type Init = PropertyItem;
     type Input = PropertyItemInput;
-    type Output = ();
+    type Output = PropertyItemOutput;
     type CommandOutput = ();
     type ParentWidget = gtk::Box;
 
@@ -107,8 +110,8 @@ impl FactoryComponent for PropertyItem {
         gtk::Box {
             set_orientation: gtk::Orientation::Horizontal,
             set_spacing: 10,
-            append = match &self.item.value {
-                PropertyValue::Text(s) => {
+            append = match &self.item.property_type() {
+                PropertyType::Text => {
                     gtk::Box {
                         set_orientation: gtk::Orientation::Horizontal,
                         set_spacing: 10,
@@ -116,20 +119,20 @@ impl FactoryComponent for PropertyItem {
                             set_size_group: &PROP_COLUMN_1.with(|w| w.clone() ),
                             gtk::Label {
                                 #[watch]
-                                set_label: &self.item.name,
+                                set_label: &self.item.name(),
                             },
                         },
                         gtk::Box {
                             set_size_group: &PROP_COLUMN_2.with(|w| w.clone() ),
                             gtk::Label {
                                 #[watch]
-                                set_label: s,
+                                set_label: self.item.text(),
                             }
                         }
                     }
                 }
                 // PropertyValue::Number{format, min, max, step, value, target} => {
-                PropertyValue::Number{format, value, ..} => {
+                PropertyType::Number => {
                     gtk::Box {
                         set_orientation: gtk::Orientation::Horizontal,
                         set_spacing: 10,
@@ -137,34 +140,34 @@ impl FactoryComponent for PropertyItem {
                             set_size_group: &PROP_COLUMN_1.with(|w| w.clone()),
                             gtk::Label {
                                 #[watch]
-                                set_label: &self.item.name,
+                                set_label: &self.item.name(),
                             },
                         },
                         gtk::Box {
                             set_size_group: &PROP_COLUMN_2.with(|w| w.clone() ),
                             gtk::Label {
                                 #[watch]
-                                set_label: &format.format(*value),
+                                set_label: self.item.formatted_number().as_str(),
                             }
                         }
                     }                }
-                PropertyValue::Light(_) => {
+                PropertyType::Light => {
                     gtk::Label {
                         set_label: "TODO: render light property"
                     }
                 }
-                PropertyValue::Switch(b) => {
+                PropertyType::Switch => {
                     gtk::CheckButton {
                         #[watch]
-                        set_active: *b,
-                        set_label: Some(&self.item.name),
+                        set_active: self.item.on(),
+                        set_label: Some(&self.item.name()),
                         // TODO group checkbuttons depending on the property SwitchType...
                         // #[track(true)]
                         // set_group: Some("apa"),
                     }
                 }
                 // PropertyValue::Blob{format, url, size, value} => {
-                PropertyValue::Blob{..} => {
+                PropertyType::Blob => {
                     gtk::Label {
                         set_label: "TODO: render blob property"
                     }
@@ -181,16 +184,16 @@ impl FactoryComponent for PropertyItem {
 
 impl PropertyItem {
     fn label(&self) -> &str {
-        &self.item.label
+        &self.item.label()
     }
 
-    fn new(item: IndigoPropertyItem) -> Self {
+    fn new(item: PropertyItem) -> Self {
         Self { item }
     }
 }
 
 struct SwitchItem {
-    item: &'static IndigoPropertyItem,
+    item: PropertyItem,
 }
 
 #[derive(Debug)]
@@ -205,7 +208,7 @@ pub enum SwitchStatus {
 
 #[relm4::factory]
 impl FactoryComponent for SwitchItem {
-    type Init = &'static IndigoPropertyItem;
+    type Init = PropertyItem;
     type Input = SwitchCommand;
     type Output = SwitchStatus;
     type CommandOutput = ();
@@ -235,13 +238,9 @@ impl FactoryComponent for SwitchItem {
 
 impl SwitchItem {
     fn label(&self) -> &str {
-        &self.item.label
+        &self.item.label()
     }
     fn value(&self) -> bool {
-        if let PropertyValue::Switch(b) = self.item.value {
-            b
-        } else {
-            unreachable!("expected 'PropertyStatus::Switch' found '{}'", &self.item.value)
-        }
+        self.item.on()
     }
 }

@@ -1,6 +1,5 @@
 use core::str;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fmt::Display;
 use std::fs::File;
 use std::io::{BufRead, Write};
 use std::{env, io};
@@ -9,11 +8,14 @@ use std::path::{Path, PathBuf};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
+// TODO source INDIGO version and build information from INDIGO source code
+// NOTE create aux crate for build related functionality shared with the sys crate
+
 /// used for cloning the INDIGO git repository when source is retrieved from a crate
 const INDIGO_GIT_REPOSITORY: &str = "https://github.com/indigo-astronomy/indigo";
 
 /// used for building INDIGO from source when checked out
-const GIT_SUBMODULE: &str = "sys/externals/indigo";
+const INDIGO_GIT_SUBMODULE: &str = "sys/externals/indigo";
 
 // used to detect Linux system libraries
 // const LINUX_INDIGO_VERSION_HEADER: &str = "/usr/include/indigo/indigo_version.h";
@@ -22,22 +24,12 @@ const GIT_SUBMODULE: &str = "sys/externals/indigo";
 
 // #define INFO_PROPERTY_NAME										"INFO"
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct IndigoName {
-    name: String,
-    value: String,
-}
-
-impl Display for IndigoName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, r#"pub const {}: &str = "{}";"#, self.name, self.value)
-    }
-}
-
 static RE: Lazy<Regex> = Lazy::new(|| Regex::new(r#"^#define\s+(?<name>\w+)_NAME\s+"(?<value>.+)"\s*$"#).unwrap());
 fn main() -> std::io::Result<()> {
 
-    let submodule = Path::new(GIT_SUBMODULE);
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+
+    let submodule = Path::new(INDIGO_GIT_SUBMODULE);
     if !submodule.exists() {
         init_indigo_submodule()?;
     }
@@ -51,13 +43,41 @@ fn main() -> std::io::Result<()> {
         }
     }
 
-    let names_path = PathBuf::from(env::var("OUT_DIR").unwrap()).join("name.rs");
+    let names_path = out_dir.join("name.rs");
     let mut names_file = File::create(names_path).expect("props.rs file creation failed");
     for prop in names {
         writeln!(names_file, r#"pub const {}: &str = "{}";"#, prop.0, prop.1)?;
     }
 
+    let include = submodule.join("indigo_libs").canonicalize()?;
+    let bindings = bindgen::Builder::default()
+        .clang_arg(format!("-I{}", include.to_str().expect("path not found")))
+        .header(join_paths(&include, "indigo/indigo_bus.h"))
+        .derive_debug(true)
+        .allowlist_item("indigo_device_interface")
+        .bitfield_enum("indigo_device_interface")
+        .prepend_enum_name(false)
+        .translate_enum_integer_types(true)
+        .generate_cstr(true)
+        // Tell cargo to invalidate the built crate whenever any of the
+        // included header files changed.
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        // Finish the builder and generate the bindings.
+        .generate()
+        // Unwrap the Result and panic on failure.
+        .expect("Unable to generate bindings");
+
+    bindings
+        .write_to_file(out_dir.join("interface.rs"))
+        .expect("Couldn't write bindings!");
+
     Ok(())
+}
+
+fn join_paths(base: &Path, path: &str) -> String {
+    let p = base.join(path);
+    let s = p.to_str().expect("path not found");
+    String::from(s)
 }
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
@@ -88,5 +108,5 @@ fn init_indigo_submodule() -> std::io::Result<PathBuf>{
     if !outcome.success() {
         panic!("could not clone or checkout git submodule externals/indigo");
     }
-    Path::new(GIT_SUBMODULE).canonicalize()
+    Path::new(INDIGO_GIT_SUBMODULE).canonicalize()
 }

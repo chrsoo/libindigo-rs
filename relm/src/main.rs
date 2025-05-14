@@ -1,19 +1,28 @@
-mod server;
-mod property;
 mod device;
+mod property;
+mod server;
 
 use std::env;
 
-use device::{Device, DeviceCommand, DeviceEvent};
-use gtk::{glib::ExitCode, prelude::*};
-use log::{error, warn};
+use device::{Device, DeviceInput, DeviceOutput};
 use gtk::glib;
-use libindigo::{sys::{SysBus, SysClientController,LogLevel}, Bus, ClientController, BusController, ClientDelegate, NamedObject, Property};
-use relm4::{factory::FactoryHashMap, Component, ComponentController, ComponentParts, ComponentSender, Controller, MessageBroker, RelmApp, RelmWidgetExt};
-use server::{IndigoServer, ServerCommand, ServerOutput};
+use gtk::{glib::ExitCode, prelude::*};
+use libindigo::IndigoResult;
+use libindigo::{
+    property::{PropertyData, PropertyItem},
+    sys::{LogLevel, SysBus, SysClientController, SysProperty, SysRemoteResource},
+    Bus, ClientController, ClientDelegate, Controller as BusController, Delegate, NamedObject,
+    Property, PropertyItem, RemoteResource,
+};
+use log::{error, warn};
+use relm4::{
+    factory::FactoryHashMap, Component, ComponentController, ComponentParts, ComponentSender,
+    Controller, MessageBroker, RelmApp, RelmWidgetExt,
+};
+use server::{Server, ServerInput, ServerOutput};
+use url_fork::Url;
 
-
-static BROKER: MessageBroker<AppCommand> = MessageBroker::new();
+static BROKER: MessageBroker<AppInput> = MessageBroker::new();
 
 fn main() -> glib::ExitCode {
     env::set_var("G_MESSAGES_DEBUG", "all");
@@ -23,7 +32,7 @@ fn main() -> glib::ExitCode {
     // TODO make the INDIGO LogLevel configurable over GTK settings.
     // Set the log level and start the local INDIGO bus
     match SysBus::start("indigoApp") {
-        Ok(bus)   => {
+        Ok(bus) => {
             SysBus::enable_bus_log(LogLevel::Debug);
 
             let app = RelmApp::new("se.jabberwocky.libindigo-rs-example-app");
@@ -31,43 +40,87 @@ fn main() -> glib::ExitCode {
             // app.run::<IndigoApp>(());
 
             ExitCode::SUCCESS
-        },
-        Err(e)  => {
+        }
+        Err(e) => {
             error!("Could not start the INDIGO bus: {e}");
             ExitCode::FAILURE
         }
     }
-
 }
 
 #[derive(Debug, Clone)]
-enum AppCommand {
-    AttachClient(String),
-    DetachClient,
-    DefineProperty(Property),
-    UpdateStatus(String),
+enum AppInput {
+
+    // -- commands
+
+    /// Connect a remote [Server]
+    ConnectServer(String, Url),
+    /// Disconnect a remote [Server]
+    DisconnectServer,
+    /// Connect [Device] to INDIGO bus.
+    RequestConnection,
+    /// Connect [Device] to INDIGO bus.
+    RequestDisconnection,
+    /// Request a new [Property] to be defined for the [Device].
+    RequestDefinition(String, String),
+    /// Request all properties for the [Device] to be defined.
+    RequestEnumeration(String),
+    /// Request update of a [Property].
+    RequestUpdate(PropertyData),
+    /// Request update of a [PropertyItem] for a [Property] on a [Device].
+    RequestItemUpdate(PropertyItem, String, String),
+    /// Request deletion of an [Property].
+    RequestDeletion(String, String),
+    /// Send a message to the [Device].
+    SendMessage(String, String),
+
+    // -- events
+
+    /// A [Property] of a [Device] was defined.
+    PropertyDefined { data: PropertyData, msg: Option<String> },
+    /// A [Property] of a Device was updated.
+    PropertyUpdated { data: PropertyData, msg: Option<String> },
+    /// A [Property] of a [Device] was deleted.
+    PropertyDeleted { property: String, device: String, msg: Option<String> },
+    /// Received a message from a Device
+    MessageReceived { device: String, msg: String }
 }
 
 #[derive(Debug, Clone)]
-enum CommandOutput {
-    ClientAttached(String),
-    ClientDetached(String),
+enum AppOutput {
+    /// Server remote server was Connected.
+    ServerConnected,
+    /// A remote server was Disconnected.
+    ServerDisconnected,
+    /// A [Property] of a [Device] was defined.
+    PropertyDefined(PropertyData),
+    /// A [Property] of a Device was updated.
+    PropertyUpdated(PropertyData),
+    /// A [Property] of a [Device] was deleted.
+    PropertyDeleted { property: String, device: String },
+    /// A message was sent by a [Device]
+    MessageSent{ message: String, device: String },
 }
 
+#[derive(Debug)]
 struct IndigoApp {
+    // indigo
     bus: SysBus,
-    server: Controller<IndigoServer>,
-    client: Option<SysClientController<DeviceCallbackHandler>>,
-    devices: FactoryHashMap<String,crate::device::Device>,
+    client: SysClientController<'static, DeviceCallbackHandler>,
+    remote: SysRemoteResource,
+    // realm
     status: String,
+    server: Controller<Server>,
+    // generic
+    devices: FactoryHashMap<String, crate::device::Device>,
 }
 
 #[relm4::component]
 impl Component for IndigoApp {
     type Init = SysBus;
-    type Input = AppCommand;
-    type Output = ();
-    type CommandOutput = CommandOutput;
+    type Input = AppInput;
+    type Output = AppOutput;
+    type CommandOutput = ();
 
     view! {
         window = gtk::ApplicationWindow {
@@ -118,25 +171,37 @@ impl Component for IndigoApp {
         let devices = FactoryHashMap::builder()
             .launch(gtk::Stack::default())
             .forward(sender.input_sender(), |output| match output {
-                DeviceEvent::Connected(d) => AppCommand::UpdateStatus(format!("Connected device '{d}'")),
-                DeviceEvent::Disconnected(d) => AppCommand::UpdateStatus(format!("Disconnected device '{d}'")),
-                DeviceEvent::PropertyDefined(p) => AppCommand::UpdateStatus(format!("Defined property '{p}'")),
-                DeviceEvent::PropertyUpdated(p) => AppCommand::UpdateStatus(format!("Defined property '{p}'")),
-                DeviceEvent::PropertyDeleted(p) => AppCommand::UpdateStatus(format!("Defined property '{p}'")),
-                DeviceEvent::Busy(d) => AppCommand::UpdateStatus(format!("Device is busy '{d}'")),
+                DeviceOutput::RequestConnection => AppInput::RequestConnection,
+                DeviceOutput::RequestDisconnection => AppInput::RequestDisconnection,
+                DeviceOutput::RequestDefinition(p, d) => AppInput::RequestDefinition(p, d),
+                DeviceOutput::RequestUpdate(p) => AppInput::RequestUpdate(p),
+                DeviceOutput::RequestDeletion(p, d) => AppInput::RequestDeletion(p, d),
+                DeviceOutput::RequestItemUpdate(pi, p, d) => AppInput::RequestItemUpdate(pi, p, d),
+                DeviceOutput::RequestEnumeration(d) => AppInput::RequestEnumeration(d),
+                DeviceOutput::SendMessage(d, m) => AppInput::SendMessage(d, m),
             });
 
-        let server = IndigoServer::builder()
+        let server = Server::builder()
             .launch(())
-            .forward(sender.input_sender(), |msg| match msg{
-                ServerOutput::Detach => AppCommand::DetachClient,
-                ServerOutput::Connected(m) => AppCommand::AttachClient(m),
-                ServerOutput::Disconnected(m) => AppCommand::UpdateStatus(m),
-                ServerOutput::StatusMessage(m) => AppCommand::UpdateStatus(m),
+            .forward(sender.input_sender(), |msg| match msg {
+                ServerOutput::ConnectServer(name, url) => AppInput::ConnectServer(name, url),
+                ServerOutput::DisconnectServer => AppInput::DisconnectServer,
             });
+
+        let delegate = DeviceCallbackHandler {};
+        let client = SysClientController::new(delegate);
+
+        let remote = SysRemoteResource::default();
 
         // let devices = Arc::new(devices);
-        let model = IndigoApp { bus, server, devices, client: None, status: String::new() };
+        let model = IndigoApp {
+            bus,
+            client,
+            remote,
+            server,
+            devices,
+            status: String::new(),
+        };
 
         // local widget refs used in the view macro above.
         let device_stack = model.devices.widget();
@@ -150,168 +215,161 @@ impl Component for IndigoApp {
         &mut self,
         input: <Self as relm4::Component>::Input,
         sender: ComponentSender<Self>,
-        _root: &<Self as relm4::Component>::Root) {
-
-        match input {
-            AppCommand::AttachClient(m) => {
-                self.status = m;
-                self.attach_client(sender);
-            },
-            AppCommand::DetachClient => self.detach_client(sender),
-            AppCommand::UpdateStatus(m) => self.status = m,
-            AppCommand::DefineProperty(p) => self.define_property(p),
+        _root: &<Self as relm4::Component>::Root,
+    ) {
+        if let Err(e) = match input {
+            // device commands
+            AppInput::RequestConnection=> todo!(),
+            AppInput::RequestDisconnection=>todo!(),
+            AppInput::RequestDefinition(d,p)=> self.client.request_definition(d.as_str(), p.as_str()),
+            AppInput::RequestEnumeration(_)=>todo!(),
+            AppInput::RequestUpdate(_)=>todo!(),
+            AppInput::RequestItemUpdate(_,_,_)=>todo!(),
+            AppInput::RequestDeletion(_,_)=>todo!(),
+            AppInput::SendMessage(_,_)=>todo!(),
+            // server commands
+            AppInput::ConnectServer(name, url)=> self.connect(name, url),
+            AppInput::DisconnectServer=> self.remote.disconnect(),
+            // property events
+            AppInput::PropertyDefined { data, msg } => self.define_property(data, msg),
+            AppInput::PropertyUpdated { data, msg } => self.update_property(data, msg),
+            AppInput::PropertyDeleted { property, device, msg } => self.delete_property(property, device, msg),
+            // device events
+            AppInput::MessageReceived { device, msg } => self.receive_message(device, msg),
+        } {
+            error!("{e}");
         }
     }
 
-    fn update_cmd(
-            &mut self,
-            message: Self::CommandOutput,
-            _sender: ComponentSender<Self>,
-            _root: &Self::Root,
-        ) {
-        match message {
-            CommandOutput::ClientAttached(m) => self.status = m,
-            CommandOutput::ClientDetached(m) => {
-                self.status = m;
-                self.client = None;
-                self.server.sender().send(ServerCommand::Disconnect).unwrap();
-            },
-        }
-    }
+    // fn update_cmd(
+    //     &mut self,
+    //     message: Self::CommandOutput,
+    //     _sender: ComponentSender<Self>,
+    //     _root: &Self::Root,
+    // ) {
+    //     match message {
+
+    //         AppOutput::ClientAttached(m) => self.status = m,
+    //         AppOutput::ClientDetached(m) => {
+    //             self.status = m;
+    //             self.client = None;
+    //             self.server.sender().send(ServerInput::Disconnect).unwrap();
+    //         }
+    //     }
+    // }
 }
 
 impl IndigoApp {
 
-    fn define_property(&mut self, property: Property) {
-        let device = &property.device().to_string();
-        if let None = self.devices.get(device) {
-            self.devices.insert(device.clone(), ClientDevice::new(device));
-        }
-        // self.devices.widget().add_titled(child, Some(property.name()), property.name());
-        self.devices.send(&device, DeviceCommand::DefineProperty(property));
+    fn connect(&mut self, name: String, url: Url) -> IndigoResult<()> {
+        let mut remote = SysRemoteResource::new(name.as_str(), url)?;
+        remote.attach(&mut self.bus)?;
+        remote.reconnect()?;
+        self.remote = remote;
+        Ok(())
     }
 
-    fn attach_client(&mut self, sender: ComponentSender<Self>) {
-        self.status = format!("Attaching the client to the INDIGO bus...");
+    // -- device events
 
-        let devices = self.devices.clone();
-        let callback_handler = DeviceCallbackHandler::new("INDIGO", devices);
-        match self.bus.attach_client(callback_handler) {
-            Ok(c)   => sender.input(AppCommand::UpdateStatus({
-                self.client = Some(c);
-                format!("Attached client to the INDIGO bus.")
-            })),
-            Err(e)  => sender.input(AppCommand::UpdateStatus({
-                self.client = None;
-                format!("Failed attching client to the INDIGO bus: {e}.")
-            })),
-        }
-
+    fn define_property(&self, data: PropertyData, msg: Option<String>)
+    -> IndigoResult<()> {
+        let device = &data.device().to_owned();
+        self.devices.send(device, DeviceInput::DefineProperty(data, msg));
+        Ok(())
     }
 
-    fn detach_client(&mut self, sender: ComponentSender<Self>) {
-        self.status = format!("Detaching the client from the INDIGO bus...");
+    fn update_property(&self, data: PropertyData, msg: Option<String>)
+    -> IndigoResult<()> {
+        let device = &data.device().to_owned();
+        self.devices.send(device, DeviceInput::UpdateProperty(data, msg));
+        Ok(())
+    }
 
-        if let Some(client) = self.client.take() {
-            if let Err(e) = client.detach() {
-                self.status = format!("Failed detaching client from the INDIGO bus: {e}.");
-            } else {
-                sender.oneshot_command(async { CommandOutput::ClientDetached(
-                    format!("Detached the client from the INDIGO bus.")
-                )});
-            }
-        } else {
-            self.status = format!("Error: trying to detach a non-exisisting client.");
-        }
+    fn delete_property(&self, property: String, device: String, msg: Option<String>)
+    -> IndigoResult<()> {
+        self.devices.send(&device, DeviceInput::DeleteProperty(property, msg));
+        Ok(())
+    }
+
+    fn receive_message(&self, device: String, msg: String) -> IndigoResult<()> {
+        self.devices.send(&device, DeviceInput::Message(msg));
+        Ok(())
     }
 }
 
-
-pub(crate) struct DeviceCallbackHandler {
-    name: String,
-    devices: FactoryHashMap<String,Device>,
-}
-
-impl DeviceCallbackHandler {
-    pub(crate) fn new(name: &str, devices: FactoryHashMap<String,Device>) -> Self {
-        Self { name: name.to_owned(), devices }
-    }
-}
+#[derive(Debug)]
+pub(crate) struct DeviceCallbackHandler { }
 
 impl NamedObject for DeviceCallbackHandler {
     fn name(&self) -> &str {
-        &self.name
+        "RealmApp"
     }
 }
 
-impl<'a> ClientDelegate<'a> for DeviceCallbackHandler {
-    type M = DeviceCallbackHandler;
+impl Delegate for DeviceCallbackHandler {
+    type Bus = SysBus;
+    type BusController = SysClientController<'static, Self>;
+}
 
-    fn on_define_property(
-        &mut self,
-        _c: &mut libindigo::ClientController<'a, Self::M>,
-        d: String,
-        p: libindigo::Property,
-        msg: Option<String>,
-    ) -> Result<(), libindigo::IndigoError> {
+impl ClientDelegate for DeviceCallbackHandler {
+    type Property = SysProperty<'static>;
+    type ClientController = SysClientController<'static, Self>;
 
-        let name = p.name().to_string();
-        let device = p.device().to_string();
-        BROKER.send(AppCommand::DefineProperty(p));
-        log::debug!("Device: '{device}'; Property '{name}'; DEFINED with message '{:?}'", msg);
+    fn on_define_property<'a>(
+        &'a mut self,
+        _c: &mut Self::ClientController,
+        _d: &'a str,
+        p: Self::Property,
+        msg: Option<&'a str>,
+    ) -> libindigo::IndigoResult<()> {
+
+        let msg = msg.map(|m| m.to_owned());
+        let input = AppInput::PropertyDefined { data: p.into(), msg };
+        BROKER.send(input);
         Ok(())
     }
 
-    fn on_update_property(
+    fn on_update_property<'a>(
         &mut self,
-        _c: &mut libindigo::ClientController<'a, Self::M>,
-        d: String,
-        p: libindigo::Property,
-        msg: Option<String>,
-    ) -> Result<(), libindigo::IndigoError> {
+        _c: &mut Self::ClientController,
+        _d: &'a str,
+        p: Self::Property,
+        msg: Option<&'a str>,
+    ) -> libindigo::IndigoResult<()> {
 
-        let device = p.device().to_string();
-        let name = p.name().to_string();
-        if let None = self.devices.get(&device) {
-            BROKER.send(AppCommand::DefineProperty(p));
-            log::debug!("Device: '{device}'; Property '{name}'; DEFINED with message '{:?}'", msg);
-        } else {
-            self.devices.send(&device, DeviceCommand::UpdateProperty(p));
-            log::debug!("Device: '{device}'; Property '{name}'; UPDATED with message '{:?}'", msg);
-        }
-
+        let msg = msg.map(|m| m.to_owned());
+        let input = AppInput::PropertyUpdated { data: p.into(), msg };
+        BROKER.send(input);
         Ok(())
     }
 
-    fn on_delete_property(
+    fn on_delete_property<'a>(
         &mut self,
-        _c: &mut libindigo::ClientController<'a, Self::M>,
-        d: String,
-        p: libindigo::Property,
-        msg: Option<String>,
-    ) -> Result<(), libindigo::IndigoError> {
-        log::debug!(
-            "Device: '{}'; Property '{}'; DELETED with message '{:?}'",
-            p.device(),
-            p.name(),
-            msg
-        );
+        _c: &mut Self::ClientController,
+        _d: &'a str,
+        p: Self::Property,
+        msg: Option<&'a str>,
+    ) -> libindigo::IndigoResult<()> {
 
-        let device = p.device().to_string();
-        if let Some(_) = self.devices.get(&device) {
-            self.devices.send(&p.device().to_string(), DeviceCommand::DeleteProperty(p));
-        }
+        let device = p.device().to_owned();
+        let property = p.name().to_owned();
+        let msg = msg.map(|m| m.to_owned());
+        let input = AppInput::PropertyDeleted{ property, device, msg };
+
+        BROKER.send(input);
         Ok(())
     }
 
-    fn on_send_message(
+    fn on_message_broadcast<'a>(
         &mut self,
-        _c: &mut libindigo::ClientController<'a, Self::M>,
-        d: String,
-        msg: String,
-    ) -> Result<(), libindigo::IndigoError> {
-        log::info!("Device: '{d}';  SEND  message: '{msg}'");
+        _c: &mut Self::ClientController,
+        d: &'a str,
+        msg: &'a str
+    ) -> libindigo::IndigoResult<()> {
+
+        let device = d.to_owned();
+        let input = AppInput::MessageReceived { device, msg: msg.to_owned() };
+        BROKER.send(input);
         Ok(())
     }
-
 }
