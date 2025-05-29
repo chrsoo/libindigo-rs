@@ -1,4 +1,7 @@
-use std::fmt::{Debug, Display};
+use std::{
+    fmt::{Debug, Display},
+    ops::{Index, IndexMut},
+};
 
 use strum_macros::Display;
 use url_fork::Url;
@@ -27,6 +30,12 @@ impl Text {
     }
 }
 
+impl Display for Text {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
 #[derive(PartialEq, Debug, Clone)]
 pub struct Number {
     /// < item value (for number properties)
@@ -42,6 +51,12 @@ pub struct Number {
     max: f64,
     /// < item increment value (for number properties)
     step: f64,
+}
+
+impl Display for Number {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
 }
 
 impl NumberItem for Number {
@@ -81,6 +96,12 @@ impl SwitchItem for Switch {
     }
 }
 
+impl Display for Switch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
 #[derive(PartialEq, Debug, Clone)]
 pub struct Blob {
     // TODO map blob file exension to mime-type or other more structured format
@@ -92,6 +113,12 @@ pub struct Blob {
     size: usize,
     /// < item URL on source server
     url: Option<Url>,
+}
+
+impl Display for Blob {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<blob>")
+    }
 }
 
 impl BlobItem for Blob {
@@ -173,6 +200,20 @@ impl PropertyValue {
     }
 }
 
+impl From<PropertyValue> for String {
+    fn from(value: PropertyValue) -> Self {
+        match value {
+            PropertyValue::Text(text) => text.value,
+            PropertyValue::Number(number) => number.value.to_string(),
+            PropertyValue::Switch(switch) => switch.value.to_string(),
+            PropertyValue::Light(light) => light.to_string(),
+            PropertyValue::Blob(blob) => blob
+                .url
+                .map_or_else(|| "blob".to_string(), |url| url.to_string()),
+        }
+    }
+}
+
 impl From<&PropertyValue> for PropertyType {
     fn from(value: &PropertyValue) -> Self {
         match value {
@@ -203,11 +244,11 @@ impl NamedObject for PropertyItem {
 impl Display for PropertyItem {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.value {
-            PropertyValue::Text(text) => text.fmt(f),
-            PropertyValue::Number(number) => number.fmt(f),
-            PropertyValue::Switch(switch) => switch.fmt(f),
-            PropertyValue::Light(state) => state.fmt(f),
-            PropertyValue::Blob(blob) => blob.fmt(f),
+            PropertyValue::Text(text) => Display::fmt(text, f),
+            PropertyValue::Number(number) => Display::fmt(number, f),
+            PropertyValue::Switch(switch) => Display::fmt(switch, f),
+            PropertyValue::Light(state) => Display::fmt(state, f),
+            PropertyValue::Blob(blob) => Display::fmt(blob, f),
         }
     }
 }
@@ -310,27 +351,41 @@ impl Property for PropertyData {
         self.items.iter()
     }
 
-    // fn update(&mut self, p: &Self) {
-    //     // Strings
-    //     self.name = p.name.to_owned();
-    //     self.device = p.device.to_owned();
-    //     self.group = p.group.to_owned();
-    //     self.hints = p.hints.to_owned();
-    //     // Other
-    //     self.hidden = p.hidden;
-    //     self.defined = p.defined;
-    //     self.perm = p.perm;
-    //     self.rule = p.rule;
-    //     self.state = p.state;
-    //     self.type_ = p.type_;
-    //     // Items
-    //     let mut i = 0;
-    //     for item in &p.items {
-    //         self.items[i] = item.to_owned();
-    //         i += 1;
-    //     }
-    //     self.items.truncate(p.items.len());
-    // }
+    fn update(&mut self, p: &impl Property) {
+        // Strings
+        self.name = p.name().to_owned();
+        self.device = p.device().to_owned();
+        self.group = p.group().to_owned();
+        self.hints = p.hints().to_owned();
+        // Other
+        self.hidden = p.hidden();
+        self.defined = p.defined();
+        self.perm = p.perm().to_owned();
+        self.rule = p.rule().to_owned();
+        self.state = p.state().to_owned();
+        self.type_ = p.property_type().to_owned();
+        // Items
+        let mut i = 0;
+        for item in p.items() {
+            self.items[i] = item.to_owned();
+            i += 1;
+        }
+        self.items.truncate(i);
+    }
+}
+
+impl Index<usize> for PropertyData {
+    type Output = PropertyItem;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.items[index]
+    }
+}
+
+impl IndexMut<usize> for PropertyData {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.items[index]
+    }
 }
 
 impl PropertyData {
@@ -364,5 +419,9 @@ impl PropertyData {
     /// Return `true` if at least one [PropertyItem] has [requested change](PropertyItem#request).
     pub fn is_dirty(&self) -> bool {
         self.items.iter().any(|i| i.is_dirty())
+    }
+
+    pub fn len(&self) -> usize {
+        self.items.len()
     }
 }

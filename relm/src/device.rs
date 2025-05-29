@@ -7,14 +7,14 @@ use log::trace;
 use relm4::factory::FactoryHashMap;
 use relm4::{gtk, prelude::FactoryComponent, FactorySender};
 
-use crate::property::Property;
-use crate::property::PropertyInput;
+use crate::property::RelmProperty;
+use crate::property::RelmPropertyInput;
 
 /// Relm model for a [ClientDevice].
 #[derive(Debug)]
 pub struct Device {
     name: String,
-    props: FactoryHashMap<String, Property>,
+    props: FactoryHashMap<String, RelmProperty>,
     message: Option<String>,
 }
 
@@ -120,15 +120,23 @@ impl FactoryComponent for Device {
 // }
 
 impl Device {
+    fn message(&self) -> &str {
+        self.message
+            .as_ref()
+            .map(|m| m.as_str())
+            .unwrap_or("<none>")
+    }
+
     fn define_property(
         &mut self,
         p: PropertyData,
         m: Option<String>,
         _sender: FactorySender<Self>,
     ) {
-        let name = p.name();
+        let name = p.name().to_owned();
         self.props.insert(name.to_owned(), p);
-        debug!("defined property {name}")
+        trace!("defined property {name}: {}", self.message());
+        self.message = m;
     }
 
     fn update_property(
@@ -137,14 +145,16 @@ impl Device {
         m: Option<String>,
         _sender: FactorySender<Self>,
     ) {
-        let name = &p.name().to_string();
-        self.props.send(&name, PropertyInput::UpdateProperty(p));
-        trace!("updated property {name}");
+        let name = &p.name().to_owned();
+        self.props.send(&name, RelmPropertyInput::UpdateProperty(p));
+        self.message = m;
+        trace!("updated property {name}: {}", self.message());
     }
 
     fn delete_property(&mut self, p: String, m: Option<String>, _sender: FactorySender<Self>) {
         self.props.remove(&p);
-        trace!("deleted property {p}");
+        trace!("deleted property {p}: {}", self.message());
+        self.message = m;
     }
 
     fn set_message(&mut self, message: String) {

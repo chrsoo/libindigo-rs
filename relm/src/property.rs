@@ -1,7 +1,18 @@
-use gtk::{glib::{self}, prelude::*, EntryBuffer, Frame, Label, SizeGroup};
-use libindigo::{property::{PropertyData, PropertyItem}, BlobItem, NamedObject as _, NumberItem, Property as IndigoProperty, PropertyItem as IndigoPropertyItem, PropertyType, SwitchItem as _, TextItem};
+use gtk::{
+    glib::{self},
+    prelude::*,
+    EntryBuffer, Frame, Label, SizeGroup,
+};
+use libindigo::{
+    property::{PropertyData, PropertyItem, PropertyValue}, BlobItem, LightItem, NamedObject as _, NumberItem, Property, PropertyType, SwitchItem as _, TextItem
+};
+use log::warn;
 use relm4::{
-    factory::{FactoryHashMap, FactoryVecDequeBuilder, FactoryView}, gtk, prelude::{DynamicIndex, FactoryComponent, FactoryVecDeque}, view, Component, ComponentParts, ComponentSender, FactorySender, RelmWidgetExt, SimpleComponent
+    factory::{FactoryHashMap, FactoryVecDequeBuilder, FactoryView},
+    gtk,
+    prelude::{DynamicIndex, FactoryComponent, FactoryVecDeque},
+    view, Component, ComponentParts, ComponentSender, FactorySender, RelmWidgetExt,
+    SimpleComponent,
 };
 
 thread_local! {
@@ -11,28 +22,27 @@ thread_local! {
 }
 
 #[derive(Debug)]
-pub(crate) struct Property {
+pub(crate) struct RelmProperty {
     property: PropertyData,
-    items: FactoryVecDeque<PropertyItem>,
+    items: FactoryVecDeque<RelmPropertyItem>,
 }
 
-
 #[derive(Debug, Clone)]
-pub(crate) enum PropertyInput {
+pub(crate) enum RelmPropertyInput {
     UpdateProperty(PropertyData),
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum PropertyOutput {
+pub(crate) enum RelmPropertyOutput {
     RequestPropertyUpdate(PropertyData),
     RequestItemUpdate(PropertyItem),
 }
 
 #[relm4::factory(pub)]
-impl FactoryComponent for Property {
+impl FactoryComponent for RelmProperty {
     type Init = PropertyData;
-    type Input = PropertyInput;
-    type Output = PropertyOutput;
+    type Input = RelmPropertyInput;
+    type Output = RelmPropertyOutput;
     type CommandOutput = ();
     type ParentWidget = gtk::Box;
     type Index = String;
@@ -48,13 +58,13 @@ impl FactoryComponent for Property {
         }
     }
 
-    fn init_model(property: Self::Init, _index: &String, sender: FactorySender<Self>) -> Self {
+    fn init_model(property: Self::Init, _index: &String, _sender: FactorySender<Self>) -> Self {
         let items = FactoryVecDeque::builder()
             .launch(Self::ParentWidget::default())
             .detach();
-            // .forward(sender.input_sender(), |output| match output {
-            //     Prop => PropertyInput::,
-            // });
+        // .forward(sender.input_sender(), |output| match output {
+        //     Prop => PropertyInput::,
+        // });
         Self { property, items }
     }
 
@@ -62,8 +72,8 @@ impl FactoryComponent for Property {
         &mut self,
         _index: &Self::Index,
         root: Self::Root,
-        returned_widget: &<Self::ParentWidget as FactoryView>::ReturnedWidget,
-        sender: FactorySender<Self>,
+        _returned_widget: &<Self::ParentWidget as FactoryView>::ReturnedWidget,
+        _sender: FactorySender<Self>,
     ) -> Self::Widgets {
         let widgets = view_output!();
 
@@ -74,16 +84,15 @@ impl FactoryComponent for Property {
         widgets
     }
 
-    fn update(&mut self, message: Self::Input, sender: FactorySender<Self>) {
+    fn update(&mut self, message: Self::Input, _sender: FactorySender<Self>) {
         match message {
-            PropertyInput::UpdateProperty(p) => self.property.update(&p),
+            RelmPropertyInput::UpdateProperty(p) => self.property.update(&p),
         }
     }
-
 }
 
 #[derive(Debug, Clone)]
-struct PropertyItem {
+struct RelmPropertyItem {
     item: PropertyItem,
 }
 
@@ -98,7 +107,7 @@ pub enum PropertyItemOutput {
 }
 
 #[relm4::factory]
-impl FactoryComponent for PropertyItem {
+impl FactoryComponent for RelmPropertyItem {
     type Init = PropertyItem;
     type Input = PropertyItemInput;
     type Output = PropertyItemOutput;
@@ -110,8 +119,8 @@ impl FactoryComponent for PropertyItem {
         gtk::Box {
             set_orientation: gtk::Orientation::Horizontal,
             set_spacing: 10,
-            append = match &self.item.property_type() {
-                PropertyType::Text => {
+            append = match &self.item.value() {
+                PropertyValue::Text(text) => {
                     gtk::Box {
                         set_orientation: gtk::Orientation::Horizontal,
                         set_spacing: 10,
@@ -119,20 +128,20 @@ impl FactoryComponent for PropertyItem {
                             set_size_group: &PROP_COLUMN_1.with(|w| w.clone() ),
                             gtk::Label {
                                 #[watch]
-                                set_label: &self.item.name(),
+                                set_label: &self.item.label(),
                             },
                         },
                         gtk::Box {
                             set_size_group: &PROP_COLUMN_2.with(|w| w.clone() ),
                             gtk::Label {
                                 #[watch]
-                                set_label: self.item.text(),
+                                set_label: text.value(),
                             }
                         }
                     }
                 }
                 // PropertyValue::Number{format, min, max, step, value, target} => {
-                PropertyType::Number => {
+                PropertyValue::Number(number) => {
                     gtk::Box {
                         set_orientation: gtk::Orientation::Horizontal,
                         set_spacing: 10,
@@ -147,19 +156,19 @@ impl FactoryComponent for PropertyItem {
                             set_size_group: &PROP_COLUMN_2.with(|w| w.clone() ),
                             gtk::Label {
                                 #[watch]
-                                set_label: self.item.formatted_number().as_str(),
+                                set_label: number.formatted_number().as_str(),
                             }
                         }
                     }                }
-                PropertyType::Light => {
+                PropertyValue::Light(_light) => {
                     gtk::Label {
                         set_label: "TODO: render light property"
                     }
                 }
-                PropertyType::Switch => {
+                PropertyValue::Switch(switch) => {
                     gtk::CheckButton {
                         #[watch]
-                        set_active: self.item.on(),
+                        set_active: switch.on(),
                         set_label: Some(&self.item.name()),
                         // TODO group checkbuttons depending on the property SwitchType...
                         // #[track(true)]
@@ -167,7 +176,7 @@ impl FactoryComponent for PropertyItem {
                     }
                 }
                 // PropertyValue::Blob{format, url, size, value} => {
-                PropertyType::Blob => {
+                PropertyValue::Blob(_blob) => {
                     gtk::Label {
                         set_label: "TODO: render blob property"
                     }
@@ -182,7 +191,7 @@ impl FactoryComponent for PropertyItem {
     }
 }
 
-impl PropertyItem {
+impl RelmPropertyItem {
     fn label(&self) -> &str {
         &self.item.label()
     }
@@ -203,7 +212,8 @@ pub enum SwitchCommand {
 
 #[derive(Debug)]
 pub enum SwitchStatus {
-    On, Off
+    On,
+    Off,
 }
 
 #[relm4::factory]
@@ -233,14 +243,18 @@ impl FactoryComponent for SwitchItem {
     fn init_model(item: Self::Init, _index: &DynamicIndex, _sender: FactorySender<Self>) -> Self {
         Self { item }
     }
-
 }
 
 impl SwitchItem {
     fn label(&self) -> &str {
-        &self.item.label()
+        self.item.label()
     }
     fn value(&self) -> bool {
-        self.item.on()
+        if let PropertyValue::Switch(switch) = self.item.value() {
+            switch.on()
+        } else {
+            warn!("defaulting to 'off': expected switch, found {:?}", self.item.value());
+            false
+        }
     }
 }

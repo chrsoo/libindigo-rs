@@ -6,6 +6,9 @@ use std::io::{self, prelude::*, ErrorKind, Result};
 use std::env;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
+use bindgen::callbacks::ParseCallbacks;
+use bindgen::RustTarget;
+use log::{error, info};
 use rev_buf_reader::RevBufReader;
 use semver::Version;
 use regex::Regex;
@@ -22,6 +25,41 @@ const GIT_SUBMODULE: &str = "externals/indigo";
 const LINUX_INDIGO_VERSION_HEADER: &str = "/usr/include/indigo/indigo_version.h";
 const LINUX_INCLUDE: &str = "/usr/include";
 const LINUX_LIB: &str = "/usr/lib";
+
+#[derive(Debug)]
+struct IndigoCallbacks {}
+impl ParseCallbacks for IndigoCallbacks {
+    // fn generated_name_override(
+    //         &self,
+    //         item_info: bindgen::callbacks::ItemInfo<'_>,
+    //     ) -> Option<String> {
+
+    //     error!("kind: {}", item_info.name);
+
+    //     match item_info.kind {
+    //         bindgen::callbacks::ItemKind::Function => {
+    //             info!("fun: {}", item_info.name);
+    //             None
+    //         },
+    //         bindgen::callbacks::ItemKind::Var => {
+    //             info!("var: {}", item_info.name);
+    //             None
+    //         },
+    //         _ => None,
+    //     }
+    // }
+    fn item_name(&self, item_name: &str) -> Option<String> {
+        match item_name {
+            "indigo_item__bindgen_ty_1" => Some("indigo_value".to_string()),
+            "indigo_item__bindgen_ty_1__bindgen_ty_1" => Some("indigo_text".to_string()),
+            "indigo_item__bindgen_ty_1__bindgen_ty_2" => Some("indigo_number".to_string()),
+            "indigo_item__bindgen_ty_1__bindgen_ty_3" => Some("indigo_switch".to_string()),
+            "indigo_item__bindgen_ty_1__bindgen_ty_4" => Some("indigo_light".to_string()),
+            "indigo_item__bindgen_ty_1__bindgen_ty_5" => Some("indigo_blob".to_string()),
+            _ => None,
+        }
+    }
+}
 
 
 fn main() -> std::io::Result<()> {
@@ -64,15 +102,19 @@ fn main() -> std::io::Result<()> {
         .header(join_paths(&include, "indigo/indigo_config.h"))
         .header(join_paths(&include, "indigo/indigo_timer.h"))
         .header(join_paths(&include, "indigo/indigo_token.h"))
+        // .raw_line("#![feature(ptr_metadata,layout_for_ptr)]")
+        // .flexarray_dst(true)
+        // .rust_target(RustTarget::nightly())
         .use_core()
-        .formatter( bindgen::Formatter::Prettyplease )
         .generate_cstr(true)
+        .formatter( bindgen::Formatter::Prettyplease )
         .default_enum_style(bindgen::EnumVariation::NewType {
             is_bitfield: false, is_global: false
         })
         .bitfield_enum("indigo_device_interface")
         .derive_debug(true)
         //.no_copy(".*")
+        .parse_callbacks(Box::new(IndigoCallbacks{}))
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))

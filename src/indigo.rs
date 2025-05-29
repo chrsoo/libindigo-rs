@@ -1,14 +1,16 @@
 #![allow(dead_code, unused_variables)]
+use std::ffi::{c_char, CString, NulError};
 use std::fmt::Debug;
 #[cfg(feature = "sys")]
 use std::{fmt::Display, str::Utf8Error};
 
 use enum_primitive::*;
 
-use log::{debug, warn};
+use libindigo_sys::buf_to_str;
+use log::{debug, error, warn};
 use number::NumberFormat;
 use strum_macros::Display;
-use url_fork::Url;
+use url_fork::{ParseError, Url};
 
 use crate::property::{PropertyItem, PropertyValue, Switch};
 use crate::{name, number, Interface};
@@ -56,7 +58,6 @@ impl Error for IndigoError {
 //     println!("{e}")
 // }
 
-#[cfg(feature = "sys")]
 impl From<Utf8Error> for IndigoError {
     fn from(value: Utf8Error) -> Self {
         warn!("Could not convert from UTF8: {value}");
@@ -64,7 +65,53 @@ impl From<Utf8Error> for IndigoError {
     }
 }
 
+impl From<ParseError> for IndigoError {
+    fn from(value: ParseError) -> Self {
+        IndigoError::new(value.to_string().as_str())
+    }
+}
+
+impl From<&str> for IndigoError {
+    fn from(msg: &str) -> Self {
+        Self {
+            msg: msg.into(),
+        }
+    }
+}
+
+impl From<String> for IndigoError {
+    fn from(msg: String) -> Self {
+        Self {
+            msg
+        }
+    }
+}
+
+// #[cfg(feature = "sys")]
+// impl<const N: usize> From<[c_char; N]> for IndigoError {
+//     fn from(value: [c_char; N]) -> Self {
+//         let error = buf_to_str(&value);
+//         IndigoError::new(error)
+//     }
+// }
+
 #[cfg(feature = "sys")]
+impl From<CString> for IndigoError {
+    fn from(value: CString) -> Self {
+        let error = value.to_str().unwrap_or_else(|e| {
+            error!("{e}");
+            "could not convert C-string"
+        });
+        IndigoError::new(error)
+    }
+}
+
+impl From<NulError> for IndigoError {
+    fn from(value: NulError) -> Self {
+        IndigoError::new(value.to_string().as_str())
+    }
+}
+
 impl Display for IndigoError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.msg)
@@ -210,8 +257,8 @@ pub trait Property: NamedObject {
         self.items().filter(|i| i.name() == name).nth(0)
     }
 
-    // /// Update this [Property] with the values of the provided [Property].
-    // fn update(&mut self, p: &Self);
+    /// Update this [Property] with the values of the provided [Property].
+    fn update(&mut self, p: &impl Property);
 
     /*
     #[doc = "< property version INDIGO_VERSION_NONE, INDIGO_VERSION_LEGACY or INDIGO_VERSION_2_0"]
@@ -220,17 +267,17 @@ pub trait Property: NamedObject {
 }
 
 enum_from_primitive! {
-    #[derive(Debug, Copy, Clone, PartialEq)]
+    #[derive(Debug, Copy, Clone, PartialEq, Display)]
     /// Possible states of a `Property`.
     pub enum PropertyState  {
         /// Property is passive (unused by INDIGO).
-        Idle,
+        Idle = 0,
         /// Property is in correct state or last operation was successful.
-        Ok,
+        Ok = 1,
         /// Property is a transient state or the outcome of an operation is pending.
-        Busy,
+        Busy = 2,
         /// Property is in incorrect state or the last operation failed.
-        Alert,
+        Alert = 3,
     }
 }
 
@@ -238,9 +285,9 @@ enum_from_primitive! {
     #[derive(Debug, Copy, Clone, PartialEq)]
     /// Possible states of a `Property`.
     pub enum PropertyPermission  {
-        ReadOnly,
-        ReadWrite,
-        WriteOnly,
+        ReadOnly = 1,
+        ReadWrite = 2,
+        WriteOnly = 3,
     }
 }
 
@@ -249,15 +296,15 @@ enum_from_primitive! {
     /// Possible property types.
     pub enum PropertyType  {
         /// Strings of limited width.
-        Text,
+        Text = 1,
         /// Float numbers with defined min, max values and increment.
-        Number,
+        Number = 2,
         /// Logical values representing “on” and “off” state.
-        Switch,
+        Switch = 3,
         /// Status values with four possible values Idle, Ok, Busy, and Alert.
-        Light,
+        Light = 4,
         /// Binary data of any type and any length.
-        Blob,
+        Blob = 5,
     }
 }
 
@@ -371,12 +418,14 @@ enum_from_primitive! {
 #[derive(Debug, Copy, Clone, PartialEq)]
 /// Possible property types.
 pub enum SwitchRule  {
-    /// Radio button group like behaviour with one switch in \"on\" state.
-    OneOfMany,
-    /// Radio button group like behaviour with none or one switch in \"on\" state.
-    AtMostOne,
-    /// Checkbox button group like behaviour.
-    AnyOfMany,
+    /// Undefined button group.
+    Undefined = 0,
+    /// Radio button group behaviour with one switch in \"on\" state.
+    OneOfMany = 1,
+    /// Radio button group behaviour with none or one switch in \"on\" state.
+    AtMostOne = 2,
+    /// Checkbox button group behaviour.
+    AnyOfMany = 3,
 }
 }
 

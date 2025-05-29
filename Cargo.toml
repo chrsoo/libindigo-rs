@@ -34,6 +34,7 @@ bitfield = "0.17.0"
 funty = "2.0.0"
 chrono = "0.4"
 regex = "1.11"
+fambox = "0.2.0"
 # dtd-rs = { git = "https://github.com/songww/dtd-rs.git", version = "0.1.0-alpha2" }
 # dtd-parser = { git = "https://github.com/songww/dtd-rs.git", version = "0.1.0-alpha3" }
 # dtd-macro = { git = "https://github.com/songww/dtd-rs.git", version = "0.1.0-alpha2" }

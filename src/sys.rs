@@ -11,6 +11,7 @@ use crate::{
 /// [INDIGO](https://github.com/indigo-astronomy)system library
 use core::{slice, str};
 use enum_primitive::*;
+use fambox::{FamBox, FamBoxOwned};
 use function_name::named;
 use libindigo_sys::*;
 use log::{debug, error, info, trace, warn};
@@ -18,7 +19,11 @@ use parking_lot::{RwLock, RwLockWriteGuard};
 use regex::Regex;
 use serde_json_core::from_slice;
 use std::{
+    alloc::LayoutError,
     collections::HashMap,
+    ffi::{c_char, c_int, c_long, CString},
+    io::Read,
+    marker::PhantomPinned,
     ops::DerefMut,
     str::{FromStr, Utf8Error},
 };
@@ -80,6 +85,12 @@ impl SysError {
 
     pub fn msg(&self) -> &str {
         self.msg
+    }
+}
+
+impl From<LayoutError> for IndigoError {
+    fn from(value: LayoutError) -> Self {
+        IndigoError::new(value.to_string().as_str())
     }
 }
 
@@ -176,14 +187,43 @@ fn lib_result_to_sys_code<'a, T>(result: &'a IndigoResult<T>) -> indigo_result {
     }
 }
 
-impl Into<indigo_property_state> for &PropertyState {
-    fn into(self) -> indigo_property_state {
-        match self {
-            PropertyState::Idle => indigo_property_state::INDIGO_IDLE_STATE,
-            PropertyState::Ok => indigo_property_state::INDIGO_OK_STATE,
-            PropertyState::Busy => indigo_property_state::INDIGO_BUSY_STATE,
-            PropertyState::Alert => indigo_property_state::INDIGO_ALERT_STATE,
-        }
+impl TryInto<indigo_item> for &'_ PropertyItem {
+    type Error = IndigoError;
+
+    fn try_into(self) -> Result<indigo_item, Self::Error> {
+        todo!()
+    }
+}
+
+impl TryInto<FamBoxOwned<indigo_property>> for &PropertyData {
+    type Error = IndigoError;
+
+    fn try_into(self) -> Result<FamBoxOwned<indigo_property>, Self::Error> {
+
+        // let items: Result<Vec<indigo_item>, _> = self.items().map(|i| i.try_into()).collect();
+        // let items: &[indigo_item] = &(items?);
+
+        let count = self.len() as i32;
+        let header = indigo_property {
+            name: str_to_buf(self.name()),
+            device: str_to_buf(self.device()),
+            group: str_to_buf(self.group()),
+            label: str_to_buf(self.label()),
+            hints: str_to_buf(self.hints()),
+            state: self.state().into(),
+            type_: self.property_type().into(),
+            perm: self.perm().into(),
+            rule: self.rule().into(),
+            access_token: 0,
+            version: indigo_version::INDIGO_VERSION_NONE.0 as i16,
+            hidden: false,
+            defined: false,
+            count,
+            allocated_count: count,
+            items: indigo_item_array::new(),
+        };
+
+        Ok(FamBoxOwned::from_fn(header, |i| (&self[i]).try_into().expect("valid property item")))
     }
 }
 
@@ -200,26 +240,6 @@ impl TryFrom<indigo_property_state> for PropertyState {
                 warn!("unknown property state: {}", value.0);
                 Err(IndigoError::new("unknown property state"))
             }
-        }
-    }
-}
-
-impl Into<indigo_property_perm> for &PropertyPermission {
-    fn into(self) -> indigo_property_perm {
-        match self {
-            PropertyPermission::ReadOnly => indigo_property_perm::INDIGO_RO_PERM,
-            PropertyPermission::ReadWrite => indigo_property_perm::INDIGO_RW_PERM,
-            PropertyPermission::WriteOnly => indigo_property_perm::INDIGO_WO_PERM,
-        }
-    }
-}
-
-impl Into<indigo_rule> for &SwitchRule {
-    fn into(self) -> indigo_rule {
-        match self {
-            SwitchRule::OneOfMany => indigo_rule::INDIGO_ONE_OF_MANY_RULE,
-            SwitchRule::AtMostOne => indigo_rule::INDIGO_AT_MOST_ONE_RULE,
-            SwitchRule::AnyOfMany => indigo_rule::INDIGO_ANY_OF_MANY_RULE,
         }
     }
 }
@@ -250,13 +270,13 @@ impl Into<indigo_log_levels> for LogLevel {
     }
 }
 
-impl From<&PropertyState> for u32 {
+impl From<&PropertyState> for indigo_property_state {
     fn from(s: &PropertyState) -> Self {
         match s {
-            PropertyState::Idle => indigo_property_state::INDIGO_IDLE_STATE.0,
-            PropertyState::Ok => indigo_property_state::INDIGO_OK_STATE.0,
-            PropertyState::Busy => indigo_property_state::INDIGO_BUSY_STATE.0,
-            PropertyState::Alert => indigo_property_state::INDIGO_ALERT_STATE.0,
+            PropertyState::Idle => indigo_property_state::INDIGO_IDLE_STATE,
+            PropertyState::Ok => indigo_property_state::INDIGO_OK_STATE,
+            PropertyState::Busy => indigo_property_state::INDIGO_BUSY_STATE,
+            PropertyState::Alert => indigo_property_state::INDIGO_ALERT_STATE,
         }
     }
 }
@@ -277,103 +297,43 @@ impl TryFrom<indigo_log_levels> for LogLevel {
     }
 }
 
-impl From<&PropertyType> for u32 {
+impl From<&PropertyType> for indigo_property_type {
     fn from(t: &PropertyType) -> Self {
         match t {
-            PropertyType::Text => indigo_property_type::INDIGO_TEXT_VECTOR.0,
-            PropertyType::Number => indigo_property_type::INDIGO_NUMBER_VECTOR.0,
-            PropertyType::Switch => indigo_property_type::INDIGO_SWITCH_VECTOR.0,
-            PropertyType::Light => indigo_property_type::INDIGO_LIGHT_VECTOR.0,
-            PropertyType::Blob => indigo_property_type::INDIGO_BLOB_VECTOR.0,
+            PropertyType::Text => indigo_property_type::INDIGO_TEXT_VECTOR,
+            PropertyType::Number => indigo_property_type::INDIGO_NUMBER_VECTOR,
+            PropertyType::Switch => indigo_property_type::INDIGO_SWITCH_VECTOR,
+            PropertyType::Light => indigo_property_type::INDIGO_LIGHT_VECTOR,
+            PropertyType::Blob => indigo_property_type::INDIGO_BLOB_VECTOR,
         }
     }
 }
 
-impl From<&PropertyPermission> for u32 {
+impl From<&PropertyPermission> for indigo_property_perm {
     fn from(p: &PropertyPermission) -> Self {
         match p {
-            PropertyPermission::ReadOnly => indigo_property_perm::INDIGO_RO_PERM.0,
-            PropertyPermission::ReadWrite => indigo_property_perm::INDIGO_RW_PERM.0,
-            PropertyPermission::WriteOnly => indigo_property_perm::INDIGO_WO_PERM.0,
+            PropertyPermission::ReadOnly => indigo_property_perm::INDIGO_RO_PERM,
+            PropertyPermission::ReadWrite => indigo_property_perm::INDIGO_RW_PERM,
+            PropertyPermission::WriteOnly => indigo_property_perm::INDIGO_WO_PERM,
         }
     }
 }
 
-impl From<&SwitchRule> for u32 {
+impl From<&SwitchRule> for indigo_rule {
     fn from(r: &SwitchRule) -> Self {
         match r {
-            SwitchRule::OneOfMany => indigo_rule::INDIGO_ONE_OF_MANY_RULE.0,
-            SwitchRule::AtMostOne => indigo_rule::INDIGO_AT_MOST_ONE_RULE.0,
-            SwitchRule::AnyOfMany => indigo_rule::INDIGO_ANY_OF_MANY_RULE.0,
+            SwitchRule::Undefined => indigo_rule::UNDEFINED,
+            SwitchRule::OneOfMany => indigo_rule::INDIGO_ONE_OF_MANY_RULE,
+            SwitchRule::AtMostOne => indigo_rule::INDIGO_AT_MOST_ONE_RULE,
+            SwitchRule::AnyOfMany => indigo_rule::INDIGO_ANY_OF_MANY_RULE,
         }
     }
 }
 
-// -- Property ----------------------------------------------------------------
-
-/// [Property] based on the [indigo_property] the `libindigo-sys` FFI binding to the [INDIGO C API](https://github.com/indigo-astronomy/indigo).
-///
-/// From the [INDIGO client documentation](https://github.com/indigo-astronomy/indigo/blob/master/indigo_docs/CLIENT_DEVELOPMENT_BASICS.md#properties):
-/// > In case the client needs to check the values of some property item of a
-/// > specified device it is always a good idea to check if the property is in OK state:
-/// > ```C
-/// > if (!strcmp(device->name, "CCD Imager Simulator @ indigosky") &&
-/// >     !strcmp(property->name, CCD_IMAGE_PROPERTY_NAME) &&
-/// >     property->state == INDIGO_OK_STATE) {
-/// >     ...
-/// > }
-/// > ```
-/// > And if the client needs to change some item value this code may help:
-/// > ```C
-/// > static const char * items[] = { CCD_IMAGE_FORMAT_FITS_ITEM_NAME };
-/// > static bool values[] = { true };
-/// > indigo_change_switch_property(
-/// >   client,
-/// >   CCD_SIMULATOR,
-/// >   CCD_IMAGE_FORMAT_PROPERTY_NAME,
-/// >   1,
-/// >   items,
-/// >   values
-/// > );
-/// > ```
-pub struct SysProperty {
-    sys: *mut indigo_property,
-    type_: PropertyType,
-    items: Vec<PropertyItem>,
-}
-
-impl SysProperty {
-    fn new(name: &str, ptype: PropertyType, device: &str) -> SysProperty {
-        let sys = Box::new(indigo_property::new(name, device, (&ptype).into()));
-
-        // let n = sys.count as usize;
-        // let items = unsafe { sys.items.as_slice(n) }
-        //     .iter()
-        //     .map(|i| SysPropertyItem::new(i, &ptype))
-        //     .collect();
-
-        SysProperty {
-            sys: Box::into_raw(sys),
-            type_: ptype,
-            items: Vec::new(),
-        }
-    }
-}
-
-impl Debug for SysProperty {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SysProperty")
-            .field("sys", &self.sys)
-            .field("property_type", &self.type_)
-            // .field("items", &self.items())
-            .finish()
-    }
-}
-/// Convert an [indigo_property] to a [SysProperty] failing on first error.
-impl TryFrom<*mut indigo_property> for SysProperty {
+/// Convert an [indigo_property] to a [PropertyData] failing on first error.
+impl TryFrom<&indigo_property> for PropertyData {
     type Error = IndigoError;
-    fn try_from(value: *mut indigo_property) -> IndigoResult<Self> {
-        let sys = unsafe { &*value };
+    fn try_from(sys: &indigo_property) -> IndigoResult<Self> {
         let type_ = PropertyType::try_from(sys.type_)?;
         let n = sys.count as usize;
 
@@ -394,18 +354,34 @@ impl TryFrom<*mut indigo_property> for SysProperty {
             })
             .collect();
 
-        Ok(SysProperty {
-            sys: value,
-            type_,
-            items: items?,
-        })
+        let name = buf_to_str(&sys.name);
+        let device = buf_to_str(&sys.device);
+        let group = buf_to_str(&sys.group);
+        let hints = buf_to_str(&sys.hints);
+        let state =
+            PropertyState::from_u32(sys.state.0).ok_or(IndigoError::new("property state error"))?;
+        let type_ =
+            PropertyType::from_u32(sys.type_.0).ok_or(IndigoError::new("property type error"))?;
+        let perm = PropertyPermission::from_u32(sys.perm.0)
+            .ok_or(IndigoError::new("property permission error"))?;
+        let rule = SwitchRule::from_u32(sys.rule.0).ok_or_else(|| {
+            IndigoError::from(format!("no rule mapped to code {}", sys.rule.0))
+        })?;
+        let hidden = sys.hidden;
+        let defined = sys.defined;
+
+        let items = items?;
+
+        Ok(PropertyData::new(
+            name, device, group, hints, state, type_, perm, rule, hidden, defined, items,
+        ))
     }
 }
 
 /// Convert INDIGO text to [PropertyValue].
-impl TryFrom<indigo_item__bindgen_ty_1__bindgen_ty_1> for PropertyValue {
+impl TryFrom<indigo_text> for PropertyValue {
     type Error = IndigoError;
-    fn try_from(text: indigo_item__bindgen_ty_1__bindgen_ty_1) -> Result<Self, Self::Error> {
+    fn try_from(text: indigo_text) -> Result<Self, Self::Error> {
         let value = if text.long_value.is_null() {
             buf_to_str(&text.value)
         } else {
@@ -422,9 +398,9 @@ impl TryFrom<indigo_item__bindgen_ty_1__bindgen_ty_1> for PropertyValue {
 }
 
 /// Convert INDIGO number to [PropertyValue].
-impl TryFrom<indigo_item__bindgen_ty_1__bindgen_ty_2> for PropertyValue {
+impl TryFrom<indigo_number> for PropertyValue {
     type Error = IndigoError;
-    fn try_from(number: indigo_item__bindgen_ty_1__bindgen_ty_2) -> Result<Self, Self::Error> {
+    fn try_from(number: indigo_number) -> Result<Self, Self::Error> {
         let fmt = buf_to_str(&number.format);
         let fmt = NumberFormat::new(fmt);
 
@@ -440,17 +416,17 @@ impl TryFrom<indigo_item__bindgen_ty_1__bindgen_ty_2> for PropertyValue {
 }
 
 /// Convert INDIGO switch to [PropertyValue].
-impl TryFrom<indigo_item__bindgen_ty_1__bindgen_ty_3> for PropertyValue {
+impl TryFrom<indigo_switch> for PropertyValue {
     type Error = IndigoError;
-    fn try_from(switch: indigo_item__bindgen_ty_1__bindgen_ty_3) -> Result<Self, Self::Error> {
+    fn try_from(switch: indigo_switch) -> Result<Self, Self::Error> {
         Ok(PropertyValue::switch(switch.value))
     }
 }
 
 /// Convert INDIGO light to [PropertyValue].
-impl TryFrom<indigo_item__bindgen_ty_1__bindgen_ty_4> for PropertyValue {
+impl TryFrom<indigo_light> for PropertyValue {
     type Error = IndigoError;
-    fn try_from(light: indigo_item__bindgen_ty_1__bindgen_ty_4) -> Result<Self, Self::Error> {
+    fn try_from(light: indigo_light) -> Result<Self, Self::Error> {
         if let Some(value) = PropertyState::from_u32(light.value.0) {
             Ok(PropertyValue::light(value))
         } else {
@@ -459,16 +435,10 @@ impl TryFrom<indigo_item__bindgen_ty_1__bindgen_ty_4> for PropertyValue {
     }
 }
 
-impl From<ParseError> for IndigoError {
-    fn from(value: ParseError) -> Self {
-        IndigoError::new(value.to_string().as_str())
-    }
-}
-
 /// Convert INDIGO blob to [PropertyValue].
-impl TryFrom<indigo_item__bindgen_ty_1__bindgen_ty_5> for PropertyValue {
+impl TryFrom<indigo_blob> for PropertyValue {
     type Error = IndigoError;
-    fn try_from(blob: indigo_item__bindgen_ty_1__bindgen_ty_5) -> Result<Self, Self::Error> {
+    fn try_from(blob: indigo_blob) -> Result<Self, Self::Error> {
         let s = buf_to_str(&blob.url);
         let url = if s.is_empty() {
             None
@@ -487,161 +457,6 @@ impl TryFrom<indigo_item__bindgen_ty_1__bindgen_ty_5> for PropertyValue {
         };
 
         Ok(PropertyValue::blob(size, ext, value, url))
-    }
-    // fn url(&self) -> Option<&Url> {
-    //     Option::as_ref(&self.url)
-    // }
-
-    // fn data(&self) -> Option<&[u8]> {
-    //     let v = unsafe { self.sys.__bindgen_anon_1.blob };
-    //     if v.value.is_null() {
-    //         None
-    //     } else {
-    //         Some(unsafe { slice::from_raw_parts(v.value as *const u8, v.size as usize) })
-    //     }
-    // }
-
-    // fn extension(&self) -> &str {
-    //     buf_to_str(unsafe { &self.sys.__bindgen_anon_1.blob.format })
-    // }
-
-    // fn size(&self) -> usize {
-    //     unsafe { self.sys.__bindgen_anon_1.blob.size as usize }
-    // }
-}
-
-impl NamedObject for SysProperty {
-    fn name(&self) -> &str {
-        unsafe { buf_to_str(&(*self.sys).name) }
-    }
-
-    fn label(&self) -> &str {
-        unsafe { buf_to_str(&(*self.sys).label) }
-    }
-}
-
-impl Property for SysProperty {
-    fn device(&self) -> &str {
-        unsafe { buf_to_str(&(*self.sys).device) }
-    }
-
-    fn group(&self) -> &str {
-        unsafe { buf_to_str(&(*self.sys).group) }
-    }
-
-    fn hints(&self) -> &str {
-        unsafe { buf_to_str(&(*self.sys).hints) }
-    }
-
-    fn state(&self) -> &PropertyState {
-        match unsafe { (*self.sys).state } {
-            indigo_property_state::INDIGO_IDLE_STATE => &PropertyState::Idle,
-            indigo_property_state::INDIGO_OK_STATE => &PropertyState::Ok,
-            indigo_property_state::INDIGO_BUSY_STATE => &PropertyState::Busy,
-            indigo_property_state::INDIGO_ALERT_STATE => &PropertyState::Alert,
-            s => unimplemented!("property state '{}' not implemented", s.0),
-        }
-    }
-
-    fn property_type(&self) -> &PropertyType {
-        &self.type_
-    }
-
-    fn perm(&self) -> &PropertyPermission {
-        match unsafe { (*self.sys).perm } {
-            indigo_property_perm::INDIGO_RO_PERM => &PropertyPermission::ReadOnly,
-            indigo_property_perm::INDIGO_RW_PERM => &PropertyPermission::ReadWrite,
-            indigo_property_perm::INDIGO_WO_PERM => &PropertyPermission::WriteOnly,
-            p => unimplemented!("property permission '{}' not implemented", p.0),
-        }
-    }
-
-    fn rule(&self) -> &SwitchRule {
-        match unsafe { (*self.sys).rule } {
-            indigo_rule::INDIGO_ANY_OF_MANY_RULE => &SwitchRule::AnyOfMany,
-            indigo_rule::INDIGO_AT_MOST_ONE_RULE => &SwitchRule::AtMostOne,
-            indigo_rule::INDIGO_ONE_OF_MANY_RULE => &SwitchRule::OneOfMany,
-            r => unimplemented!("switch rule '{}' not implemented", r.0),
-        }
-    }
-
-    fn hidden(&self) -> bool {
-        unsafe { (*self.sys).hidden }
-    }
-
-    fn defined(&self) -> bool {
-        unsafe { (*self.sys).defined }
-    }
-
-    fn items(&self) -> impl Iterator<Item = &PropertyItem> {
-        self.items.iter()
-    }
-
-    // fn update(&mut self, p: &Self) {
-    //     if self.sys == p.sys {
-    //         trace!("skipping update of same property instance");
-    //         return;
-    //     }
-    //     trace!("updating property by copying values");
-    //     let sys = unsafe { &mut *self.sys };
-
-    //     copy_from_str(sys.device, p.device());
-    //     copy_from_str(sys.device, p.device());
-    //     copy_from_str(sys.group, p.group());
-    //     copy_from_str(sys.hints, p.hints());
-    //     sys.state = p.state().into();
-    //     sys.type_ = p.property_type().into();
-    //     sys.perm = p.perm().into();
-    //     sys.rule = p.rule().into();
-    //     sys.hidden = p.hidden();
-    //     sys.defined = p.defined();
-
-    //     // let all: HashSet<&Self::Item> = self.items().collect();
-    //     // for item in &mut self.items {
-    //     //     item.update()
-    //     // }
-
-    //     /* TODO items */
-    // }
-}
-
-impl Display for SysProperty {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Property[Name: '{}'; Device: '{}'; Group: '{}'; Label: '{}'; Hints: '{}']",
-            self.name(),
-            self.device(),
-            self.group(),
-            self.label(),
-            self.hints(),
-        )?;
-        for item in self.items() {
-            write!(f, "    {item:?}")?;
-        }
-        Ok(())
-    }
-}
-
-impl From<SysProperty> for PropertyData {
-    fn from(p: SysProperty) -> Self {
-        let items = p.items()
-            .map(|i| i.to_owned())
-            .collect()
-            ;
-        PropertyData::new(
-            p.name(),
-            p.device(),
-            p.group(),
-            p.hints(),
-            p.state().to_owned(),
-            p.property_type().to_owned(),
-            p.perm().to_owned(),
-            p.rule().to_owned(),
-            p.hidden(),
-            p.defined(),
-            items,
-        )
     }
 }
 
@@ -663,23 +478,11 @@ impl TryFrom<indigo_property_type> for PropertyType {
     }
 }
 
-impl Into<indigo_property_type> for &PropertyType {
-    fn into(self) -> indigo_property_type {
-        match self {
-            PropertyType::Text => indigo_property_type::INDIGO_TEXT_VECTOR,
-            PropertyType::Number => indigo_property_type::INDIGO_NUMBER_VECTOR,
-            PropertyType::Switch => indigo_property_type::INDIGO_SWITCH_VECTOR,
-            PropertyType::Light => indigo_property_type::INDIGO_LIGHT_VECTOR,
-            PropertyType::Blob => indigo_property_type::INDIGO_BLOB_VECTOR,
-        }
-    }
-}
-
 // -- SysClientController -----------------------------------------------------
 /// Client to manage devices attached to the INDIGO [Bus].
 pub struct SysClientController<D>
 where
-    D: ClientDelegate<Property = SysProperty, Bus = SysBus>,
+    D: ClientDelegate<Property = PropertyData, Bus = SysBus>,
 {
     sys: *mut indigo_client,
     delegate: PhantomData<D>,
@@ -688,7 +491,7 @@ where
 impl<'s, D> NamedObject for SysClientController<D>
 where
     D: ClientDelegate<
-        Property = SysProperty,
+        Property = PropertyData,
         Bus = SysBus,
         BusController = Self,
         ClientController = Self,
@@ -705,7 +508,7 @@ type BUS_CALLBACK<'a, D: ClientDelegate> =
 impl<D> Controller<SysBus> for SysClientController<D>
 where
     D: ClientDelegate<
-        Property = SysProperty,
+        Property = PropertyData,
         Bus = SysBus,
         BusController = Self,
         ClientController = Self,
@@ -733,7 +536,7 @@ where
     }
 }
 
-// impl<'s, D: ClientDelegate<SysProperty,SysBus,Self>> Drop for SysClientController<D> {
+// impl<'s, D: ClientDelegate<PropertyData,SysBus,Self>> Drop for SysClientController<D> {
 //     fn drop(&mut self) {
 //         if !self.sys.is_null() {
 //             let client = unsafe { Box::from_raw(self.sys) };
@@ -757,7 +560,7 @@ type PROPERTY_CALLBACK<D: ClientDelegate> = fn(
 impl<D> SysClientController<D>
 where
     D: ClientDelegate<
-        Property = SysProperty,
+        Property = PropertyData,
         Bus = SysBus,
         BusController = Self,
         ClientController = Self,
@@ -826,13 +629,16 @@ where
         RwLockWriteGuard<'b, D>,
         &'b str,
         &'b str,
-        SysProperty,
+        PropertyData,
         Option<&'b str>,
     )> {
         let object = Self::write_lock(c);
         let c = buf_to_str(&(unsafe { &*c }).name);
         let d = buf_to_str(&(unsafe { &*d }).name);
-        let p = SysProperty::try_from(p)?;
+
+        let p = unsafe { &*p };
+        let p = PropertyData::try_from(p)?;
+
         let m = if m.is_null() {
             None
         } else {
@@ -948,9 +754,11 @@ where
         let client_name = buf_to_str(&(unsafe { &*c }).name);
 
         let device = buf_to_str(&(unsafe { &*d }).name);
-        let property = SysProperty::try_from(p)
+
+        let p = unsafe { &*p };
+        let property = PropertyData::try_from(p)
             .inspect_err(|e| warn!("could not create property: {e}"))
-            .expect("valid system property");
+            .expect("invalid system property");
         let message = if m.is_null() {
             None
         } else {
@@ -973,45 +781,268 @@ where
 
         log_and_return_code(client_name, function_name!(), &result)
     }
+
+    #[named]
+    fn request_text_item_update(&self, p: &PropertyData, i: &[&PropertyItem]) -> IndigoResult<()> {
+        let mut items = Vec::new();
+        let mut values = Vec::new();
+
+        i.iter().try_for_each(|item| {
+            let name = CString::new(item.name())?;
+            items.push(name.into_raw() as *const c_char);
+            if let PropertyValue::Text(text) = item.value() {
+                let value = CString::new(text.value())?;
+                values.push(value.into_raw() as *const c_char);
+                Ok(())
+            } else {
+                Err(IndigoError::new("not a text item"))
+            }
+        })?;
+
+        let device = CString::new(p.device())?.into_raw();
+        let property = CString::new(p.name())?.into_raw();
+
+        let code = unsafe {
+            indigo_change_text_property(
+                self.sys,
+                device,
+                property,
+                items.len() as i32,
+                items.as_mut_ptr(),
+                values.as_mut_ptr(),
+            )
+        };
+
+        // cleanup of allocated CStrings
+        unsafe {
+            drop(CString::from_raw(device));
+            drop(CString::from_raw(property));
+            items.iter().for_each(|ptr| {
+                let name = CString::from_raw(*ptr as *mut i8);
+                drop(name)
+            });
+            values.iter().for_each(|ptr| {
+                let value = CString::from_raw(*ptr as *mut i8);
+                drop(value)
+            });
+        }
+
+        sys_code_to_lib_result((), function_name!(), code)
+    }
+
+    #[named]
+    fn request_number_items_update(
+        &self,
+        p: &PropertyData,
+        i: &[&PropertyItem],
+    ) -> IndigoResult<()> {
+        let mut items = Vec::new();
+        let mut values = Vec::new();
+
+        i.iter().try_for_each(|item| {
+            let name = CString::new(item.name())?;
+            items.push(name.into_raw() as *const c_char);
+            if let PropertyValue::Number(nbr) = item.value() {
+                values.push(nbr.target());
+                Ok(())
+            } else {
+                Err(IndigoError::new("not a text item"))
+            }
+        })?;
+
+        let device = CString::new(p.device())?.into_raw();
+        let property = CString::new(p.name())?.into_raw();
+
+        let code = unsafe {
+            indigo_change_number_property(
+                self.sys,
+                device,
+                property,
+                items.len() as i32,
+                items.as_mut_ptr(),
+                values.as_mut_ptr(),
+            )
+        };
+
+        // cleanup of allocated CStrings
+        unsafe {
+            drop(CString::from_raw(device));
+            drop(CString::from_raw(property));
+            items.iter().for_each(|ptr| {
+                let name = CString::from_raw(*ptr as *mut i8);
+                drop(name)
+            });
+        }
+        // values assumed to be dropped on exit...
+        sys_code_to_lib_result((), function_name!(), code)
+    }
+
+    #[named]
+    fn request_switch_items_update(
+        &self,
+        p: &PropertyData,
+        i: &[&PropertyItem],
+    ) -> IndigoResult<()> {
+        let mut items = Vec::new();
+        let mut values = Vec::new();
+
+        i.iter().try_for_each(|item| {
+            let name = CString::new(item.name())?;
+            items.push(name.into_raw() as *const c_char);
+            if let PropertyValue::Switch(s) = item.value() {
+                values.push(s.on());
+                Ok(())
+            } else {
+                Err(IndigoError::new("not a text item"))
+            }
+        })?;
+
+        let device = CString::new(p.device())?.into_raw();
+        let property = CString::new(p.name())?.into_raw();
+
+        let code = unsafe {
+            indigo_change_switch_property(
+                self.sys,
+                device,
+                property,
+                items.len() as i32,
+                items.as_mut_ptr(),
+                values.as_mut_ptr(),
+            )
+        };
+
+        // cleanup of allocated CStrings
+        unsafe {
+            drop(CString::from_raw(device));
+            drop(CString::from_raw(property));
+            items.iter().for_each(|ptr| {
+                let name = CString::from_raw(*ptr as *mut c_char);
+                drop(name)
+            });
+        }
+        // values assumed to be dropped on exit...
+        sys_code_to_lib_result((), function_name!(), code)
+    }
+
+    #[named]
+    fn request_blob_items_update(&self, p: &PropertyData, i: &[&PropertyItem]) -> IndigoResult<()> {
+        let mut items = Vec::new(); // *mut *const
+        let mut values = Vec::new(); // *mut *mut *c_void
+        let mut sizes = Vec::new(); // *const c_long
+        let mut formats = Vec::new(); // *mut *const c_char
+        let mut urls = Vec::new(); // *mut *const c_char
+
+        i.iter().try_for_each(|item| {
+            let name = CString::new(item.name())?;
+            items.push(name.into_raw() as *const c_char);
+            if let PropertyValue::Blob(blob) = item.value() {
+                sizes.push(blob.size() as c_long);
+                let format = CString::new(blob.extension())?;
+                formats.push(format.into_raw() as *const c_char);
+                // values
+                if let Some(bytes) = blob.data() {
+                    values.push(bytes.as_ptr() as *mut c_void)
+                } else {
+                    values.push(ptr::null_mut())
+                }
+                // urls
+                if let Some(url) = blob.url() {
+                    let url = CString::new(url.as_str())?;
+                    urls.push(url.into_raw() as *const c_char)
+                } else {
+                    urls.push(ptr::null_mut());
+                }
+                Ok(())
+            } else {
+                Err(IndigoError::new("not a text item"))
+            }
+        })?;
+
+        let device = CString::new(p.device())?.into_raw();
+        let property = CString::new(p.name())?.into_raw();
+
+        let code = unsafe {
+            indigo_change_blob_property(
+                self.sys,
+                device,
+                property,
+                items.len() as i32,
+                items.as_mut_ptr(),
+                values.as_mut_ptr(),
+                sizes.as_mut_ptr(),
+                formats.as_mut_ptr(),
+                urls.as_mut_ptr(),
+            )
+        };
+
+        // cleanup of allocated CStrings
+        unsafe {
+            drop(CString::from_raw(device));
+            drop(CString::from_raw(property));
+            items.iter().for_each(|ptr| {
+                let name = CString::from_raw(*ptr as *mut i8);
+                drop(name)
+            });
+            formats.iter().for_each(|format| {
+                let format = CString::from_raw(*format as *mut c_char);
+                drop(format)
+            });
+            urls.iter().for_each(|url| {
+                let url = CString::from_raw(*url as *mut c_char);
+                drop(url)
+            });
+        }
+        // sizes and ptrs to the value byte slices are assumed to be dropped on exit...
+        sys_code_to_lib_result((), function_name!(), code)
+    }
 }
 
-impl<D> ClientController<SysProperty, SysBus> for SysClientController<D>
+impl<D> ClientController<PropertyData, SysBus> for SysClientController<D>
 where
     D: ClientDelegate<
-        Property = SysProperty,
+        Property = PropertyData,
         Bus = SysBus,
         BusController = Self,
         ClientController = Self,
     >,
 {
     fn request_definition<'a>(&mut self, d: &'a str, p: &'a str) -> IndigoResult<()> {
-        let sys = &mut indigo_property::new(p, d, indigo_property_type::INDIGO_TEXT_VECTOR);
+        let sys = &mut indigo_property::new(p, d, indigo_property_type::UNDEFINED);
         let code = unsafe { indigo_enumerate_properties(self.sys, sys) };
         sys_code_to_lib_result((), "indigo_enumerate_properties", code)
     }
 
-    fn request_update<'a>(&mut self, _d: &'a str, p: &'a SysProperty) -> IndigoResult<()> {
-        let code = unsafe { indigo_change_property(self.sys, p.sys) };
+    fn request_update<'a>(&mut self, _d: &'a str, p: &'a PropertyData) -> IndigoResult<()> {
+        let sys: FamBoxOwned<indigo_property> = p.try_into()?;
+        let code = unsafe { indigo_change_property(self.sys, sys.leak().as_mut()) };
         sys_code_to_lib_result((), "indigo_enumerate_properties", code)
     }
 
     fn request_update_item<'a>(
         &mut self,
         _d: &'a str,
-        _p: &'a SysProperty,
+        _p: &'a PropertyData,
         _i: &'a PropertyItem,
     ) -> IndigoResult<()> {
-        todo!()
+        match _p.property_type() {
+            PropertyType::Text => self.request_text_item_update(_p, &[_i]),
+            PropertyType::Number => self.request_number_items_update(_p, &[_i]),
+            PropertyType::Switch => self.request_switch_items_update(_p, &[_i]),
+            PropertyType::Blob => self.request_blob_items_update(_p, &[_i]),
+            PropertyType::Light => Err(IndigoError::new(
+                "update not supported for light property type",
+            )),
+        }
     }
 
-    fn request_delete<'a>(&mut self, _d: &'a str, _p: &'a SysProperty) -> IndigoResult<()> {
+    fn request_delete<'a>(&mut self, _d: &'a str, _pz2: &'a PropertyData) -> IndigoResult<()> {
         todo!()
     }
 
     fn request_delete_item<'a>(
         &mut self,
         _d: &'a str,
-        _p: &'a SysProperty,
+        _p: &'a PropertyData,
         _i: &'a PropertyItem,
     ) -> IndigoResult<()> {
         todo!()
@@ -1031,7 +1062,7 @@ where
 impl<D> Debug for SysClientController<D>
 where
     D: ClientDelegate<
-        Property = SysProperty,
+        Property = PropertyData,
         Bus = SysBus,
         BusController = Self,
         ClientController = Self,
@@ -1049,14 +1080,14 @@ where
 
 struct SysDeviceController<D>
 where
-    D: DeviceDelegate<Property = SysProperty, Bus = SysBus>,
+    D: DeviceDelegate<Property = PropertyData, Bus = SysBus>,
 {
     sys: *mut indigo_device,
     _phantom: PhantomData<D>,
 }
 
 // impl<'s,D> Display for SysDeviceController<'s,D>
-// where D: DeviceDelegate<SysProperty> {
+// where D: DeviceDelegate<PropertyData> {
 //     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 //         let status = self.connected().map_or_else(
 //             |e| format!("{:?}", e),
@@ -1084,7 +1115,7 @@ where
 
 impl<'s, D> SysDeviceController<D>
 where
-    D: DeviceDelegate<Property = SysProperty, Bus = SysBus>,
+    D: DeviceDelegate<Property = PropertyData, Bus = SysBus>,
 {
     fn new(d: D) -> Self {
         let sys = Box::new(indigo_device {
@@ -1144,7 +1175,7 @@ where
 
 impl<'s, D> Debug for SysDeviceController<D>
 where
-    D: DeviceDelegate<Property = SysProperty, Bus = SysBus>,
+    D: DeviceDelegate<Property = PropertyData, Bus = SysBus>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SysDeviceController")
@@ -1156,7 +1187,7 @@ where
 
 impl<'s, D> NamedObject for SysDeviceController<D>
 where
-    D: DeviceDelegate<Property = SysProperty, Bus = SysBus>,
+    D: DeviceDelegate<Property = PropertyData, Bus = SysBus>,
 {
     fn name(&self) -> &str {
         unsafe { buf_to_str(&(*self.sys).name) }
@@ -1165,7 +1196,7 @@ where
 
 impl<'s, D> Drop for SysDeviceController<D>
 where
-    D: DeviceDelegate<Property = SysProperty, Bus = SysBus>,
+    D: DeviceDelegate<Property = PropertyData, Bus = SysBus>,
 {
     fn drop(&mut self) {
         let sys = unsafe { Box::from_raw(self.sys) };
@@ -1175,7 +1206,7 @@ where
 
 impl<'s, D> Controller<SysBus> for SysDeviceController<D>
 where
-    D: DeviceDelegate<Property = SysProperty, Bus = SysBus>,
+    D: DeviceDelegate<Property = PropertyData, Bus = SysBus>,
 {
     fn attach<'a>(&mut self, _: &'a mut SysBus) -> IndigoResult<()> {
         todo!()
@@ -1186,28 +1217,25 @@ where
     }
 }
 
-impl<'s, D> DeviceController<SysProperty, SysBus> for SysDeviceController<D>
+impl<'s, D> DeviceController<PropertyData, SysBus> for SysDeviceController<D>
 where
-    D: DeviceDelegate<Property = SysProperty, Bus = SysBus>,
+    D: DeviceDelegate<Property = PropertyData, Bus = SysBus>,
 {
-    fn define_property<'a>(&mut self, p: &'a SysProperty) -> IndigoResult<()> {
-        let code = unsafe { indigo_update_property(self.sys, p.sys, ptr::null()) };
-        sys_code_to_lib_result((), "indigo_enumerate_properties", code)
+    fn define_property<'a>(&mut self, _p: &'a PropertyData) -> IndigoResult<()> {
+        todo!("implement device define_property")
     }
 
-    fn update_property<'a>(&mut self, p: &'a SysProperty) -> IndigoResult<()> {
-        let code = unsafe { indigo_update_property(self.sys, p.sys, ptr::null()) };
-        sys_code_to_lib_result((), "indigo_update_property", code)
+    fn update_property<'a>(&mut self, _p: &'a PropertyData) -> IndigoResult<()> {
+        todo!("implement device update_property")
     }
 
-    fn delete_property<'a>(&mut self, p: &'a SysProperty) -> IndigoResult<()> {
-        let code = unsafe { indigo_update_property(self.sys, p.sys, ptr::null()) };
-        sys_code_to_lib_result((), "indigo_update_property", code)
+    fn delete_property<'a>(&mut self, _p: &'a PropertyData) -> IndigoResult<()> {
+        todo!("implement device delete_property")
     }
 
     fn broadcast_message(&mut self, msg: &str) -> IndigoResult<()> {
         let msg: [i8; 256] = str_to_buf(msg);
-        let code = unsafe { indigo_send_message(self.sys, &raw const msg as *const i8) };
+        let code = unsafe { indigo_send_message(self.sys, &raw const msg as *const c_char) };
         sys_code_to_lib_result((), "indigo_send_message", code)
     }
 }
@@ -1464,7 +1492,7 @@ impl RemoteResource<SysBus> for SysRemoteResource {
 //         .inspect_err(|e| warn!("Connection failed: {e}."))
 // }
 
-// -- SysBus ------------------------------------------------------------------
+// -- SysBus -------------------------------------------------------------------
 
 pub struct SysBus {
     name: String,
@@ -1546,12 +1574,12 @@ impl Bus for SysBus {
     // fn attach_device(
     //     &mut self,
     //     delegate: D,
-    // ) -> IndigoResult<impl DeviceController<SysProperty, D>, impl Error> {
+    // ) -> IndigoResult<impl DeviceController<PropertyData, D>, impl Error> {
     //     let device = SysDeviceController::new(delegate);
     //     Ok::<SysDeviceController<'s,D>,SysError>(device)
     // }
 
-    // fn attach_client<'a,C: ClientDelegate<SysProperty<'b>>>(&self, c: C) ->
+    // fn attach_client<'a,C: ClientDelegate<PropertyData<'b>>>(&self, c: C) ->
     // IndigoResult<SysClientController<'a,C>> {
 
     //     trace!("'{}': attaching client...", c.name());
@@ -1623,7 +1651,7 @@ mod tests {
 
     use crate::sys::{NamedObject, Property};
 
-    use super::{str_to_buf, SysBus, SysProperty};
+    use super::{str_to_buf, PropertyData, SysBus};
 
     fn init_test(level: LevelFilter) {
         let _ = env_logger::builder()
@@ -1633,8 +1661,14 @@ mod tests {
             .try_init();
     }
 
-    fn create_prop() -> *mut indigo_property {
-        let mut prop = Box::new(indigo_property {
+    fn dummy_property() -> Result<FamBoxOwned<indigo_property>, IndigoError> {
+        let items = [
+            indigo_item::text("F1", "Fruit 1", "green and round", "Apple ")?,
+            indigo_item::text("F2", "Fruit 2", "yellow and oblong", "Banana")?,
+            indigo_item::text("F3", "Fruit 3", "red and small", "Strawberry")?,
+        ];
+
+        let prop = indigo_property {
             device: str_to_buf("device"),
             name: str_to_buf("prop"),
             group: str_to_buf("group"),
@@ -1649,26 +1683,29 @@ mod tests {
             hidden: true,
             defined: true,
             allocated_count: 3,
-            count: 4,
+            count: 3,
             items: __IncompleteArrayField::new(),
-        });
-        prop.as_mut()
+        };
+        
+        let fam = FamBoxOwned::from_fn(prop, |i| items[i]);
+        Ok(fam)
     }
 
     #[test]
     fn test_sys_property() -> IndigoResult<()> {
-        let sys = create_prop();
-        let prop: SysProperty = SysProperty::try_from(sys)?;
+        let sys = dummy_property()?;
+        let prop: PropertyData = PropertyData::try_from(sys.as_ref())?;
         assert_eq!(prop.name(), "prop");
         assert_eq!(prop.device(), "device");
         assert_eq!(prop.group(), "group");
-        assert_eq!(prop.label(), "label");
+        assert_eq!(prop.label(), "prop");
         assert_eq!(prop.hints(), "clueless");
-        prop.items().for_each(|p| {
-            println!("name '{}'", p.name());
-            // let v1 = super::TextItem::value(p);
-            // let v2 = super::NumberItem::value(p);
-        });
+
+        assert_eq!(prop.len(), 3);
+        assert_eq!(prop[0].name(), "F1");
+        assert_eq!(prop[1].name(), "F2");
+        assert_eq!(prop[2].name(), "F3");
+
         Ok(())
     }
 
@@ -1702,7 +1739,7 @@ mod tests {
     struct TestDelegate {
         name: String,
         monitor: Arc<TestMonitor>,
-        _phantom: PhantomData<SysProperty>,
+        _phantom: PhantomData<PropertyData>,
     }
 
     impl Debug for TestDelegate {
@@ -1743,14 +1780,14 @@ mod tests {
     }
 
     impl<'s> ClientDelegate for TestDelegate {
-        type Property = SysProperty;
+        type Property = PropertyData;
         type ClientController = SysClientController<Self>;
 
         fn on_define_property<'a>(
             &'a mut self,
             _c: &mut SysClientController<Self>,
             _d: &'a str,
-            p: SysProperty,
+            p: PropertyData,
             _msg: Option<&'a str>,
         ) -> IndigoResult<()> {
             debug!("'{}': '{}' property defined ", p.device(), p.name());

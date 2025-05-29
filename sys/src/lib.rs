@@ -1,29 +1,71 @@
+// #![feature(ptr_metadata,layout_for_ptr)]
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
+include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 use core::slice;
 use std::{
-    ffi::{c_char, CStr, CString},
+    alloc::{alloc, dealloc, Layout, LayoutErr, LayoutError},
+    cmp,
+    ffi::{c_char, CStr, CString, NulError},
     hash::Hash,
+    marker::PhantomData,
+    mem,
+    ops::Index,
     ptr,
+    str::FromStr,
 };
 
 use enum_primitive::*;
-use log::warn;
-
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+use fambox::FamHeader;
+use log::{error, warn};
 
 pub const DEFAULT_PORT: u16 = 7624;
 pub const DEFAULT_HOST: &str = "indigo.local";
+pub const BUF_SIZE: usize = 256;
 
+pub const DEVICE_NAME_SIZE: usize = 128usize;
+pub const PROPERTY_NAME_SIZE: usize = 128usize;
+pub const ITEM_NAME_SIZE: usize = 128usize;
+pub const TEXT_ITEM_SIZE: usize = 512usize;
+
+pub type indigo_item_array = __IncompleteArrayField<indigo_item>;
+
+impl indigo_property_type {
+    /// Undefined property type.
+    pub const UNDEFINED: indigo_property_type = indigo_property_type(0);
+}
+
+impl indigo_rule {
+    pub const UNDEFINED: indigo_rule = indigo_rule(0);
+}
+
+// impl From<&[indigo_item]> for &mut indigo_property<[indigo_item]> {
+//     fn from(items: &[indigo_item]) -> Self {
+//         let len = items.len();
+//         let ptr = unsafe { indigo_property::flex_ptr_mut(items.as_mut_ptr(), len) }
+//         unsafe { indigo_property::flex_ptr_mut(ptr, len).assume_init() }
+//     }
+// }
 impl indigo_property {
-    /// Create a new indigo_property with default values.
-    pub fn new(name: &str, device: &str, ptype: indigo_property_type) -> indigo_property {
+    /// Create a new indigo_property with default values for most fields.
+    pub fn new(name: &str, device: &str, type_: indigo_property_type) -> indigo_property {
+        // let len = items.len();
+        // let item_layout = indigo_property::layout(len);
+        // let buffer = unsafe { alloc(item_layout) } as *mut indigo_property<[indigo_item;0]>;
+        // let property = unsafe { indigo_property::flex_ptr_mut(buffer, len).assume_init() };
+
+        // Write data
+        // property.items.clone_from_slice(items);
+
+        // let data_slice = unsafe { property.fixed_mut() };
+        // data_slice.clone_from_slice(items);
+
         indigo_property {
             device: str_to_buf(device),
             name: str_to_buf(name),
-            type_: ptype,
+            type_,
             group: [0i8; 128],
             label: [0i8; 512],
             hints: [0i8; 512],
@@ -40,11 +82,161 @@ impl indigo_property {
             items: __IncompleteArrayField::new(),
         }
     }
+
+    /*
+    /// Allocate memory and set name, decvice and type of property.
+    ///
+    /// # Safety
+    /// Memory allocated by the method muste be [freed](free) after usage.
+    pub fn alloc(name: &str, device: &str, type_: indigo_property_type) -> *mut indigo_property {
+        let p = indigo_property::new(name, device, type_);
+        let b = Box::new(p);
+        Box::into_raw(b)
+    }
+
+    /// Drops the indigo_property and frees the memory used.
+    ///
+    /// # Safety
+    /// This method cleans up memory referenced by the `*mut indigo_property` pointer.
+    pub unsafe fn free(ptr: *mut indigo_property) {
+        drop(Box::from_raw(ptr));
+    }
+     */
 }
+
+unsafe impl FamHeader for indigo_property {
+    type Element = indigo_item;
+
+    fn fam_len(&self) -> usize {
+        self.allocated_count as usize
+    }
+}
+
+// impl Drop for indigo_property {
+//     fn drop(&mut self) {
+//         if let Ok(item_layout) = Layout::array::<indigo_item>(self.allocated_count as usize) {
+//             let ptr = self.items.as_ptr() as *mut u8;
+//             unsafe { dealloc(ptr, item_layout) };
+//         } else {
+//             let p = buf_to_str(&self.name);
+//             let d = buf_to_str(&self.device);
+//             error!("could not deallocate items for property {p} on device {d}");
+//             panic!("deallocation failure")
+//         }
+//     }
+// }
+
+impl indigo_item {
+    pub fn new(
+        name: &str,
+        label: &str,
+        hints: &str,
+        value: indigo_value,
+    ) -> Result<indigo_item, String> {
+        let name = str_to_buf(name);
+        let label = str_to_buf(label);
+        let hints = str_to_buf(hints);
+
+        Ok(indigo_item {
+            name,
+            label,
+            hints,
+            __bindgen_anon_1: value,
+        })
+    }
+
+    pub fn text(name: &str, label: &str, hints: &str, text: &str) -> Result<indigo_item, String> {
+        let name = str_to_buf(name);
+        let label = str_to_buf(label);
+        let hints = str_to_buf(hints);
+
+        let cstring = CString::from_str(text).expect("valid C-string");
+        let bytes = cstring.as_bytes_with_nul();
+
+        let length = bytes.len();
+
+        let text = if length > TEXT_ITEM_SIZE {
+            // empty value and pointer
+            let value = [0i8; TEXT_ITEM_SIZE];
+            let bytes = Box::new(bytes);
+            let long_value = Box::into_raw(bytes) as *mut i8;
+            indigo_text {
+                value,
+                long_value,
+                length: length as i64,
+            }
+        } else {
+            // text value and null pointer
+            let mut value = [0i8; TEXT_ITEM_SIZE];
+            for i in 0..length {
+                value[i] = bytes[i] as i8;
+            }
+            indigo_text {
+                value,
+                long_value: ptr::null_mut(),
+                length: length as i64,
+            }
+        };
+
+        Ok(indigo_item {
+            name,
+            label,
+            hints,
+            __bindgen_anon_1: indigo_value { text },
+        })
+    }
+
+    pub fn number(
+        name: &str,
+        label: &str,
+        hints: &str,
+        number: indigo_number,
+    ) -> Result<indigo_item, String> {
+        let name = str_to_buf(name);
+        let label = str_to_buf(label);
+        let hints = str_to_buf(hints);
+
+        Ok(indigo_item {
+            name,
+            label,
+            hints,
+            __bindgen_anon_1: indigo_value { number },
+        })
+    }
+}
+
+// /// ```
+// /// use libindigo_sys::*;
+// /// let items = [indigo_item::default(), indigo_item::default()];
+// /// let arr = indigo_item_array::try_from(&items[..]).expect("indigo_item_array");
+// /// let slice = unsafe { arr.as_slice(2) };
+// /// assert_eq!(slice.len(), 2);
+// /// ```
+// impl TryFrom<&'_ [indigo_item]> for indigo_item_array {
+//     type Error = LayoutError;
+
+//     fn try_from(values: &'_ [indigo_item]) -> Result<Self, Self::Error> {
+//         // https://users.rust-lang.org/t/memory-allocation-and-writing-to-incomplete-array-field-generated-by-bindgen
+//         unsafe {
+//             let len = values.len();
+//             let item_layout = Layout::array::<indigo_item>(len)?;
+//             let buffer = alloc(item_layout) as *const [indigo_item; 0];
+
+//             let arr = buffer as *mut indigo_item_array;
+
+//             // Write data
+//             let slice = indigo_item_array::as_mut_slice(&mut *arr, len);
+//             slice.copy_from_slice(values);
+
+//             // Ok(*arr)
+//             todo!()
+//         }
+//     }
+// }
 
 impl Default for indigo_item {
     fn default() -> Self {
-        let text = indigo_item__bindgen_ty_1__bindgen_ty_1 {
+        let text = indigo_text {
             value: [0i8; 512],
             long_value: ptr::null_mut(),
             length: 0,
@@ -53,7 +245,7 @@ impl Default for indigo_item {
             name: [0i8; 128],
             label: [0i8; 512],
             hints: [0i8; 512],
-            __bindgen_anon_1: indigo_item__bindgen_ty_1 { text },
+            __bindgen_anon_1: indigo_value { text },
         }
     }
 }
@@ -86,7 +278,7 @@ pub fn ptr_to_str<'a>(message: *const c_char) -> Option<&'a str> {
         match unsafe { CStr::from_ptr(m) }.to_str() {
             Ok(s) => Some(s),
             Err(e) => {
-                warn!("unsafe c-string to string conversion: {e}");
+                warn!("unsafe c-string to string conversion error: {e}");
                 None
             }
         }
@@ -120,6 +312,24 @@ mod tests {
     use core::{ffi::CStr, ptr};
 
     use super::*;
+
+    // #[test]
+    // fn indigo_item_array_try_from_slice() {
+    //     let items = [
+    //         indigo_item::text("f1", "Fruit 1", "usually round and green", "Apple").expect("indigo text item"),
+    //         indigo_item::text("f2", "Fruit 2", "usually oblong and yellow", "Banana").expect("indigo text item"),
+    //     ];
+
+    //     let arr = &indigo_item_array::try_from(&items[..]).expect("indigo_item_array");
+
+    //     let slice = unsafe { indigo_item_array::as_slice(arr, 2) };
+    //     assert_eq!(buf_to_str(&slice[0].name), "f1");
+    //     assert_eq!(buf_to_str(&slice[1].name), "f2");
+
+    //     let item_layout = Layout::array::<indigo_item>(items.len()).expect("layout for array of indigo_item");
+    //     let ptr = arr.as_ptr() as *mut u8;
+    //     unsafe { dealloc(ptr, item_layout) };
+    // }
 
     unsafe extern "C" fn my_attach(client: *mut indigo_client) -> indigo_result {
         let c_msg = std::ffi::CString::new("attached to INDIGO bus...").unwrap();

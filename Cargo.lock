@@ -294,6 +294,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
+name = "fambox"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09730ac65e54b4cbe57c2e7dcf5502694113c4f827984c559b2646c130e17e8b"
+dependencies = [
+ "version_check",
+]
+
+[[package]]
 name = "field-offset"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -866,6 +875,7 @@ dependencies = [
  "chrono",
  "enum_primitive",
  "env_logger",
+ "fambox",
  "function_name",
  "funty",
  "hostname-validator",
@@ -906,6 +916,7 @@ dependencies = [
  "bindgen",
  "enum_primitive",
  "env_logger",
+ "fambox",
  "log",
  "regex",
  "rev_buf_reader",
@@ -1667,6 +1678,12 @@ name = "version-compare"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "852e951cb7832cb45cb1169900d19760cfa39b82bc0ea9c0e5a14ae88411c98b"
+
+[[package]]
+name = "version_check"
+version = "0.9.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "wasi"

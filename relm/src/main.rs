@@ -10,9 +10,9 @@ use gtk::{glib::ExitCode, prelude::*};
 use libindigo::IndigoResult;
 use libindigo::{
     property::{PropertyData, PropertyItem},
-    sys::{LogLevel, SysBus, SysClientController, SysProperty, SysRemoteResource},
+    sys::{LogLevel, SysBus, SysClientController, SysRemoteResource},
     Bus, ClientController, ClientDelegate, Controller as BusController, Delegate, NamedObject,
-    Property, PropertyItem, RemoteResource,
+    Property, RemoteResource,
 };
 use log::{error, warn};
 use relm4::{
@@ -106,7 +106,7 @@ enum AppOutput {
 struct IndigoApp {
     // indigo
     bus: SysBus,
-    client: SysClientController<'static, DeviceCallbackHandler>,
+    client: SysClientController<DeviceCallbackHandler>,
     remote: SysRemoteResource,
     // realm
     status: String,
@@ -214,7 +214,7 @@ impl Component for IndigoApp {
     fn update(
         &mut self,
         input: <Self as relm4::Component>::Input,
-        sender: ComponentSender<Self>,
+        _sender: ComponentSender<Self>,
         _root: &<Self as relm4::Component>::Root,
     ) {
         if let Err(e) = match input {
@@ -308,12 +308,12 @@ impl NamedObject for DeviceCallbackHandler {
 
 impl Delegate for DeviceCallbackHandler {
     type Bus = SysBus;
-    type BusController = SysClientController<'static, Self>;
+    type BusController = SysClientController<Self>;
 }
 
 impl ClientDelegate for DeviceCallbackHandler {
-    type Property = SysProperty<'static>;
-    type ClientController = SysClientController<'static, Self>;
+    type Property = PropertyData;
+    type ClientController = SysClientController<Self>;
 
     fn on_define_property<'a>(
         &'a mut self,
