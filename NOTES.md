@@ -1,10 +1,15 @@
-# Usecases
+# libindigo notes
 
-## download all new files
+## Usecases
+
+### download all new files
+
 Application subscribes to all file creation events and downloads each file to local storage.
 
-# Client interface options
+## Client interface options
+
 Requirements:
+
 * Active open-source community with stable code base.
 * Portable code with support for all major PC platforms (Mac, Linux, Windows).
 * Portable and embeddalbe code with support for microcontroller architectures (Pico & Arduino based).
@@ -33,8 +38,8 @@ Settled on `relm` for the first tries of implementing a `libindigo-rs` GUI.
 | Slint | 12k | 544 | macOS, Windows, Linux, Android and iOS, Web | **Yes** |
 | Druid | 9.2k | 2.1k | macOS, Windows, Linux/BSD and Web | No |
 | Yew | 29.3k | 10.7k | Web/WebAssembly | No |
-| Xilem | 2.3k|–|Linux | No releases yet |
+| Xilem | 2.3k | – | Linux | No releases yet |
 
-## One trait with all callback methods
+### One trait with all callback methods
 
-## One trait per callback method
+### One trait per callback method

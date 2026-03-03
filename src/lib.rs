@@ -6,6 +6,8 @@ mod indigo;
 pub mod property;
 #[cfg(feature = "sys")]
 pub mod sys;
+#[cfg(feature = "auto")]
+pub mod auto;
 
 // mod bus;
 // mod server;
@@ -13,7 +15,6 @@ pub mod sys;
 mod client;
 // mod device;
 mod spike;
-
 
 include!(concat!(env!("OUT_DIR"), "/interface.rs"));
 

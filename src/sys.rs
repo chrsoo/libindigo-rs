@@ -1686,7 +1686,7 @@ mod tests {
             count: 3,
             items: __IncompleteArrayField::new(),
         };
-        
+
         let fam = FamBoxOwned::from_fn(prop, |i| items[i]);
         Ok(fam)
     }
@@ -1769,7 +1769,7 @@ mod tests {
         }
     }
 
-    impl<'s> Delegate for TestDelegate {
+    impl Delegate for TestDelegate {
         type Bus = SysBus;
         type BusController = SysClientController<Self>;
 
@@ -1779,7 +1779,7 @@ mod tests {
         }
     }
 
-    impl<'s> ClientDelegate for TestDelegate {
+    impl ClientDelegate for TestDelegate {
         type Property = PropertyData;
         type ClientController = SysClientController<Self>;
 
@@ -1801,7 +1801,7 @@ mod tests {
 
     /// Test assumes an INDIGO server running on localhost on the default port.
     #[test]
-    fn test_sys_bus() -> IndigoResult<()> {
+    fn test_sys_bus() {
         init_test(LevelFilter::Trace);
 
         SysBus::enable_bus_log(LogLevel::Debug);
@@ -1829,7 +1829,7 @@ mod tests {
 
         info!("testing, testing");
 
-        bus.stop(); // FIXME ensure that the remote is detached
+        bus.stop().expect("Stopped server"); // FIXME ensure that the remote is detached
                     // bus.stop().expect("stopped bus");
 
         // while let Err(e) = bus.stop() {
@@ -1837,7 +1837,5 @@ mod tests {
         //     log::logger().flush();
         //     sleep(Duration::from_secs(1));
         // }
-
-        Ok(())
     }
 }

@@ -1,3 +1,5 @@
+# libindgo
+
 Rust API for writing client appliations and device drivers related to astronomy equipment that uses the [INDIGO](https://www.indigo-astronomy.org/index.html) protocol and architecture. It is based on the standard INDIGO [open source](https://github.com/indigo-astronomy/indigo) project that provides an API written in C and is ported to Rust through the [bindgen](https://rust-lang.github.io/rust-bindgen) generated FFI bindings.
 
 > [!CAUTION]
@@ -15,7 +17,8 @@ The `libindigo-rs` API is consists of five public modules:
 
 The `client` and `device` modules contains implementations of traits defined in the `libindigo` API, notable `Device`
 
-# File Structure
+## File Structure
+
 ```bash
 tree --gitignore
 # files elided for brevity
