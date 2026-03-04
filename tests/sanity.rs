@@ -116,7 +116,6 @@ impl TestMonitor {
 //     bus::stop()
 // }
 
-
 // #[ignore = "until discovery is implemented"]
 // #[test]
 // fn server_discovery()  -> Result<(),IndigoError> {

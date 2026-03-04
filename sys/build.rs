@@ -1,17 +1,15 @@
+use bindgen::callbacks::ParseCallbacks;
 use core::str;
+use regex::Regex;
+use rev_buf_reader::RevBufReader;
+use semver::Version;
+use std::env;
 use std::ffi::OsString;
 use std::fmt::{Debug, Display};
 use std::fs::{self, File};
-use std::io::{self, prelude::*, ErrorKind, Result};
-use std::env;
 use std::io::BufReader;
+use std::io::{self, prelude::*, Result};
 use std::path::{Path, PathBuf};
-use bindgen::callbacks::ParseCallbacks;
-use bindgen::RustTarget;
-use log::{error, info};
-use rev_buf_reader::RevBufReader;
-use semver::Version;
-use regex::Regex;
 
 /// used for cloning the INDIGO git repository when source is retrieved from a crate
 const INDIGO_GIT_REPOSITORY: &str = "https://github.com/indigo-astronomy/indigo";
@@ -61,30 +59,36 @@ impl ParseCallbacks for IndigoCallbacks {
     }
 }
 
-
 fn main() -> std::io::Result<()> {
-
     let include = if let Ok(envar) = env::var(INDIGO_SOURCE_ENVAR) {
-        eprintln!("building INDIGO from source dir {:?} found in {:?}", envar, INDIGO_SOURCE_ENVAR);
+        eprintln!(
+            "building INDIGO from source dir {:?} found in {:?}",
+            envar, INDIGO_SOURCE_ENVAR
+        );
         let indigo_source = PathBuf::from(envar);
-        let indigo_source = indigo_source.canonicalize().expect("cannot canonicalize path");
+        let indigo_source = indigo_source
+            .canonicalize()
+            .expect("cannot canonicalize path");
         make_indigo(&indigo_source)?
-
     } else if let Ok(submodule) = Path::new(GIT_SUBMODULE).canonicalize() {
         eprintln!("building INDIGO from submodule {:?}", GIT_SUBMODULE);
         make_indigo(&submodule)?
-
     } else if Path::new(LINUX_INDIGO_VERSION_HEADER).is_file() {
         eprintln!("using system libraries");
-        let lib_dir = Path::new(LINUX_LIB).to_str().expect("could not find /usr/lib");
+        let lib_dir = Path::new(LINUX_LIB)
+            .to_str()
+            .expect("could not find /usr/lib");
         println!("cargo:rustc-link-search=native={}", lib_dir);
         println!("cargo:rustc-link-lib=libindigo");
         PathBuf::from(LINUX_INCLUDE)
-
-    } else { // last ditch effort
+    } else {
+        // last ditch effort
         eprintln!("checking out git submodule");
         let submodule = init_indigo_submodule()?;
-        eprintln!("building INDIGO from submodule {}", submodule.to_str().expect("expected git submodule"));
+        eprintln!(
+            "building INDIGO from submodule {}",
+            submodule.to_str().expect("expected git submodule")
+        );
         make_indigo(&submodule)?
     };
 
@@ -107,14 +111,15 @@ fn main() -> std::io::Result<()> {
         // .rust_target(RustTarget::nightly())
         .use_core()
         .generate_cstr(true)
-        .formatter( bindgen::Formatter::Prettyplease )
+        .formatter(bindgen::Formatter::Prettyplease)
         .default_enum_style(bindgen::EnumVariation::NewType {
-            is_bitfield: false, is_global: false
+            is_bitfield: false,
+            is_global: false,
         })
         .bitfield_enum("indigo_device_interface")
         .derive_debug(true)
         //.no_copy(".*")
-        .parse_callbacks(Box::new(IndigoCallbacks{}))
+        .parse_callbacks(Box::new(IndigoCallbacks {}))
         // Tell cargo to invalidate the built crate whenever any of the
         // included header files changed.
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
@@ -132,23 +137,23 @@ fn main() -> std::io::Result<()> {
     Ok(())
 }
 
-fn init_indigo_submodule() -> Result<PathBuf>{
+fn init_indigo_submodule() -> Result<PathBuf> {
     // check if we are in a crate package or if this a git repository
     let outcome = if PathBuf::from(".git").exists() {
         std::process::Command::new("git")
-        .arg("submodule")
-        .arg("update")
-        .arg("--init")
-        .arg("--recursive")
-        .status()
-        .expect("could not spawn `git`")
+            .arg("submodule")
+            .arg("update")
+            .arg("--init")
+            .arg("--recursive")
+            .status()
+            .expect("could not spawn `git`")
     } else {
         std::process::Command::new("git")
-        .arg("clone")
-        .arg(INDIGO_GIT_REPOSITORY)
-        .arg("externals/indigo")
-        .status()
-        .expect("could not spawn `git`")
+            .arg("clone")
+            .arg(INDIGO_GIT_REPOSITORY)
+            .arg("externals/indigo")
+            .status()
+            .expect("could not spawn `git`")
     };
 
     if !outcome.success() {
@@ -191,7 +196,7 @@ fn _parse_indigo_version(indigo_root: &Path) -> std::io::Result<Version> {
 }
 
 /// Ensure that the Cargo package version string includes the correct INDIGO build number.
-fn _ensure_build_version(indigo_root: &Path) -> std::io::Result<()>{
+fn _ensure_build_version(indigo_root: &Path) -> std::io::Result<()> {
     let indigo_version = _parse_indigo_version(indigo_root)?;
 
     if let Ok(v) = env::var("CARGO_PKG_VERSION") {
@@ -211,10 +216,18 @@ fn taillog(file: &str, limit: usize, err: bool) {
 
     // https://stackoverflow.com/a/74282737/51016
     let buf = RevBufReader::new(file);
-    let lines: Vec<String> = buf.lines().take(limit).map(|l| l.expect("Could not parse line")).collect();
+    let lines: Vec<String> = buf
+        .lines()
+        .take(limit)
+        .map(|l| l.expect("Could not parse line"))
+        .collect();
 
     for line in lines {
-        if err { eprintln!("{line}") } else { println!("{line}") } // ugly...
+        if err {
+            eprintln!("{line}")
+        } else {
+            println!("{line}")
+        } // ugly...
     }
 }
 
@@ -241,24 +254,27 @@ impl Display for _Compilation {
 
 impl Debug for _Compilation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Compilation").field("source", &self.source).field("target", &self.target).finish()
+        f.debug_struct("Compilation")
+            .field("source", &self.source)
+            .field("target", &self.target)
+            .finish()
     }
 }
 
-impl std::error::Error for _Compilation { }
+impl std::error::Error for _Compilation {}
 struct _Build<'a> {
     source: &'a PathBuf,
     targets: Vec<PathBuf>,
 }
 
 macro_rules! args {
-    ($a:expr) => {
-        {
-            let mut v = Vec::new();
-            $a.split(" ").map(|arg| OsString::from(arg)).for_each(|a| v.push(a));
-            v
-        }
-    }
+    ($a:expr) => {{
+        let mut v = Vec::new();
+        $a.split(" ")
+            .map(|arg| OsString::from(arg))
+            .for_each(|a| v.push(a));
+        v
+    }};
 }
 
 // macro_rules! args {
@@ -279,12 +295,11 @@ impl<'a> _Build<'a> {
         }
     }
 
-    fn _source_dir(&self) -> PathBuf{
+    fn _source_dir(&self) -> PathBuf {
         self.source.join("indigo_libs")
     }
 
     fn _source_paths(&self) -> Vec<PathBuf> {
-
         let mut source_paths = Vec::new();
 
         let source_dir = self._source_dir();
@@ -310,11 +325,11 @@ impl<'a> _Build<'a> {
         let source_dir = self._source_dir();
         paths.push(source_dir.clone());
 
-        fs::read_dir(source_dir.join("externals")).unwrap()
+        fs::read_dir(source_dir.join("externals"))
+            .unwrap()
             .filter_map(|r| if let Ok(r) = r { Some(r.path()) } else { None })
             .filter(|p| p.is_dir())
-            .for_each(|d| paths.push(d))
-            ;
+            .for_each(|d| paths.push(d));
         paths.push(source_dir.join("externals").join("libtiff").join("libtiff"));
         paths
     }
@@ -339,13 +354,13 @@ impl<'a> _Build<'a> {
         // assert!(source.ends_with(".c"), "source file does not have a .c suffix");
 
         /*
-                INDIGO_CUDA =
-                ifeq ($(findstring arm64e,$(shell file $(CC))),arm64e)
-                        MAC_ARCH = -arch x86_64 -arch arm64
-                else
-                        MAC_ARCH = -arch x86_64
-                endif
-         */
+               INDIGO_CUDA =
+               ifeq ($(findstring arm64e,$(shell file $(CC))),arm64e)
+                       MAC_ARCH = -arch x86_64 -arch arm64
+               else
+                       MAC_ARCH = -arch x86_64
+               endif
+        */
         // let arch_args = match std::env::consts::ARCH {
         //     // * `"x86"`
         //     // * `"x86_64"`
@@ -373,10 +388,12 @@ impl<'a> _Build<'a> {
             .arg(&target)
             .arg(source)
             .output()
-            .expect("could not spawn `clang`")
-            ;
+            .expect("could not spawn `clang`");
 
-        let comp = _Compilation { source: source.clone(), target };
+        let comp = _Compilation {
+            source: source.clone(),
+            target,
+        };
 
         if output.status.success() {
             assert!(comp.target.exists(), "target files was not comppiled");
@@ -384,10 +401,16 @@ impl<'a> _Build<'a> {
             self.targets.push(comp.target);
             Ok(self)
         } else {
-            println!("{}", str::from_utf8(&output.stdout).expect("could not print stdout"));
-            eprintln!("{}", str::from_utf8(&output.stderr).expect("could not print stdout"));
+            println!(
+                "{}",
+                str::from_utf8(&output.stdout).expect("could not print stdout")
+            );
+            eprintln!(
+                "{}",
+                str::from_utf8(&output.stderr).expect("could not print stdout")
+            );
             let msg = format!("could not compile '{:?}'", comp.source);
-            Err(io::Error::new(ErrorKind::Other, msg))
+            Err(io::Error::other(msg))
         }
     }
 
@@ -407,8 +430,7 @@ impl<'a> _Build<'a> {
             .arg(&lib_path)
             // .args(ld_args)
             .args(self.targets.as_slice())
-            .output()?
-            ;
+            .output()?;
         // let output = std::process::Command::new("ar")
         //     .arg("rcs")
         //     .arg(&lib_path)
@@ -418,10 +440,19 @@ impl<'a> _Build<'a> {
         if output.status.success() {
             Ok(lib_path)
         } else {
-            println!("{}", str::from_utf8(&output.stdout).expect("could not print stdout"));
-            eprintln!("{}", str::from_utf8(&output.stderr).expect("could not print stdout"));
-            let msg = format!("could not link targets: command exited with {:?}", output.status);
-            Err(io::Error::new(ErrorKind::Other, msg))
+            println!(
+                "{}",
+                str::from_utf8(&output.stdout).expect("could not print stdout")
+            );
+            eprintln!(
+                "{}",
+                str::from_utf8(&output.stderr).expect("could not print stdout")
+            );
+            let msg = format!(
+                "could not link targets: command exited with {:?}",
+                output.status
+            );
+            Err(io::Error::other(msg))
         }
     }
 }
@@ -435,23 +466,31 @@ fn _build_indigo(indigo_root: &PathBuf) -> Result<PathBuf> {
 
     // eprintln!("INCLUDE='{:?}'", build.include_args());
 
-    let libindigo = build._source_paths().iter()
+    let libindigo = build
+        ._source_paths()
+        .iter()
         .try_fold(build, |build, c| build._compile(c))?
-        ._link()?
-        ;
+        ._link()?;
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR envar not defined"));
     out_dir.canonicalize().expect("could not find OUT_DIR");
-    println!("cargo:rustc-link-search={}", out_dir.to_str().expect("could not conver OStr"));
+    println!(
+        "cargo:rustc-link-search={}",
+        out_dir.to_str().expect("could not conver OStr")
+    );
 
-    assert_eq!(libindigo.file_name().unwrap(), "libindigo.a", "`indigo` library filename must be `libindigo.a`");
+    assert_eq!(
+        libindigo.file_name().unwrap(),
+        "libindigo.a",
+        "`indigo` library filename must be `libindigo.a`"
+    );
     println!("cargo:rustc-link-lib=indigo");
 
     Ok(source_dir)
 }
 
 /// compile source code using external make
-fn make_indigo(indigo_root: &PathBuf) -> Result<PathBuf>{
+fn make_indigo(indigo_root: &PathBuf) -> Result<PathBuf> {
     // _ensure_build_version(&indigo_root)?;
 
     let log = File::create("libindigo-sys.log").unwrap();
@@ -475,13 +514,28 @@ fn make_indigo(indigo_root: &PathBuf) -> Result<PathBuf>{
         eprintln!("libindigo-sys.err:\n...");
         taillog("libindigo-sys.err", 10, true);
         eprintln!("---");
-        panic!("could not make {}", indigo_root.to_str().expect("indigo root not found"));
+        panic!(
+            "could not make {}",
+            indigo_root.to_str().expect("indigo root not found")
+        );
     }
 
-    let build_dir = indigo_root.join("build/lib/").canonicalize().expect("could not find build/lib/ dir");
-    assert_eq!(build_dir.join("libindigo.a").file_name().unwrap(), "libindigo.a", "make did not build libindigo.a");
+    let build_dir = indigo_root
+        .join("build/lib/")
+        .canonicalize()
+        .expect("could not find build/lib/ dir");
+    assert_eq!(
+        build_dir.join("libindigo.a").file_name().unwrap(),
+        "libindigo.a",
+        "make did not build libindigo.a"
+    );
 
-    println!("cargo:rustc-link-search={}", build_dir.to_str().expect("could not create string from OsStr"));
+    println!(
+        "cargo:rustc-link-search={}",
+        build_dir
+            .to_str()
+            .expect("could not create string from OsStr")
+    );
     println!("cargo:rustc-link-lib=indigo");
 
     Ok(indigo_root.join("indigo_libs")) // return include dir containing the header files

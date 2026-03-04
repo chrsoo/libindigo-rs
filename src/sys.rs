@@ -199,7 +199,6 @@ impl TryInto<FamBoxOwned<indigo_property>> for &PropertyData {
     type Error = IndigoError;
 
     fn try_into(self) -> Result<FamBoxOwned<indigo_property>, Self::Error> {
-
         // let items: Result<Vec<indigo_item>, _> = self.items().map(|i| i.try_into()).collect();
         // let items: &[indigo_item] = &(items?);
 
@@ -223,7 +222,9 @@ impl TryInto<FamBoxOwned<indigo_property>> for &PropertyData {
             items: indigo_item_array::new(),
         };
 
-        Ok(FamBoxOwned::from_fn(header, |i| (&self[i]).try_into().expect("valid property item")))
+        Ok(FamBoxOwned::from_fn(header, |i| {
+            (&self[i]).try_into().expect("valid property item")
+        }))
     }
 }
 
@@ -364,9 +365,8 @@ impl TryFrom<&indigo_property> for PropertyData {
             PropertyType::from_u32(sys.type_.0).ok_or(IndigoError::new("property type error"))?;
         let perm = PropertyPermission::from_u32(sys.perm.0)
             .ok_or(IndigoError::new("property permission error"))?;
-        let rule = SwitchRule::from_u32(sys.rule.0).ok_or_else(|| {
-            IndigoError::from(format!("no rule mapped to code {}", sys.rule.0))
-        })?;
+        let rule = SwitchRule::from_u32(sys.rule.0)
+            .ok_or_else(|| IndigoError::from(format!("no rule mapped to code {}", sys.rule.0)))?;
         let hidden = sys.hidden;
         let defined = sys.defined;
 
@@ -1830,7 +1830,7 @@ mod tests {
         info!("testing, testing");
 
         bus.stop().expect("Stopped server"); // FIXME ensure that the remote is detached
-                    // bus.stop().expect("stopped bus");
+                                             // bus.stop().expect("stopped bus");
 
         // while let Err(e) = bus.stop() {
         //     info!("failed stopping bus: {e}");

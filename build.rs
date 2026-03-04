@@ -2,8 +2,8 @@ use core::str;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, Write};
-use std::{env, io};
 use std::path::{Path, PathBuf};
+use std::{env, io};
 
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -24,9 +24,9 @@ const INDIGO_GIT_SUBMODULE: &str = "sys/externals/indigo";
 
 // #define INFO_PROPERTY_NAME										"INFO"
 
-static RE: Lazy<Regex> = Lazy::new(|| Regex::new(r#"^#define\s+(?<name>\w+)_NAME\s+"(?<value>.+)"\s*$"#).unwrap());
+static RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"^#define\s+(?<name>\w+)_NAME\s+"(?<value>.+)"\s*$"#).unwrap());
 fn main() -> std::io::Result<()> {
-
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     let submodule = Path::new(INDIGO_GIT_SUBMODULE);
@@ -36,7 +36,9 @@ fn main() -> std::io::Result<()> {
 
     let mut names = BTreeMap::new();
 
-    let include = submodule.join("indigo_libs/indigo/indigo_names.h").canonicalize()?;
+    let include = submodule
+        .join("indigo_libs/indigo/indigo_names.h")
+        .canonicalize()?;
     for line in read_lines(include)? {
         if let Some(cap) = RE.captures(&line?) {
             names.insert(cap["name"].to_string(), cap["value"].to_string());
@@ -81,28 +83,30 @@ fn join_paths(base: &Path, path: &str) -> String {
 }
 
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
-where P: AsRef<Path>, {
+where
+    P: AsRef<Path>,
+{
     let file = File::open(filename)?;
     Ok(io::BufReader::new(file).lines())
 }
 
-fn init_indigo_submodule() -> std::io::Result<PathBuf>{
+fn init_indigo_submodule() -> std::io::Result<PathBuf> {
     // check if we are in a crate package or if this a git repository
     let outcome = if PathBuf::from(".git").exists() {
         std::process::Command::new("git")
-        .arg("submodule")
-        .arg("update")
-        .arg("--init")
-        .arg("--recursive")
-        .status()
-        .expect("could not spawn `git`")
+            .arg("submodule")
+            .arg("update")
+            .arg("--init")
+            .arg("--recursive")
+            .status()
+            .expect("could not spawn `git`")
     } else {
         std::process::Command::new("git")
-        .arg("clone")
-        .arg(INDIGO_GIT_REPOSITORY)
-        .arg("externals/indigo")
-        .status()
-        .expect("could not spawn `git`")
+            .arg("clone")
+            .arg(INDIGO_GIT_REPOSITORY)
+            .arg("externals/indigo")
+            .status()
+            .expect("could not spawn `git`")
     };
 
     if !outcome.success() {

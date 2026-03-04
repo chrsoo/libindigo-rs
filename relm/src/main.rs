@@ -50,9 +50,7 @@ fn main() -> glib::ExitCode {
 
 #[derive(Debug, Clone)]
 enum AppInput {
-
     // -- commands
-
     /// Connect a remote [Server]
     ConnectServer(String, Url),
     /// Disconnect a remote [Server]
@@ -75,15 +73,24 @@ enum AppInput {
     SendMessage(String, String),
 
     // -- events
-
     /// A [Property] of a [Device] was defined.
-    PropertyDefined { data: PropertyData, msg: Option<String> },
+    PropertyDefined {
+        data: PropertyData,
+        msg: Option<String>,
+    },
     /// A [Property] of a Device was updated.
-    PropertyUpdated { data: PropertyData, msg: Option<String> },
+    PropertyUpdated {
+        data: PropertyData,
+        msg: Option<String>,
+    },
     /// A [Property] of a [Device] was deleted.
-    PropertyDeleted { property: String, device: String, msg: Option<String> },
+    PropertyDeleted {
+        property: String,
+        device: String,
+        msg: Option<String>,
+    },
     /// Received a message from a Device
-    MessageReceived { device: String, msg: String }
+    MessageReceived { device: String, msg: String },
 }
 
 #[derive(Debug, Clone)]
@@ -99,7 +106,7 @@ enum AppOutput {
     /// A [Property] of a [Device] was deleted.
     PropertyDeleted { property: String, device: String },
     /// A message was sent by a [Device]
-    MessageSent{ message: String, device: String },
+    MessageSent { message: String, device: String },
 }
 
 #[derive(Debug)]
@@ -167,7 +174,6 @@ impl Component for IndigoApp {
         window: Self::Root,
         sender: ComponentSender<Self>,
     ) -> relm4::ComponentParts<Self> {
-
         let devices = FactoryHashMap::builder()
             .launch(gtk::Stack::default())
             .forward(sender.input_sender(), |output| match output {
@@ -219,21 +225,27 @@ impl Component for IndigoApp {
     ) {
         if let Err(e) = match input {
             // device commands
-            AppInput::RequestConnection=> todo!(),
-            AppInput::RequestDisconnection=>todo!(),
-            AppInput::RequestDefinition(d,p)=> self.client.request_definition(d.as_str(), p.as_str()),
-            AppInput::RequestEnumeration(_)=>todo!(),
-            AppInput::RequestUpdate(_)=>todo!(),
-            AppInput::RequestItemUpdate(_,_,_)=>todo!(),
-            AppInput::RequestDeletion(_,_)=>todo!(),
-            AppInput::SendMessage(_,_)=>todo!(),
+            AppInput::RequestConnection => todo!(),
+            AppInput::RequestDisconnection => todo!(),
+            AppInput::RequestDefinition(d, p) => {
+                self.client.request_definition(d.as_str(), p.as_str())
+            }
+            AppInput::RequestEnumeration(_) => todo!(),
+            AppInput::RequestUpdate(_) => todo!(),
+            AppInput::RequestItemUpdate(_, _, _) => todo!(),
+            AppInput::RequestDeletion(_, _) => todo!(),
+            AppInput::SendMessage(_, _) => todo!(),
             // server commands
-            AppInput::ConnectServer(name, url)=> self.connect(name, url),
-            AppInput::DisconnectServer=> self.remote.disconnect(),
+            AppInput::ConnectServer(name, url) => self.connect(name, url),
+            AppInput::DisconnectServer => self.remote.disconnect(),
             // property events
             AppInput::PropertyDefined { data, msg } => self.define_property(data, msg),
             AppInput::PropertyUpdated { data, msg } => self.update_property(data, msg),
-            AppInput::PropertyDeleted { property, device, msg } => self.delete_property(property, device, msg),
+            AppInput::PropertyDeleted {
+                property,
+                device,
+                msg,
+            } => self.delete_property(property, device, msg),
             // device events
             AppInput::MessageReceived { device, msg } => self.receive_message(device, msg),
         } {
@@ -260,7 +272,6 @@ impl Component for IndigoApp {
 }
 
 impl IndigoApp {
-
     fn connect(&mut self, name: String, url: Url) -> IndigoResult<()> {
         let mut remote = SysRemoteResource::new(name.as_str(), url)?;
         remote.attach(&mut self.bus)?;
@@ -271,23 +282,28 @@ impl IndigoApp {
 
     // -- device events
 
-    fn define_property(&self, data: PropertyData, msg: Option<String>)
-    -> IndigoResult<()> {
+    fn define_property(&self, data: PropertyData, msg: Option<String>) -> IndigoResult<()> {
         let device = &data.device().to_owned();
-        self.devices.send(device, DeviceInput::DefineProperty(data, msg));
+        self.devices
+            .send(device, DeviceInput::DefineProperty(data, msg));
         Ok(())
     }
 
-    fn update_property(&self, data: PropertyData, msg: Option<String>)
-    -> IndigoResult<()> {
+    fn update_property(&self, data: PropertyData, msg: Option<String>) -> IndigoResult<()> {
         let device = &data.device().to_owned();
-        self.devices.send(device, DeviceInput::UpdateProperty(data, msg));
+        self.devices
+            .send(device, DeviceInput::UpdateProperty(data, msg));
         Ok(())
     }
 
-    fn delete_property(&self, property: String, device: String, msg: Option<String>)
-    -> IndigoResult<()> {
-        self.devices.send(&device, DeviceInput::DeleteProperty(property, msg));
+    fn delete_property(
+        &self,
+        property: String,
+        device: String,
+        msg: Option<String>,
+    ) -> IndigoResult<()> {
+        self.devices
+            .send(&device, DeviceInput::DeleteProperty(property, msg));
         Ok(())
     }
 
@@ -298,7 +314,7 @@ impl IndigoApp {
 }
 
 #[derive(Debug)]
-pub(crate) struct DeviceCallbackHandler { }
+pub(crate) struct DeviceCallbackHandler {}
 
 impl NamedObject for DeviceCallbackHandler {
     fn name(&self) -> &str {
@@ -322,9 +338,11 @@ impl ClientDelegate for DeviceCallbackHandler {
         p: Self::Property,
         msg: Option<&'a str>,
     ) -> libindigo::IndigoResult<()> {
-
         let msg = msg.map(|m| m.to_owned());
-        let input = AppInput::PropertyDefined { data: p.into(), msg };
+        let input = AppInput::PropertyDefined {
+            data: p.into(),
+            msg,
+        };
         BROKER.send(input);
         Ok(())
     }
@@ -336,9 +354,11 @@ impl ClientDelegate for DeviceCallbackHandler {
         p: Self::Property,
         msg: Option<&'a str>,
     ) -> libindigo::IndigoResult<()> {
-
         let msg = msg.map(|m| m.to_owned());
-        let input = AppInput::PropertyUpdated { data: p.into(), msg };
+        let input = AppInput::PropertyUpdated {
+            data: p.into(),
+            msg,
+        };
         BROKER.send(input);
         Ok(())
     }
@@ -350,11 +370,14 @@ impl ClientDelegate for DeviceCallbackHandler {
         p: Self::Property,
         msg: Option<&'a str>,
     ) -> libindigo::IndigoResult<()> {
-
         let device = p.device().to_owned();
         let property = p.name().to_owned();
         let msg = msg.map(|m| m.to_owned());
-        let input = AppInput::PropertyDeleted{ property, device, msg };
+        let input = AppInput::PropertyDeleted {
+            property,
+            device,
+            msg,
+        };
 
         BROKER.send(input);
         Ok(())
@@ -364,11 +387,13 @@ impl ClientDelegate for DeviceCallbackHandler {
         &mut self,
         _c: &mut Self::ClientController,
         d: &'a str,
-        msg: &'a str
+        msg: &'a str,
     ) -> libindigo::IndigoResult<()> {
-
         let device = d.to_owned();
-        let input = AppInput::MessageReceived { device, msg: msg.to_owned() };
+        let input = AppInput::MessageReceived {
+            device,
+            msg: msg.to_owned(),
+        };
         BROKER.send(input);
         Ok(())
     }

@@ -4,7 +4,9 @@ use gtk::{
     EntryBuffer, Frame, Label, SizeGroup,
 };
 use libindigo::{
-    property::{PropertyData, PropertyItem, PropertyValue}, BlobItem, LightItem, NamedObject as _, NumberItem, Property, PropertyType, SwitchItem as _, TextItem
+    property::{PropertyData, PropertyItem, PropertyValue},
+    BlobItem, LightItem, NamedObject as _, NumberItem, Property, PropertyType, SwitchItem as _,
+    TextItem,
 };
 use log::warn;
 use relm4::{
@@ -253,7 +255,10 @@ impl SwitchItem {
         if let PropertyValue::Switch(switch) = self.item.value() {
             switch.on()
         } else {
-            warn!("defaulting to 'off': expected switch, found {:?}", self.item.value());
+            warn!(
+                "defaulting to 'off': expected switch, found {:?}",
+                self.item.value()
+            );
             false
         }
     }

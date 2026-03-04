@@ -1,8 +1,14 @@
 use std::{
-    collections::{HashMap, VecDeque}, fmt::{Debug, Display}, marker::PhantomData, time::SystemTime
+    collections::{HashMap, VecDeque},
+    fmt::{Debug, Display},
+    marker::PhantomData,
+    time::SystemTime,
 };
 
-use crate::{indigo::{self, *}, name, Interface};
+use crate::{
+    indigo::{self, *},
+    name, Interface,
+};
 use chrono::{DateTime, Utc};
 use log::{debug, trace, warn};
 
@@ -20,7 +26,7 @@ pub struct LogEntry {
 }
 
 /// Event for a [ClientDeviceModel].
-#[derive(Debug,Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClientDeviceEvent {
     /// [Device] created event.
     Created(LogEntry),
@@ -35,34 +41,53 @@ pub enum ClientDeviceEvent {
 }
 
 impl ClientDeviceEvent {
-
     fn created(device: String) -> ClientDeviceEvent {
         let timestamp = SystemTime::now().into();
         let message = "added device to model".to_string();
-        ClientDeviceEvent::Created(LogEntry { name: device, timestamp, message })
+        ClientDeviceEvent::Created(LogEntry {
+            name: device,
+            timestamp,
+            message,
+        })
     }
 
     fn received(device: String, msg: &str) -> ClientDeviceEvent {
         let timestamp = SystemTime::now().into();
         let message = msg.to_owned();
-        ClientDeviceEvent::Received(LogEntry { name: device, timestamp, message })
+        ClientDeviceEvent::Received(LogEntry {
+            name: device,
+            timestamp,
+            message,
+        })
     }
 
     fn defined(property: String, msg: Option<&str>) -> ClientDeviceEvent {
         let timestamp = SystemTime::now().into();
         let message = msg.unwrap_or("property defined").to_owned();
-        ClientDeviceEvent::Defined(LogEntry { name: property, timestamp, message })
+        ClientDeviceEvent::Defined(LogEntry {
+            name: property,
+            timestamp,
+            message,
+        })
     }
 
     fn updated(property: String, msg: Option<&str>) -> ClientDeviceEvent {
         let timestamp = SystemTime::now().into();
         let message = msg.unwrap_or("property updated").to_owned();
-        ClientDeviceEvent::Updated(LogEntry { name: property, timestamp, message })
+        ClientDeviceEvent::Updated(LogEntry {
+            name: property,
+            timestamp,
+            message,
+        })
     }
     fn deleted(property: String, msg: Option<&str>) -> ClientDeviceEvent {
         let timestamp = SystemTime::now().into();
         let message = msg.unwrap_or("property deleted").to_owned();
-        ClientDeviceEvent::Deleted(LogEntry { name: property, timestamp, message })
+        ClientDeviceEvent::Deleted(LogEntry {
+            name: property,
+            timestamp,
+            message,
+        })
     }
 }
 
@@ -70,17 +95,18 @@ impl ClientDeviceEvent {
 
 /// A device consisting of a collection of [Properties](Property) as seen from a
 /// client implementation.
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct ClientDeviceModel<P>
-where P: Property {
+where
+    P: Property,
+{
     name: String,
-    props: HashMap<String,P>,
+    props: HashMap<String, P>,
     events: VecDeque<ClientDeviceEvent>,
-    hook: Option<DeviceHook<P>>
+    hook: Option<DeviceHook<P>>,
 }
 
 impl<P: Property> ClientDeviceModel<P> {
-
     pub fn new(name: &str) -> Self {
         Self {
             name: name.to_owned(),
@@ -96,25 +122,15 @@ impl<P: Property> ClientDeviceModel<P> {
         debug!("registered hook {hook:?}");
     }
 
-    fn upsert_property(
-        &mut self,
-        p: P,
-        e: ClientDeviceEvent,
-    ) -> IndigoResult<()> {
+    fn upsert_property(&mut self, p: P, e: ClientDeviceEvent) -> IndigoResult<()> {
         self.props
             .entry(p.name().to_string())
             .and_modify(|prop| prop.update(&p))
-            .or_insert(p)
-            ;
+            .or_insert(p);
         self.dispatch_event(e)
     }
 
-    fn delete_property(
-        &mut self,
-        p: impl Property,
-        msg: Option<&str>
-    ) -> IndigoResult<P> {
-
+    fn delete_property(&mut self, p: impl Property, msg: Option<&str>) -> IndigoResult<P> {
         if let Some(prop) = self.props.remove(p.name()) {
             self.dispatch_event(ClientDeviceEvent::deleted(p.name().to_owned(), msg))?;
             Ok(prop)
@@ -127,7 +143,7 @@ impl<P: Property> ClientDeviceModel<P> {
         self.dispatch_event(ClientDeviceEvent::received(self.name().to_owned(), msg))
     }
 
-    fn dispatch_event(&mut self, e: ClientDeviceEvent) -> IndigoResult<()>{
+    fn dispatch_event(&mut self, e: ClientDeviceEvent) -> IndigoResult<()> {
         self.events.push_front(e);
 
         let e = self.events.front().unwrap();
@@ -141,7 +157,6 @@ impl<P: Property> ClientDeviceModel<P> {
         }
         Ok(())
     }
-
 }
 
 impl<P: Property> Display for ClientDeviceModel<P> {
@@ -177,7 +192,6 @@ impl<P: Property> NamedObject for ClientDeviceModel<P> {
 }
 
 impl<P: Property> Device for ClientDeviceModel<P> {
-
     fn get(&self, property: &str) -> enum_primitive::Option<&impl Property> {
         self.props.get(property)
     }
@@ -197,17 +211,25 @@ impl<P: Property> Device for ClientDeviceModel<P> {
 
 /// A default implementation of [ClientDelegate] that manages the set of all enumerated devices
 /// and their properties that are defined on the [Bus](crate::Bus) .
-pub struct ClientModel<P,B,C>
-where P: Property, B: Bus, C: ClientController<P,B> {
+pub struct ClientModel<P, B, C>
+where
+    P: Property,
+    B: Bus,
+    C: ClientController<P, B>,
+{
     name: String,
-    devices: HashMap<String,ClientDeviceModel<P>>,
+    devices: HashMap<String, ClientDeviceModel<P>>,
     hook: Option<DeviceHook<P>>,
     _b: PhantomData<B>,
     _c: PhantomData<C>,
 }
 
-impl<P,B,C> Debug for ClientModel<P,B,C>
-where P: Property, B: Bus, C: ClientController<P,B> {
+impl<P, B, C> Debug for ClientModel<P, B, C>
+where
+    P: Property,
+    B: Bus,
+    C: ClientController<P, B>,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ClientModel")
             .field("name", &self.name)
@@ -219,22 +241,33 @@ where P: Property, B: Bus, C: ClientController<P,B> {
     }
 }
 
-
-impl<P,B,C> NamedObject for ClientModel<P,B,C>
-where P: Property, B: Bus, C: ClientController<P,B> {
+impl<P, B, C> NamedObject for ClientModel<P, B, C>
+where
+    P: Property,
+    B: Bus,
+    C: ClientController<P, B>,
+{
     fn name(&self) -> &str {
         &self.name
     }
 }
 
-impl<P,B,C> Delegate for ClientModel<P,B,C>
-where P: Property, B: Bus, C: ClientController<P,B> {
+impl<P, B, C> Delegate for ClientModel<P, B, C>
+where
+    P: Property,
+    B: Bus,
+    C: ClientController<P, B>,
+{
     type Bus = B;
     type BusController = C;
 }
 
-impl<P,B,C> ClientDelegate for ClientModel<P,B,C>
-where P: Property, B: Bus, C: ClientController<P,B> {
+impl<P, B, C> ClientDelegate for ClientModel<P, B, C>
+where
+    P: Property,
+    B: Bus,
+    C: ClientController<P, B>,
+{
     type Property = P;
     type ClientController = C;
 
@@ -246,7 +279,6 @@ where P: Property, B: Bus, C: ClientController<P,B> {
         p: P,
         msg: Option<&str>,
     ) -> IndigoResult<()> {
-
         let device = self.get_or_create_device(p.device());
         let name = p.name().to_owned();
         device.upsert_property(p, ClientDeviceEvent::defined(name, msg))
@@ -258,10 +290,8 @@ where P: Property, B: Bus, C: ClientController<P,B> {
         _c: &mut C,
         _d: &str,
         p: P,
-        msg: Option<&str>
-
+        msg: Option<&str>,
     ) -> IndigoResult<()> {
-
         let device = self.get_or_create_device(p.device());
         let name = p.name().to_owned();
         device.upsert_property(p, ClientDeviceEvent::updated(name, msg))
@@ -272,35 +302,29 @@ where P: Property, B: Bus, C: ClientController<P,B> {
         _c: &mut C,
         _d: &str,
         p: P,
-        msg: Option<&str>
+        msg: Option<&str>,
     ) -> IndigoResult<()> {
-
         if let Some(device) = self.devices.get_mut(p.device()) {
             device.delete_property(p, msg)?;
             Ok(())
         } else {
             Err(IndigoError::new("device not found"))
         }
-
     }
 
-    fn on_message_broadcast(
-        &mut self,
-        _c: &mut C,
-        d: &str,
-        msg: &str
-    ) -> IndigoResult<()> {
-
+    fn on_message_broadcast(&mut self, _c: &mut C, d: &str, msg: &str) -> IndigoResult<()> {
         let device = self.get_or_create_device(d);
         device.dispatch_event(ClientDeviceEvent::received(d.to_owned(), msg))
     }
-
 }
 
-impl<P,B,C> ClientModel<P,B,C>
-where P: Property, B: Bus, C: ClientController<P,B> {
-
-    pub fn new(name: &str) -> ClientModel<P,B,C> {
+impl<P, B, C> ClientModel<P, B, C>
+where
+    P: Property,
+    B: Bus,
+    C: ClientController<P, B>,
+{
+    pub fn new(name: &str) -> ClientModel<P, B, C> {
         ClientModel {
             name: name.to_owned(),
             devices: HashMap::new(),
@@ -321,17 +345,15 @@ where P: Property, B: Bus, C: ClientController<P,B> {
     }
 
     fn get_or_create_device(&mut self, d: &str) -> &mut ClientDeviceModel<P> {
-        self.devices
-            .entry(d.to_owned())
-            .or_insert_with(|| {
-                let device = ClientDeviceModel::new(d);
-                debug!("added device '{d}' to model");
-                if let Some(hook) = self.hook {
-                    if let Err(e) = hook(&device, &ClientDeviceEvent::created(d.to_owned())) {
-                        warn!("callback failed: {e}");
-                    }
+        self.devices.entry(d.to_owned()).or_insert_with(|| {
+            let device = ClientDeviceModel::new(d);
+            debug!("added device '{d}' to model");
+            if let Some(hook) = self.hook {
+                if let Err(e) = hook(&device, &ClientDeviceEvent::created(d.to_owned())) {
+                    warn!("callback failed: {e}");
                 }
-                device
-            })
+            }
+            device
+        })
     }
 }

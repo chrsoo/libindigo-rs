@@ -90,7 +90,6 @@
 //     buf: [u8;256],
 // }
 
-
 // // -- wrapper code for working with the bindgen code ---------------------------
 
 // impl Property {

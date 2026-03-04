@@ -1,7 +1,6 @@
 /// Implementation for the INDIGO protocol v2 as specified by
 /// [INDIGO](https://github.com/indigo-astronomy/indigo/blob/master/indigo_docs/PROTOCOLS.md)
 /// and [INDI](../doc/INDI.pdf).
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -14,7 +13,6 @@ struct GetProperties<'a> {
 pub struct AccessToken {
     tok: u64,
 }
-
 
 // mod test {
 //     use serde_xml_rs::{from_str, to_string};
