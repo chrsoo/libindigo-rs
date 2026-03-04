@@ -7,14 +7,17 @@ use enum_primitive::*;
 
 #[cfg(feature = "ffi-strategy")]
 use libindigo_sys::buf_to_str;
+#[cfg(feature = "ffi-strategy")]
+use log::{debug, error, warn};
+#[cfg(not(feature = "ffi-strategy"))]
 use log::{debug, warn};
 use number::NumberFormat;
+#[cfg(feature = "ffi-strategy")]
+use std::ffi::CString;
 use strum_macros::Display as StrumDisplay;
 use url_fork::{ParseError, Url};
 
 use crate::property::{PropertyItem, PropertyValue};
-#[cfg(feature = "ffi-strategy")]
-use crate::Interface;
 use crate::{name, number};
 use core::error::Error;
 use core::result::Result;
@@ -657,12 +660,12 @@ pub trait Device: NamedObject {
     /// List all interfaces defined for this device, returning [None] if no
     /// interfaces can be found.
     #[cfg(feature = "ffi-strategy")]
-    fn list_interfaces(&self) -> Option<Vec<Interface>> {
+    fn list_interfaces(&self) -> Option<Vec<crate::Interface>> {
         let p = self.info()?;
         if let Some(item) = p.get_item(name::INFO_DEVICE_INTERFACE_ITEM) {
             if let PropertyValue::Text(text) = item.value() {
                 if let Ok(code) = text.value().parse() {
-                    Interface::map(code)
+                    crate::Interface::map(code)
                 } else {
                     None
                 }

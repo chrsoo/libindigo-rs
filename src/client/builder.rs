@@ -603,6 +603,80 @@ impl Client {
     pub fn strategy_mut(&mut self) -> &mut dyn ClientStrategy {
         self.strategy.as_mut()
     }
+
+    /// Discovers INDIGO servers on the local network.
+    ///
+    /// This is a convenience method that performs one-shot server discovery
+    /// using default configuration (5 second timeout).
+    ///
+    /// # Availability
+    ///
+    /// This method is only available when the `auto` feature is enabled.
+    ///
+    /// # Returns
+    ///
+    /// A list of discovered servers, or an error if discovery fails.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use libindigo::client::Client;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> libindigo::Result<()> {
+    /// let servers = Client::discover_servers().await?;
+    /// for server in servers {
+    ///     println!("Found: {} at {}", server.name, server.url());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "auto")]
+    pub async fn discover_servers() -> Result<Vec<crate::discovery::DiscoveredServer>> {
+        crate::discovery::ServerDiscoveryApi::discover(crate::discovery::DiscoveryConfig::new())
+            .await
+    }
+
+    /// Discovers INDIGO servers with custom configuration.
+    ///
+    /// This method allows you to customize the discovery behavior using
+    /// a [`DiscoveryConfig`](crate::discovery::DiscoveryConfig).
+    ///
+    /// # Availability
+    ///
+    /// This method is only available when the `auto` feature is enabled.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Discovery configuration
+    ///
+    /// # Returns
+    ///
+    /// A list of discovered servers, or an error if discovery fails.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use libindigo::client::Client;
+    /// use libindigo::discovery::DiscoveryConfig;
+    /// use std::time::Duration;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> libindigo::Result<()> {
+    /// let config = DiscoveryConfig::new()
+    ///     .timeout(Duration::from_secs(10))
+    ///     .filter(|server| server.name.contains("Observatory"));
+    ///
+    /// let servers = Client::discover_servers_with_config(config).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "auto")]
+    pub async fn discover_servers_with_config(
+        config: crate::discovery::DiscoveryConfig,
+    ) -> Result<Vec<crate::discovery::DiscoveredServer>> {
+        crate::discovery::ServerDiscoveryApi::discover(config).await
+    }
 }
 
 #[cfg(test)]

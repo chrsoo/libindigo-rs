@@ -131,6 +131,24 @@ pub mod client;
 /// Strategy implementations (FFI and Rust).
 pub mod strategies;
 
+/// Server discovery API (ZeroConf/Bonjour).
+///
+/// This module provides automatic discovery of INDIGO servers on the local network
+/// using mDNS/DNS-SD. It is only available when the `auto` feature is enabled.
+///
+/// # Example
+///
+/// ```ignore
+/// use libindigo::discovery::{DiscoveryConfig, ServerDiscoveryApi};
+///
+/// let servers = ServerDiscoveryApi::discover(DiscoveryConfig::new()).await?;
+/// for server in servers {
+///     println!("Found: {}", server.name);
+/// }
+/// ```
+#[cfg(feature = "auto")]
+pub mod discovery;
+
 // Re-export commonly used types from new API
 // Note: Some types (Property, PropertyState, PropertyType, SwitchRule) conflict
 // with old API types. Use the `prelude` module or direct imports from `types`
@@ -155,6 +173,13 @@ pub mod prelude {
         Device, DeviceInfo, Property, PropertyPerm, PropertyState, PropertyType,
     };
     pub use crate::types::{PropertyValue, SwitchRule, SwitchState};
+
+    // Re-export discovery types when auto feature is enabled
+    #[cfg(feature = "auto")]
+    pub use crate::discovery::{
+        DiscoveredServer, DiscoveryConfig, DiscoveryEvent, DiscoveryMode, ServerDiscovery,
+        ServerDiscoveryApi,
+    };
 
     // Re-export strategy implementations when features are enabled
     #[cfg(all(feature = "ffi-strategy", feature = "async"))]
@@ -185,12 +210,6 @@ pub mod property;
 #[cfg(feature = "sys")]
 #[deprecated(note = "Use `strategies::ffi` module instead")]
 pub mod sys;
-
-#[deprecated(note = "Use new client API in the `client` module")]
-#[cfg(feature = "std")]
-mod client_old;
-#[deprecated(note = "Device API will be implemented in Phase 4")]
-mod spike;
 
 #[cfg(any(feature = "ffi-strategy", feature = "sys"))]
 include!(concat!(env!("OUT_DIR"), "/interface.rs"));
@@ -229,7 +248,11 @@ use std::collections::hash_map::ValuesMut;
 use std::collections::HashMap;
 
 #[cfg(feature = "ffi-strategy")]
+use enum_primitive::*;
+#[cfg(feature = "ffi-strategy")]
 use libindigo_sys::{self, *};
+#[cfg(feature = "ffi-strategy")]
+use strum::IntoEnumIterator;
 
 pub type StringMap<T> = HashMap<String, T>;
 
@@ -240,7 +263,7 @@ pub use crate::indigo::*;
 #[cfg(feature = "ffi-strategy")]
 #[allow(deprecated)]
 enum_from_primitive! {
-#[derive(Debug, Copy, Clone, Eq, PartialEq, EnumIter, strum_macros::Display)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, strum_macros::EnumIter, strum_macros::Display)]
 #[non_exhaustive]
 #[repr(u32)]
 // sys-doc: Device interface (value should be used for INFO_DEVICE_INTERFACE_ITEM->text.value)
