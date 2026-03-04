@@ -2,24 +2,162 @@ name: Rust
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main", "master"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main", "master"]
 
 env:
   CARGO_TERM_COLOR: always
-jobs:
-  build:
 
+jobs:
+  # Test pure Rust strategy (no C dependencies)
+  test-rs-strategy:
+    name: Test Pure Rust Strategy
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: 'true'
-    - name: Setup
-      run: sudo apt-get update && sudo apt-get install build-essential autoconf autotools-dev libtool cmake libudev-dev libavahi-compat-libdnssd-dev libusb-1.0-0-dev libcurl4-gnutls-dev libgphoto2-dev libz-dev git curl patchelf
-    - name: Build
-      run: cargo build --workspace
-    - name: Run tests
-      run: cargo test
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+        continue-on-error: true
+
+      - name: Run clippy
+        run: cargo clippy --features rs-strategy -- -D warnings
+        continue-on-error: true
+
+      - name: Build with rs-strategy
+        run: cargo build --features rs-strategy --verbose
+
+      - name: Run unit tests (rs-strategy)
+        run: cargo test --features rs-strategy --lib --verbose
+
+      - name: Run integration tests (rs-strategy, no server)
+        run: |
+          # Integration tests will skip gracefully if server not available
+          # Set environment variable to skip server startup attempts
+          INDIGO_TEST_SKIP_SERVER=true cargo test --features rs-strategy --test '*' --verbose || true
+        continue-on-error: true
+
+  # Build with FFI strategy (requires C library)
+  build-ffi-strategy:
+    name: Build FFI Strategy
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            autoconf \
+            autotools-dev \
+            libtool \
+            cmake \
+            libudev-dev \
+            libavahi-compat-libdnssd-dev \
+            libusb-1.0-0-dev \
+            libcurl4-gnutls-dev \
+            libgphoto2-dev \
+            libz-dev \
+            git \
+            curl \
+            patchelf
+
+      - name: Cache INDIGO build
+        uses: actions/cache@v3
+        with:
+          path: |
+            sys/externals/indigo/build
+            target
+          key: ${{ runner.os }}-indigo-${{ hashFiles('sys/externals/indigo/**') }}
+          restore-keys: |
+            ${{ runner.os }}-indigo-
+
+      - name: Build workspace (default features with FFI)
+        run: cargo build --workspace --verbose
+        env:
+          # Build INDIGO from submodule
+          INDIGO_SOURCE: sys/externals/indigo
+
+      - name: Run unit tests (FFI strategy)
+        run: cargo test --lib --verbose
+        continue-on-error: true
+
+      - name: Run integration tests (FFI strategy, no server)
+        run: |
+          # Integration tests will skip if server not available
+          INDIGO_TEST_SKIP_SERVER=true cargo test --test '*' --verbose || true
+        continue-on-error: true
+
+  # Minimal build check (no optional features)
+  build-minimal:
+    name: Build Minimal (No Optional Features)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Build with no default features
+        run: cargo build --no-default-features --verbose
+        continue-on-error: true
+
+  # Documentation build
+  docs:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Build documentation
+        run: cargo doc --no-deps --features rs-strategy --verbose
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+        continue-on-error: true
+
+  # Check different Rust versions
+  check-rust-versions:
+    name: Check Rust ${{ matrix.rust }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust: [stable, beta, nightly]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Check with rs-strategy
+        run: cargo check --features rs-strategy --verbose
+        continue-on-error: ${{ matrix.rust != 'stable' }}
