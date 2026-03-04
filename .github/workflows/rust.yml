@@ -95,11 +95,23 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-indigo-
 
+      - name: Verify submodule checkout
+        run: |
+          echo "Checking submodule status..."
+          ls -la sys/externals/
+          if [ -d "sys/externals/indigo" ]; then
+            echo "INDIGO submodule exists"
+            ls -la sys/externals/indigo/ | head -20
+          else
+            echo "ERROR: INDIGO submodule not found!"
+            exit 1
+          fi
+
       - name: Build workspace (default features with FFI)
         run: cargo build --workspace --exclude libindigo-relm --verbose
         env:
-          # Build INDIGO from submodule
-          INDIGO_SOURCE: sys/externals/indigo
+          # Build INDIGO from submodule (absolute path from workspace root)
+          INDIGO_SOURCE: ${{ github.workspace }}/sys/externals/indigo
 
       - name: Run unit tests (FFI strategy)
         run: cargo test --workspace --exclude libindigo-relm --lib --verbose
