@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Configuration for the test harness
 //!
 //! This module provides configuration management for the INDIGO server test harness,

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Test Harness - Main coordinator for integration tests
 //!
 //! This module provides the global test harness singleton that manages

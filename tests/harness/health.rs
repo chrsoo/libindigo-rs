@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Health Monitor for INDIGO server
 //!
 //! This module provides health checking and readiness detection for the INDIGO server,
@@ -42,8 +44,8 @@ impl HealthMonitor {
     pub async fn check_connectivity(&self) -> Result<bool, String> {
         match timeout(self.timeout_duration, TcpStream::connect(&self.address)).await {
             Ok(Ok(_stream)) => Ok(true),
-            Ok(Err(e)) => Ok(false), // Connection failed but no timeout
-            Err(_) => Ok(false),     // Timeout
+            Ok(Err(_e)) => Ok(false), // Connection failed but no timeout
+            Err(_) => Ok(false),      // Timeout
         }
     }
 

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Server Manager for INDIGO server process lifecycle
 //!
 //! This module manages the INDIGO server process, including discovery,

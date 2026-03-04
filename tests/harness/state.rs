@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! State Manager for INDIGO server
 //!
 //! This module manages server state between tests, providing lightweight

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Test Harness for INDIGO Server Integration Tests
 //!
 //! This module provides a comprehensive test harness for managing an INDIGO server
