@@ -6,20 +6,15 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 use core::slice;
 use std::{
-    alloc::{alloc, dealloc, Layout, LayoutErr, LayoutError},
-    cmp,
-    ffi::{c_char, CStr, CString, NulError},
+    ffi::{c_char, CStr, CString},
     hash::Hash,
-    marker::PhantomData,
-    mem,
-    ops::Index,
     ptr,
     str::FromStr,
 };
 
 use enum_primitive::*;
 use fambox::FamHeader;
-use log::{error, warn};
+use log::warn;
 
 pub const DEFAULT_PORT: u16 = 7624;
 pub const DEFAULT_HOST: &str = "indigo.local";
