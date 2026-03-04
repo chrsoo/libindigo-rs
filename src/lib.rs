@@ -178,10 +178,11 @@ mod client_old;
 #[deprecated(note = "Device API will be implemented in Phase 4")]
 mod spike;
 
+#[cfg(any(feature = "ffi-strategy", feature = "sys"))]
 include!(concat!(env!("OUT_DIR"), "/interface.rs"));
 
 pub mod name {
-    include!(concat!(env!("OUT_DIR"), "/name.rs"));
+    include!("constants.rs");
 
     #[cfg(test)]
     mod tests {

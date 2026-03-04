@@ -79,7 +79,7 @@ env_logger = "*"
 regex = "1.11"
 
 [features]
-default = ["async", "ffi-strategy", "sys", "std", "auto"]
+default = ["async", "ffi-strategy", "sys", "std"]
 async = ["tokio"]
 ffi-strategy = ["libindigo-sys"]
 rs-strategy = ["quick-xml", "tokio", "base64", "serde_json", "serde/derive"]

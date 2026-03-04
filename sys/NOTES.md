@@ -1,14 +1,18 @@
-> [!CAUTION]
-> At some point these raw notes should be upgraded to proper documentation.
+# libindigo Notes
 
-# bindgen
+> [!CAUTION]
+At some point these raw notes should be upgraded to proper documentation.
+
+## bindgen
 
 * [Rust bindgen manual](https://rust-lang.github.io/rust-bindgen/introduction.html)
 
-## prerequisits
+### prerequisits
+
 libclang must be installed, cf. [bindgen requirements](https://rust-lang.github.io/rust-bindgen/requirements.html)
 
 For Mac using Homebrew:
+
 ```bash
 $ brew install llvm
 ...
@@ -27,8 +31,10 @@ For compilers to find llvm you may need to set:
   export CPPFLAGS="-I/opt/homebrew/opt/llvm/include"
 ```
 
-## VSCode support for bindgen
+### VSCode support for bindgen
+
 Include generated bindings in `lib.rs`:
+
 ```rust
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
@@ -36,32 +42,40 @@ Include generated bindings in `lib.rs`:
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 ```
+
 To make rust-analyzer happy [the following line](https://github.com/rust-lang/rust-analyzer/issues/5992) needs to be added to VSCode's settings.json:
+
 ```
 "rust-analyzer.cargo.loadOutDirsFromCheck": true,
 ```
 
-## compiling on linux
+### compiling on linux
 
 Build on a clean Ubuntu distro running in Docker (optional):
+
 ```bash
 # TODO save image for reuse
 docker run --rm -it --name github-runner ubuntu:22.04
 ```
-## building INDIGO for the first time
+
+### building INDIGO for the first time
+
 Install [INDIGO prerequisits](https://www.indigo-astronomy.org/for-developers.html):
+
 ```bash
 apt-get update
 apt-get install build-essential autoconf autotools-dev libtool cmake libudev-dev libavahi-compat-libdnssd-dev libusb-1.0-0-dev libcurl4-gnutls-dev libgphoto2-dev libz-dev git curl patchelf
 ```
 
 [Install rust](https://www.rust-lang.org/tools/install):
+
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 . "$HOME/.cargo/env" # todo add command for permanently adding to path
 ```
 
-build [first time] (pthread issue)(https://github.com/indigo-astronomy/indigo/blob/master/README.md#no-pthread_yield):
+build [first time] (pthread issue)(<https://github.com/indigo-astronomy/indigo/blob/master/README.md#no-pthread_yield>):
+
 ``` bash
 cargo build # building `sys` should fail with a QHY related error
 cd sys/externals/indigo/indigo_drivers/ccd_qhy/bin_externals/pthread_yield_compat
