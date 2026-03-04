@@ -87,3 +87,6 @@ blocking = []
 sys = ["libindigo-sys"]
 std = []
 auto = ["zeroconf"]
+# Build INDIGO server for integration tests (build-time only)
+# This allows RS builds to run integration tests without runtime FFI dependencies
+test-server = ["libindigo-sys"]

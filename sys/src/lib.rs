@@ -2,19 +2,25 @@
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
+#![allow(unused_imports)] // Some imports are used by parent crate via wildcard re-export
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 use core::slice;
 use std::{
-    ffi::{c_char, CStr, CString},
+    alloc::{alloc, dealloc, Layout, LayoutError},
+    cmp,
+    ffi::{c_char, CStr, CString, NulError},
     hash::Hash,
+    marker::PhantomData,
+    mem,
+    ops::Index,
     ptr,
     str::FromStr,
 };
 
 use enum_primitive::*;
 use fambox::FamHeader;
-use log::warn;
+use log::{error, warn};
 
 pub const DEFAULT_PORT: u16 = 7624;
 pub const DEFAULT_HOST: &str = "indigo.local";

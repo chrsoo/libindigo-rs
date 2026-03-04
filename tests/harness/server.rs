@@ -51,43 +51,112 @@ impl ServerManager {
     }
 
     /// Discover the INDIGO server binary
+    ///
+    /// Priority order:
+    /// 1. Environment variable INDIGO_SERVER_PATH
+    /// 2. Built from source in submodule (sys/externals/indigo/build/bin/)
+    /// 3. System PATH (which, where commands)
+    /// 4. System installation paths (macOS/Linux)
     pub fn discover_binary() -> Result<PathBuf, String> {
+        let mut search_log = Vec::new();
+
         // 1. Check environment variable
         if let Ok(path) = std::env::var("INDIGO_SERVER_PATH") {
-            let path_buf = PathBuf::from(path);
+            let path_buf = PathBuf::from(&path);
+            search_log.push(format!("INDIGO_SERVER_PATH: {}", path));
             if path_buf.exists() {
+                eprintln!("[INDIGO] Found server via INDIGO_SERVER_PATH: {}", path);
                 return Ok(path_buf);
             }
         }
 
-        // 2. Check system installation (macOS/Linux)
+        // 2. Check built from source in submodule (PRIORITY)
+        let submodule_paths = vec![
+            "sys/externals/indigo/build/bin/indigo_server",
+            "sys/externals/indigo/indigo_server",
+        ];
+
+        for path_str in &submodule_paths {
+            let path = PathBuf::from(path_str);
+            search_log.push(format!("Submodule: {}", path_str));
+            if path.exists() {
+                eprintln!("[INDIGO] Found server in build directory: {}", path_str);
+                return Ok(path);
+            }
+        }
+
+        // 3. Check system PATH using 'which' (Unix) or 'where' (Windows)
+        #[cfg(unix)]
+        {
+            if let Ok(output) = std::process::Command::new("which")
+                .arg("indigo_server")
+                .output()
+            {
+                if output.status.success() {
+                    if let Ok(path_str) = String::from_utf8(output.stdout) {
+                        let path_str = path_str.trim();
+                        if !path_str.is_empty() {
+                            let path = PathBuf::from(path_str);
+                            if path.exists() {
+                                eprintln!("[INDIGO] Found server in PATH: {}", path_str);
+                                return Ok(path);
+                            }
+                        }
+                    }
+                }
+            }
+            search_log.push("System PATH (which indigo_server)".to_string());
+        }
+
+        #[cfg(windows)]
+        {
+            if let Ok(output) = std::process::Command::new("where")
+                .arg("indigo_server")
+                .output()
+            {
+                if output.status.success() {
+                    if let Ok(path_str) = String::from_utf8(output.stdout) {
+                        let path_str = path_str.trim();
+                        if !path_str.is_empty() {
+                            let path = PathBuf::from(path_str);
+                            if path.exists() {
+                                eprintln!("[INDIGO] Found server in PATH: {}", path_str);
+                                return Ok(path);
+                            }
+                        }
+                    }
+                }
+            }
+            search_log.push("System PATH (where indigo_server)".to_string());
+        }
+
+        // 4. Check system installation paths (macOS/Linux)
         let system_paths = vec![
             "/usr/local/bin/indigo_server",
             "/usr/bin/indigo_server",
             "/opt/indigo/bin/indigo_server",
         ];
 
-        for path_str in system_paths {
+        for path_str in &system_paths {
             let path = PathBuf::from(path_str);
+            search_log.push(format!("System: {}", path_str));
             if path.exists() {
+                eprintln!("[INDIGO] Found server in system path: {}", path_str);
                 return Ok(path);
             }
         }
 
-        // 3. Check built from source in submodule
-        let submodule_paths = vec![
-            "sys/externals/indigo/build/bin/indigo_server",
-            "sys/externals/indigo/indigo_server",
-        ];
+        // Build detailed error message
+        let error_msg = format!(
+            "INDIGO server binary not found. Searched:\n  {}\n\n\
+             To fix this:\n\
+             1. Build INDIGO server: cd sys/externals/indigo && make\n\
+             2. Install system-wide: brew install indigo (macOS) or build from source\n\
+             3. Set INDIGO_SERVER_PATH environment variable to the binary location",
+            search_log.join("\n  ")
+        );
 
-        for path_str in submodule_paths {
-            let path = PathBuf::from(path_str);
-            if path.exists() {
-                return Ok(path);
-            }
-        }
-
-        Err("INDIGO server binary not found. Set INDIGO_SERVER_PATH environment variable or install INDIGO server.".to_string())
+        Err(error_msg)
     }
 
     /// Start the INDIGO server process

@@ -17,16 +17,35 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libavahi-client-dev
+          sudo apt-get install -y \
+            libavahi-client-dev \
+            build-essential \
+            cmake \
+            libudev-dev \
+            libavahi-compat-libdnssd-dev \
+            libusb-1.0-0-dev \
+            libcurl4-gnutls-dev \
+            libz-dev
 
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
+
+      - name: Cache INDIGO build
+        uses: actions/cache@v3
+        with:
+          path: |
+            sys/externals/indigo/build
+          key: ${{ runner.os }}-indigo-rs-${{ hashFiles('sys/externals/indigo/**') }}
+          restore-keys: |
+            ${{ runner.os }}-indigo-rs-
 
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -36,17 +55,33 @@ jobs:
         run: cargo clippy --no-default-features --features rs-strategy -- -D warnings
         continue-on-error: true
 
-      - name: Build with rs-strategy
+      - name: Build with rs-strategy (runtime only)
         run: cargo build --no-default-features --features rs-strategy --verbose
 
       - name: Run unit tests (rs-strategy)
         run: cargo test --no-default-features --features rs-strategy --lib --verbose
 
-      - name: Run integration tests (rs-strategy, no server)
+      - name: Build INDIGO server for integration tests
         run: |
-          # Integration tests will skip gracefully if server not available
-          # Set environment variable to skip server startup attempts
-          INDIGO_TEST_SKIP_SERVER=true cargo test --no-default-features --features rs-strategy --test '*' --verbose || true
+          echo "Building INDIGO server for integration tests..."
+          # Build with test-server feature to compile INDIGO server (build-time only)
+          cargo build --no-default-features --features "rs-strategy,test-server" --verbose
+
+          # Verify server binary was built
+          if [ -f "sys/externals/indigo/build/bin/indigo_server" ]; then
+            echo "✓ INDIGO server built successfully"
+            ls -lh sys/externals/indigo/build/bin/indigo_server
+          else
+            echo "✗ INDIGO server not found in expected location"
+            echo "Searching for indigo_server..."
+            find sys/externals/indigo -name "indigo_server" -type f || true
+          fi
+
+      - name: Run integration tests (rs-strategy with server)
+        run: |
+          echo "Running integration tests with INDIGO server..."
+          # Run integration tests - they will discover the built server
+          cargo test --no-default-features --features rs-strategy --test '*' --verbose
         continue-on-error: true
 
   # Build with FFI strategy (requires C library)
@@ -91,9 +126,9 @@ jobs:
           path: |
             sys/externals/indigo/build
             target
-          key: ${{ runner.os }}-indigo-${{ hashFiles('sys/externals/indigo/**') }}
+          key: ${{ runner.os }}-indigo-ffi-${{ hashFiles('sys/externals/indigo/**') }}
           restore-keys: |
-            ${{ runner.os }}-indigo-
+            ${{ runner.os }}-indigo-ffi-
 
       - name: Verify submodule checkout
         run: |
@@ -113,14 +148,27 @@ jobs:
           # Build INDIGO from submodule (absolute path from workspace root)
           INDIGO_SOURCE: ${{ github.workspace }}/sys/externals/indigo
 
+      - name: Verify INDIGO server was built
+        run: |
+          echo "Checking for INDIGO server binary..."
+          if [ -f "sys/externals/indigo/build/bin/indigo_server" ]; then
+            echo "✓ INDIGO server built successfully"
+            ls -lh sys/externals/indigo/build/bin/indigo_server
+          else
+            echo "✗ INDIGO server not found in expected location"
+            echo "Searching for indigo_server..."
+            find sys/externals/indigo -name "indigo_server" -type f || true
+          fi
+
       - name: Run unit tests (FFI strategy)
         run: cargo test --workspace --exclude libindigo-relm --lib --verbose
         continue-on-error: true
 
-      - name: Run integration tests (FFI strategy, no server)
+      - name: Run integration tests (FFI strategy with server)
         run: |
-          # Integration tests will skip if server not available
-          INDIGO_TEST_SKIP_SERVER=true cargo test --workspace --exclude libindigo-relm --test '*' --verbose || true
+          echo "Running integration tests with INDIGO server..."
+          # Integration tests will discover the built server
+          cargo test --workspace --exclude libindigo-relm --test '*' --verbose
         continue-on-error: true
 
   # Minimal build check (no optional features)
