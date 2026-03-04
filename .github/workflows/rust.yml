@@ -33,20 +33,20 @@ jobs:
         continue-on-error: true
 
       - name: Run clippy
-        run: cargo clippy --features rs-strategy -- -D warnings
+        run: cargo clippy --no-default-features --features rs-strategy -- -D warnings
         continue-on-error: true
 
       - name: Build with rs-strategy
-        run: cargo build --features rs-strategy --verbose
+        run: cargo build --no-default-features --features rs-strategy --verbose
 
       - name: Run unit tests (rs-strategy)
-        run: cargo test --features rs-strategy --lib --verbose
+        run: cargo test --no-default-features --features rs-strategy --lib --verbose
 
       - name: Run integration tests (rs-strategy, no server)
         run: |
           # Integration tests will skip gracefully if server not available
           # Set environment variable to skip server startup attempts
-          INDIGO_TEST_SKIP_SERVER=true cargo test --features rs-strategy --test '*' --verbose || true
+          INDIGO_TEST_SKIP_SERVER=true cargo test --no-default-features --features rs-strategy --test '*' --verbose || true
         continue-on-error: true
 
   # Build with FFI strategy (requires C library)
@@ -142,7 +142,7 @@ jobs:
           toolchain: stable
 
       - name: Build documentation
-        run: cargo doc --no-deps --features rs-strategy --verbose
+        run: cargo doc --no-deps --no-default-features --features rs-strategy --verbose
         env:
           RUSTDOCFLAGS: "-D warnings"
         continue-on-error: true
@@ -169,5 +169,5 @@ jobs:
           toolchain: ${{ matrix.rust }}
 
       - name: Check with rs-strategy
-        run: cargo check --features rs-strategy --verbose
+        run: cargo check --no-default-features --features rs-strategy --verbose
         continue-on-error: ${{ matrix.rust != 'stable' }}
