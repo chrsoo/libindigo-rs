@@ -3,6 +3,19 @@
 //! This crate provides a Rust API for developing INDIGO astronomy clients and devices.
 //! It supports both FFI-based (using the C INDIGO library) and Rust implementations
 //! through a strategy pattern.
+
+// Allow deprecated warnings for the old API that's still in the codebase
+#![allow(deprecated)]
+// Allow clippy warnings about mixed attribute styles
+#![allow(clippy::mixed_attributes_style)]
+// Allow dead code in deprecated modules
+#![allow(dead_code)]
+// Allow clippy warnings for old deprecated code
+#![allow(clippy::should_implement_trait)]
+#![allow(clippy::unnecessary_cast)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::len_without_is_empty)]
+#![allow(mismatched_lifetime_syntaxes)]
 //!
 //! ## Implementation Status
 //!
@@ -127,14 +140,15 @@ pub use error::{IndigoError as NewIndigoError, Result as NewResult};
 pub use types::{Device as NewDevice, DeviceInfo};
 
 /// Prelude module for convenient imports of the new API.
+///
+/// Convenient re-exports of commonly used types and traits from the new API.
+///
+/// Use this module to import the most commonly used types:
+///
+/// ```ignore
+/// use libindigo::prelude::*;
+/// ```
 pub mod prelude {
-    //! Convenient re-exports of commonly used types and traits from the new API.
-    //!
-    //! Use this module to import the most commonly used types:
-    //!
-    //! ```ignore
-    //! use libindigo::prelude::*;
-    //! ```
     pub use crate::client::{Client, ClientBuilder, ClientStrategy};
     pub use crate::error::{IndigoError, Result};
     pub use crate::types::{
@@ -195,8 +209,11 @@ pub mod name {
     }
 }
 
+#[allow(deprecated)]
 pub use number::FormatFlags;
+#[allow(deprecated)]
 pub use number::NumberFormat;
+#[allow(deprecated)]
 pub use number::ParseError;
 
 // pub use property::Property;
@@ -206,17 +223,10 @@ pub use number::ParseError;
 // pub use property::PropertyType;
 // pub use property::PropertyValue;
 
-use core::str;
 use parking_lot::RwLockWriteGuard;
 use std::collections::hash_map::Values;
 use std::collections::hash_map::ValuesMut;
 use std::collections::HashMap;
-use strum_macros::EnumIter;
-
-use std::fmt::Debug;
-
-use enum_primitive::*;
-use strum::IntoEnumIterator;
 
 #[cfg(feature = "ffi-strategy")]
 use libindigo_sys::{self, *};
@@ -228,6 +238,7 @@ pub type StringMap<T> = HashMap<String, T>;
 pub use crate::indigo::*;
 
 #[cfg(feature = "ffi-strategy")]
+#[allow(deprecated)]
 enum_from_primitive! {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, EnumIter, strum_macros::Display)]
 #[non_exhaustive]
@@ -259,6 +270,7 @@ pub enum Interface  {
 }
 
 #[cfg(feature = "ffi-strategy")]
+#[allow(deprecated)]
 impl Interface {
     /// Match the [Interface] against an INDIGO string encoded bitmap.
     pub fn matches(self, ifs: &str) -> bool {
@@ -294,10 +306,12 @@ impl Interface {
 }
 
 #[deprecated]
+#[allow(deprecated)]
 pub struct GuardedStringMap<'a, T> {
     lock: RwLockWriteGuard<'a, StringMap<T>>,
 }
 
+#[allow(deprecated)]
 impl<'a, 'b: 'a, T: 'a> IntoIterator for &'b mut GuardedStringMap<'a, T> {
     type Item = &'a mut T;
     type IntoIter = ValuesMut<'a, String, T>;
@@ -307,6 +321,7 @@ impl<'a, 'b: 'a, T: 'a> IntoIterator for &'b mut GuardedStringMap<'a, T> {
     }
 }
 
+#[allow(deprecated)]
 impl<'a, 'b: 'a, T: 'a> IntoIterator for &'b GuardedStringMap<'a, T> {
     type Item = &'a T;
     type IntoIter = Values<'a, String, T>;

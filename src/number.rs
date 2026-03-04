@@ -396,7 +396,7 @@ impl<const N: usize> TryFrom<&[c_char; N]> for NumberFormat {
 
     fn try_from(value: &[c_char; N]) -> Result<Self, Self::Error> {
         let bytes = unsafe { slice::from_raw_parts(value.as_ptr() as *const u8, N) };
-        let utf_str = str::from_utf8(&bytes)?;
+        let utf_str = str::from_utf8(bytes)?;
         NumberFormat::try_from(utf_str.as_bytes())
     }
 }
@@ -413,10 +413,10 @@ impl TryFrom<&str> for NumberFormat {
 impl TryFrom<&[u8]> for NumberFormat {
     type Error = ParseError<'static>;
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        if value.len() == 0 {
+        if value.is_empty() {
             return Err(ParseError::new(FMT_ERR_ZERO_LENGTH_BUFFER, 1));
         }
-        if value[0] != '%' as u8 {
+        if value[0] != b'%' {
             return Err(ParseError::new(
                 FMT_ERR_FIRST_CHARACTER_MUST_BE_A_PERCENT_SIGN,
                 0,
@@ -428,7 +428,7 @@ impl TryFrom<&[u8]> for NumberFormat {
         // parse flags
         let mut flags = FormatFlags(0);
         while index < value.len() {
-            match value[index] as u8 as char {
+            match value[index] as char {
                 // flags
                 '-' => flags.set_minus_flag(true),
                 '+' => flags.set_plus_flag(true),
@@ -492,7 +492,7 @@ impl TryFrom<&[u8]> for NumberFormat {
         // parse length
         let mut length = None;
         while index < value.len() {
-            match value[index] as u8 as char {
+            match value[index] as char {
                 'h' => match length {
                     None => length = Some(FormatLength::h),
                     Some(FormatLength::l) => length = Some(FormatLength::hh),
@@ -533,7 +533,7 @@ impl TryFrom<&[u8]> for NumberFormat {
         if index == value.len() {
             return Err(ParseError::new(FMT_ERR_NO_FORMAT_SPECIFIER, index));
         }
-        let specifier = value[index] as u8 as char;
+        let specifier = value[index] as char;
         match specifier {
             'd' | 'i' => (),                         // decimal, integer
             'u' => (),                               // unsigned integer
@@ -554,13 +554,11 @@ impl TryFrom<&[u8]> for NumberFormat {
         }
         index += 1;
 
-        if index != value.len() {
-            if value[index] as u8 as char != '\0' {
-                return Err(ParseError::new(
-                    FMT_ERR_TRAILING_CHARACTERS_AFTER_FORMAT,
-                    index,
-                ));
-            }
+        if index != value.len() && value[index] as char != '\0' {
+            return Err(ParseError::new(
+                FMT_ERR_TRAILING_CHARACTERS_AFTER_FORMAT,
+                index,
+            ));
         }
 
         Ok(NumberFormat {

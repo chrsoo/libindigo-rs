@@ -77,7 +77,6 @@ jobs:
             libavahi-compat-libdnssd-dev \
             libavahi-client-dev \
             libglib2.0-dev \
-            libgobject-2.0-dev \
             libusb-1.0-0-dev \
             libcurl4-gnutls-dev \
             libgphoto2-dev \

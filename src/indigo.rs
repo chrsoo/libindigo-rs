@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables)]
-use std::ffi::{c_char, CString, NulError};
+use std::ffi::NulError;
 use std::fmt::{Debug, Display};
 use std::str::Utf8Error;
 
@@ -7,12 +7,12 @@ use enum_primitive::*;
 
 #[cfg(feature = "ffi-strategy")]
 use libindigo_sys::buf_to_str;
-use log::{debug, error, warn};
+use log::{debug, warn};
 use number::NumberFormat;
 use strum_macros::Display as StrumDisplay;
 use url_fork::{ParseError, Url};
 
-use crate::property::{PropertyItem, PropertyValue, Switch};
+use crate::property::{PropertyItem, PropertyValue};
 #[cfg(feature = "ffi-strategy")]
 use crate::Interface;
 use crate::{name, number};
@@ -689,11 +689,11 @@ where
     B: Bus,
 {
     /// Publish a [Property] definition event on the [Bus].
-    fn define_property<'a>(&mut self, p: &'a P) -> IndigoResult<()>;
+    fn define_property(&mut self, p: &P) -> IndigoResult<()>;
     /// Publish a [Property] update event on the [Bus].
-    fn update_property<'a>(&mut self, p: &'a P) -> IndigoResult<()>;
+    fn update_property(&mut self, p: &P) -> IndigoResult<()>;
     /// Publish a [Property] delete event on the [Bus].
-    fn delete_property<'a>(&mut self, p: &'a P) -> IndigoResult<()>;
+    fn delete_property(&mut self, p: &P) -> IndigoResult<()>;
     /// Broadcast device message on the [Bus].
     fn broadcast_message(&mut self, msg: &str) -> IndigoResult<()>;
 }
@@ -761,18 +761,18 @@ pub trait DeviceDelegate: Delegate {
     type DeviceController: DeviceController<Self::Property, Self::Bus>;
 
     /// Called when a request to enumerate all properties is made, returning the [Result::Ok] on success.
-    fn on_enumeration_request<'a>(
+    fn on_enumeration_request(
         &mut self,
         c: Self::DeviceController,
-        p: &'a Self::Property,
+        p: &Self::Property,
     ) -> IndigoResult<()>;
 
     /// Called when a request to define a property is made, returning the [PropertyState].
-    fn on_definition_request<'a>(&mut self, p: &'a Self::Property) -> IndigoResult<()>;
+    fn on_definition_request(&mut self, p: &Self::Property) -> IndigoResult<()>;
 
     /// Called when a request to update a property is made, returning [Result::Ok] on success.
-    fn on_update_request<'a>(&mut self, p: &'a Self::Property) -> IndigoResult<()>;
+    fn on_update_request(&mut self, p: &Self::Property) -> IndigoResult<()>;
 
     /// Called when a request to delete a property is made, returning [Result::Ok] on success.
-    fn on_deletion_request<'a>(&mut self, p: &'a Self::Property) -> IndigoResult<()>;
+    fn on_deletion_request(&mut self, p: &Self::Property) -> IndigoResult<()>;
 }

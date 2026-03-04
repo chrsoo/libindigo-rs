@@ -28,9 +28,6 @@ use crate::strategies::AsyncFfiStrategy;
 #[cfg(feature = "ffi-strategy")]
 use crate::strategies::FfiClientStrategy;
 
-#[cfg(feature = "rs-strategy")]
-use crate::strategies::RsClientStrategy;
-
 /// Builder for constructing INDIGO clients.
 ///
 /// The builder provides a fluent API for configuring and creating clients
@@ -496,7 +493,7 @@ impl Client {
     /// # Arguments
     ///
     /// * `device` - Optional device name to enumerate properties for.
-    ///              If `None`, enumerates properties for all devices.
+    ///   If `None`, enumerates properties for all devices.
     ///
     /// # Errors
     ///

@@ -57,9 +57,10 @@ pub struct PropertyItem {
 }
 
 /// State of a property.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum PropertyState {
     /// Property is idle.
+    #[default]
     Idle,
     /// Property operation completed successfully.
     Ok,
@@ -81,13 +82,14 @@ impl std::fmt::Display for PropertyState {
 }
 
 /// Permission level for a property.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum PropertyPerm {
     /// Read-only property.
     ReadOnly,
     /// Write-only property.
     WriteOnly,
     /// Read-write property.
+    #[default]
     ReadWrite,
 }
 
@@ -265,17 +267,5 @@ impl PropertyItem {
             label: label.into(),
             value,
         }
-    }
-}
-
-impl Default for PropertyState {
-    fn default() -> Self {
-        PropertyState::Idle
-    }
-}
-
-impl Default for PropertyPerm {
-    fn default() -> Self {
-        PropertyPerm::ReadWrite
     }
 }

@@ -692,7 +692,7 @@ impl ClientStrategy for RsClientStrategy {
     /// strategy.connect("localhost:7624").await?;
     /// ```
     async fn connect(&mut self, url: &str) -> Result<()> {
-        let mut state = self.state.lock().await;
+        let state = self.state.lock().await;
 
         if state.connected {
             return Err(IndigoError::InvalidState("Already connected".to_string()));
