@@ -27,6 +27,24 @@ const INDIGO_GIT_SUBMODULE: &str = "sys/externals/indigo";
 static RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r#"^#define\s+(?<name>\w+)_NAME\s+"(?<value>.+)"\s*$"#).unwrap());
 fn main() -> std::io::Result<()> {
+    // Only generate bindings when building with FFI features
+    let has_ffi = env::var("CARGO_FEATURE_FFI_STRATEGY").is_ok()
+        || env::var("CARGO_FEATURE_SYS").is_ok()
+        || env::var("CARGO_FEATURE_AUTO").is_ok();
+
+    if !has_ffi {
+        // For pure Rust builds, just create empty output files
+        let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+        let names_path = out_dir.join("name.rs");
+        let interface_path = out_dir.join("interface.rs");
+        std::fs::write(names_path, "// No INDIGO names for pure Rust build\n")?;
+        std::fs::write(
+            interface_path,
+            "// No INDIGO interface for pure Rust build\n",
+        )?;
+        return Ok(());
+    }
+
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     let submodule = Path::new(INDIGO_GIT_SUBMODULE);
