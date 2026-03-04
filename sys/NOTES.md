@@ -45,7 +45,7 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 To make rust-analyzer happy [the following line](https://github.com/rust-lang/rust-analyzer/issues/5992) needs to be added to VSCode's settings.json:
 
-```
+```text
 "rust-analyzer.cargo.loadOutDirsFromCheck": true,
 ```
 

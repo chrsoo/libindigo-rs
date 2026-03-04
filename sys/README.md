@@ -1,3 +1,5 @@
+# libindgo-sys
+
 The `libindigo-sys` crate is a [bindgen](https://rust-lang.github.io/rust-bindgen) generated FFI for the upstream [INDIGO](https://www.indigo-astronomy.org/) source code in C found on [GitHub](https://github.com/indigo-astronomy/indigo).
 
 > [!CAUTION]
