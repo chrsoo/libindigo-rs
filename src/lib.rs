@@ -1,19 +1,92 @@
-// mod driver;
-// mod property;
-mod number;
-mod msg;
+//! # libindigo - Rust API for INDIGO astronomy clients and devices
+//!
+//! This crate provides a Rust API for developing INDIGO astronomy clients and devices.
+//! It supports both FFI-based (using the C INDIGO library) and pure Rust implementations
+//! through a strategy pattern.
+//!
+//! ## New API (Phase 1+)
+//!
+//! The new API provides idiomatic Rust patterns with async/await support:
+//!
+//! ```ignore
+//! use libindigo::prelude::*;
+//!
+//! #[tokio::main]
+//! async fn main() -> libindigo::Result<()> {
+//!     // Client implementation coming in Phase 2
+//!     Ok(())
+//! }
+//! ```
+//!
+//! ## Old API (Deprecated)
+//!
+//! The old API is still available but deprecated. See the migration guide for
+//! transitioning to the new API.
+
+// ============================================================================
+// New API - Phase 1 Foundation
+// ============================================================================
+
+/// Error types for libindigo operations.
+pub mod error;
+
+/// Core types for properties, devices, and values.
+pub mod types;
+
+/// Client API for connecting to INDIGO servers.
+pub mod client;
+
+/// Strategy implementations (FFI and pure Rust).
+pub mod strategies;
+
+// Re-export commonly used types from new API
+// Note: Some types (Property, PropertyState, PropertyType, SwitchRule) conflict
+// with old API types. Use the `prelude` module or direct imports from `types`
+// module to access the new types.
+pub use client::ClientStrategy;
+pub use error::{IndigoError as NewIndigoError, Result as NewResult};
+pub use types::{Device as NewDevice, DeviceInfo};
+
+/// Prelude module for convenient imports of the new API.
+pub mod prelude {
+    //! Convenient re-exports of commonly used types and traits from the new API.
+    //!
+    //! Use this module to import the most commonly used types:
+    //!
+    //! ```ignore
+    //! use libindigo::prelude::*;
+    //! ```
+    pub use crate::client::ClientStrategy;
+    pub use crate::error::{IndigoError, Result};
+    pub use crate::types::{
+        Device, DeviceInfo, Property, PropertyPerm, PropertyState, PropertyType,
+    };
+    pub use crate::types::{PropertyValue, SwitchRule, SwitchState};
+}
+
+// ============================================================================
+// Old API - Deprecated
+// ============================================================================
+
+#[cfg(feature = "auto")]
+#[deprecated(note = "Auto-discovery will be reimplemented in future phases")]
+pub mod auto;
+#[deprecated(note = "Use new API in `client`, `types`, and `strategies` modules")]
 mod indigo;
+#[deprecated(note = "Use new types in the `types` module")]
+mod msg;
+#[deprecated(note = "Use new error types in the `error` module")]
+mod number;
+#[deprecated(note = "Use new types in the `types` module")]
 pub mod property;
 #[cfg(feature = "sys")]
+#[deprecated(note = "Use `strategies::ffi` module instead")]
 pub mod sys;
-#[cfg(feature = "auto")]
-pub mod auto;
 
-// mod bus;
-// mod server;
+#[deprecated(note = "Use new client API in the `client` module")]
 #[cfg(feature = "std")]
-mod client;
-// mod device;
+mod client_old;
+#[deprecated(note = "Device API will be implemented in Phase 4")]
 mod spike;
 
 include!(concat!(env!("OUT_DIR"), "/interface.rs"));
@@ -32,8 +105,8 @@ pub mod name {
     }
 }
 
-pub use number::NumberFormat;
 pub use number::FormatFlags;
+pub use number::NumberFormat;
 pub use number::ParseError;
 
 // pub use property::Property;
@@ -43,17 +116,19 @@ pub use number::ParseError;
 // pub use property::PropertyType;
 // pub use property::PropertyValue;
 
-use parking_lot::RwLockWriteGuard;
-use strum_macros::EnumIter;
 use core::str;
+use parking_lot::RwLockWriteGuard;
 use std::collections::hash_map::Values;
 use std::collections::hash_map::ValuesMut;
 use std::collections::HashMap;
+use strum_macros::EnumIter;
 
 use std::fmt::Debug;
 
 use enum_primitive::*;
 use strum::IntoEnumIterator;
+
+#[cfg(feature = "ffi-strategy")]
 use libindigo_sys::{self, *};
 
 pub type StringMap<T> = HashMap<String, T>;
@@ -62,6 +137,7 @@ pub type StringMap<T> = HashMap<String, T>;
 
 pub use crate::indigo::*;
 
+#[cfg(feature = "ffi-strategy")]
 enum_from_primitive! {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, EnumIter, strum_macros::Display)]
 #[non_exhaustive]
@@ -92,8 +168,8 @@ pub enum Interface  {
 }
 }
 
+#[cfg(feature = "ffi-strategy")]
 impl Interface {
-
     /// Match the [Interface] against an INDIGO string encoded bitmap.
     pub fn matches(self, ifs: &str) -> bool {
         let ifs = Interface::convert(ifs);
@@ -131,7 +207,6 @@ impl Interface {
 pub struct GuardedStringMap<'a, T> {
     lock: RwLockWriteGuard<'a, StringMap<T>>,
 }
-
 
 impl<'a, 'b: 'a, T: 'a> IntoIterator for &'b mut GuardedStringMap<'a, T> {
     type Item = &'a mut T;
@@ -326,5 +401,4 @@ fn str_to_buf<'a,T>(value: &'a str, _len: u16) -> Result<[i8; 128], IndigoError>
 #[cfg(test)]
 mod tests {
     // use super::*;
-
 }

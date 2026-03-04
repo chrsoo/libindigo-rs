@@ -21,7 +21,7 @@ log = "0.4.22"
 # url = "2.5.2" # TODO replace all url::Url references with url_fork::Url
 url-fork = "3.0"
 hostname-validator = "1.1.1"
-libindigo-sys = { path = "sys" }
+libindigo-sys = { path = "sys", optional = true }
 enum_primitive = "0.1.1"
 lazy_static = "1.5.0"
 once_cell = "1.19.0"
@@ -40,6 +40,15 @@ zeroconf = { version = "0.15", optional = true }
 # dtd-parser = { git = "https://github.com/songww/dtd-rs.git", version = "0.1.0-alpha3" }
 # dtd-macro = { git = "https://github.com/songww/dtd-rs.git", version = "0.1.0-alpha2" }
 
+# New dependencies for Phase 1
+tokio = { version = "1.35", features = ["full"], optional = true }
+futures = "0.3"
+thiserror = "1.0"
+async-trait = "0.1"
+pin-project = "1.1"
+quick-xml = { version = "0.31", optional = true }
+tracing = "0.1"
+
 #mime = "0.3"
 
 [build-dependencies]
@@ -56,7 +65,11 @@ env_logger = "*"
 regex = "1.11"
 
 [features]
-default = ["sys", "std", "auto"]
-sys = []
+default = ["async", "ffi-strategy", "sys", "std", "auto"]
+async = ["tokio"]
+ffi-strategy = ["libindigo-sys"]
+rs-strategy = ["quick-xml", "tokio"]
+blocking = []
+sys = ["libindigo-sys"]
 std = []
 auto = [ "zeroconf" ]

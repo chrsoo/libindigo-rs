@@ -1,19 +1,21 @@
 #![allow(dead_code, unused_variables)]
 use std::ffi::{c_char, CString, NulError};
-use std::fmt::Debug;
-#[cfg(feature = "sys")]
-use std::{fmt::Display, str::Utf8Error};
+use std::fmt::{Debug, Display};
+use std::str::Utf8Error;
 
 use enum_primitive::*;
 
+#[cfg(feature = "ffi-strategy")]
 use libindigo_sys::buf_to_str;
 use log::{debug, error, warn};
 use number::NumberFormat;
-use strum_macros::Display;
+use strum_macros::Display as StrumDisplay;
 use url_fork::{ParseError, Url};
 
 use crate::property::{PropertyItem, PropertyValue, Switch};
-use crate::{name, number, Interface};
+#[cfg(feature = "ffi-strategy")]
+use crate::Interface;
+use crate::{name, number};
 use core::error::Error;
 use core::result::Result;
 
@@ -73,17 +75,13 @@ impl From<ParseError> for IndigoError {
 
 impl From<&str> for IndigoError {
     fn from(msg: &str) -> Self {
-        Self {
-            msg: msg.into(),
-        }
+        Self { msg: msg.into() }
     }
 }
 
 impl From<String> for IndigoError {
     fn from(msg: String) -> Self {
-        Self {
-            msg
-        }
+        Self { msg }
     }
 }
 
@@ -267,7 +265,7 @@ pub trait Property: NamedObject {
 }
 
 enum_from_primitive! {
-    #[derive(Debug, Copy, Clone, PartialEq, Display)]
+    #[derive(Debug, Copy, Clone, PartialEq, StrumDisplay)]
     /// Possible states of a `Property`.
     pub enum PropertyState  {
         /// Property is passive (unused by INDIGO).
@@ -292,7 +290,7 @@ enum_from_primitive! {
 }
 
 enum_from_primitive! {
-    #[derive(Debug, Copy, Clone, PartialEq, Eq, Display)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, StrumDisplay)]
     /// Possible property types.
     pub enum PropertyType  {
         /// Strings of limited width.
