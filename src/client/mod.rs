@@ -7,19 +7,31 @@
 //! # Example
 //!
 //! ```ignore
-//! use libindigo::client::Client;
+//! use libindigo::client::ClientBuilder;
+//! use futures::StreamExt;
 //!
 //! #[tokio::main]
 //! async fn main() -> libindigo::Result<()> {
-//!     // Client creation will be implemented in Phase 2
+//!     // Create a client with async FFI strategy
+//!     let mut client = ClientBuilder::new()
+//!         .with_async_ffi_strategy()
+//!         .build()?;
+//!
+//!     // Connect to server
+//!     client.connect("localhost:7624").await?;
+//!
+//!     // Enumerate properties
+//!     client.enumerate_properties(None).await?;
+//!
+//!     // Disconnect
+//!     client.disconnect().await?;
+//!
 //!     Ok(())
 //! }
 //! ```
 
+pub mod builder;
 pub mod strategy;
 
+pub use builder::{Client, ClientBuilder};
 pub use strategy::ClientStrategy;
-
-// TODO: Phase 2 - Implement Client struct and builder
-// TODO: Phase 2 - Implement property streams
-// TODO: Phase 2 - Implement event handling

@@ -1,5 +1,5 @@
 [workspace]
-members = [ ".", "relm", "sys", ]
+members = [".", "relm", "sys"]
 
 [package]
 name = "libindigo"
@@ -9,8 +9,13 @@ license = "MIT"
 homepage = "https://github.com/chrsoo/libindigo-rs"
 repository = "https://github.com/chrsoo/libindigo-rs"
 readme = "README.md"
-keywords = [ "astronomy", "astrophotography", "indigo", "indi" ]
-categories = [ "api-bindings", "asynchronous", "external-ffi-bindings", "hardware-support" ]
+keywords = ["astronomy", "astrophotography", "indigo", "indi"]
+categories = [
+    "api-bindings",
+    "asynchronous",
+    "external-ffi-bindings",
+    "hardware-support",
+]
 edition = "2021"
 
 [dependencies]
@@ -40,8 +45,13 @@ zeroconf = { version = "0.15", optional = true }
 # dtd-parser = { git = "https://github.com/songww/dtd-rs.git", version = "0.1.0-alpha3" }
 # dtd-macro = { git = "https://github.com/songww/dtd-rs.git", version = "0.1.0-alpha2" }
 
-# New dependencies for Phase 1
-tokio = { version = "1.35", features = ["full"], optional = true }
+# New dependencies for Phase 1 & Phase 2
+tokio = { version = "1.35", features = [
+    "rt-multi-thread",
+    "sync",
+    "macros",
+    "time",
+], optional = true }
 futures = "0.3"
 thiserror = "1.0"
 async-trait = "0.1"
@@ -72,4 +82,4 @@ rs-strategy = ["quick-xml", "tokio"]
 blocking = []
 sys = ["libindigo-sys"]
 std = []
-auto = [ "zeroconf" ]
+auto = ["zeroconf"]
