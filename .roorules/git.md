@@ -1,4 +1,4 @@
-# Git Commit Policy
+# Git Commit Rules
 
 ## Commit Message Format
 
@@ -56,7 +56,7 @@ feat: Add timeout handling to integration tests
 ci: Update GitHub Actions workflow for multi-strategy builds
 
 Add separate jobs for pure Rust and FFI strategies.
-See CI_CD_STRATEGY.md for detailed documentation.
+See plans/ci-cd-strategy.md for detailed documentation.
 ```
 
 ```

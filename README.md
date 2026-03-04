@@ -3,13 +3,13 @@
 Rust API for writing client applications and device drivers for astronomy equipment using the [INDIGO](https://www.indigo-astronomy.org/index.html) protocol and architecture.
 
 > [!NOTE]
-> **Phase 3 Complete!** ✅ The pure Rust client strategy is now fully implemented and production-ready with **JSON and XML protocol support**. See [PHASE3_COMPLETE.md](PHASE3_COMPLETE.md) for details.
+> **Phase 3 Complete!** ✅ The pure Rust client strategy is now fully implemented and production-ready with **JSON and XML protocol support**. See [plans/archive/phase3-complete.md](plans/archive/phase3-complete.md) for details.
 
 ## Implementation Status
 
-- ✅ **Phase 1**: Foundation & Core Types (Complete) - [Details](PHASE1_COMPLETE.md)
-- ✅ **Phase 2**: Async FFI Strategy (Complete) - [Details](PHASE2_COMPLETE.md)
-- ✅ **Phase 3**: Rust Client Strategy (Complete) - [Details](PHASE3_COMPLETE.md)
+- ✅ **Phase 1**: Foundation & Core Types (Complete) - [Details](plans/archive/phase1-complete.md)
+- ✅ **Phase 2**: Async FFI Strategy (Complete) - [Details](plans/archive/phase2-complete.md)
+- ✅ **Phase 3**: Rust Client Strategy (Complete) - [Details](plans/archive/phase3-complete.md)
 - 🚧 **Phase 4**: Device Driver Support (Planned)
 
 ## Features
@@ -211,7 +211,7 @@ let mut client = ClientBuilder::new()
 client.connect("localhost:7624").await?;
 ```
 
-For more details, see [PHASE3_JSON_COMPLETE.md](PHASE3_JSON_COMPLETE.md).
+For more details, see [plans/archive/phase3-json-complete.md](plans/archive/phase3-json-complete.md).
 
 ## Installation
 
@@ -385,13 +385,13 @@ The library uses a strategy pattern to support multiple implementations:
 ## Documentation
 
 - [API Documentation](https://docs.rs/libindigo) (coming soon)
-- [Phase 1 Complete](PHASE1_COMPLETE.md) - Foundation & Core Types
-- [Phase 2 Complete](PHASE2_COMPLETE.md) - Async FFI Strategy
-- [Phase 3 Complete](PHASE3_COMPLETE.md) - Rust Client Strategy
-- [Phase 3 JSON Protocol](PHASE3_JSON_COMPLETE.md) - JSON Protocol Implementation
+- [Phase 1 Complete](plans/archive/phase1-complete.md) - Foundation & Core Types
+- [Phase 2 Complete](plans/archive/phase2-complete.md) - Async FFI Strategy
+- [Phase 3 Complete](plans/archive/phase3-complete.md) - Rust Client Strategy
+- [Phase 3 JSON Protocol](plans/archive/phase3-json-complete.md) - JSON Protocol Implementation
 - [JSON Protocol Tests](tests/JSON_PROTOCOL_TEST_SUMMARY.md) - Test Coverage Summary
 - [Architecture Plan](plans/code-review-and-architecture.md)
-- [Known Issues](ISSUES.md)
+- [Known Issues](plans/issues.md)
 - [Build Instructions](BUILD.md)
 
 ## Testing

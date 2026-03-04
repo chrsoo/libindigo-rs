@@ -4,7 +4,7 @@
 
 Phase 3 is **complete**! The pure Rust INDIGO client strategy is fully implemented, tested, and production-ready. This implementation provides a complete INDIGO client without any C FFI dependencies, enabling cross-platform deployment and modern Rust async patterns.
 
-**NEW**: ✨ **JSON Protocol Support** - Full INDIGO JSON protocol implementation with automatic negotiation! See [PHASE3_JSON_COMPLETE.md](PHASE3_JSON_COMPLETE.md) for details.
+**NEW**: ✨ **JSON Protocol Support** - Full INDIGO JSON protocol implementation with automatic negotiation! See [phase3-json-complete.md](phase3-json-complete.md) for details.
 
 **Status**: ✅ **PRODUCTION READY**
 
@@ -502,7 +502,7 @@ let client = ClientBuilder::new()
 
 - ✅ README.md updated with Phase 3 and JSON protocol info
 - ✅ This completion document
-- ✅ JSON Protocol completion document ([PHASE3_JSON_COMPLETE.md](PHASE3_JSON_COMPLETE.md))
+- ✅ JSON Protocol completion document ([phase3-json-complete.md](phase3-json-complete.md))
 - ✅ JSON Protocol test summary ([tests/JSON_PROTOCOL_TEST_SUMMARY.md](tests/JSON_PROTOCOL_TEST_SUMMARY.md))
 - ✅ Test documentation
 - ✅ Integration examples

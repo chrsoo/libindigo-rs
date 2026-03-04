@@ -16,10 +16,10 @@ This document provides a comprehensive code review of the libindigo-rs crate and
 
 | Phase | Status | Completion | Documentation |
 |-------|--------|------------|---------------|
-| **Phase 1**: Foundation & Core Types | ✅ Complete | 100% | [PHASE1_COMPLETE.md](../PHASE1_COMPLETE.md) |
-| **Phase 2**: Async FFI Strategy | ✅ Complete | 100% | [PHASE2_COMPLETE.md](../PHASE2_COMPLETE.md) |
-| **Phase 3**: Rust Client Strategy | ✅ Complete | 100% | [PHASE3_COMPLETE.md](../PHASE3_COMPLETE.md) |
-| **Phase 3 Enhancement**: JSON Protocol | ✅ Complete | 100% | [PHASE3_JSON_COMPLETE.md](../PHASE3_JSON_COMPLETE.md) |
+| **Phase 1**: Foundation & Core Types | ✅ Complete | 100% | [phase1-complete.md](archive/phase1-complete.md) |
+| **Phase 2**: Async FFI Strategy | ✅ Complete | 100% | [phase2-complete.md](archive/phase2-complete.md) |
+| **Phase 3**: Rust Client Strategy | ✅ Complete | 100% | [phase3-complete.md](archive/phase3-complete.md) |
+| **Phase 3 Enhancement**: JSON Protocol | ✅ Complete | 100% | [phase3-json-complete.md](archive/phase3-json-complete.md) |
 | **Phase 4**: Device Driver Support | 🚧 Planned | 0% | TBD |
 
 **Current Status**: Phase 3 complete with JSON protocol support! Rust client strategy is production-ready with dual protocol support (JSON + XML).
@@ -107,7 +107,7 @@ pub enum BusError { ... }
 
 - **Issue**: Excessive string copying between C and Rust
 - **Impact**: Performance overhead, memory allocations
-- **Evidence**: [`ISSUES.md`](ISSUES.md:29-36) acknowledges this
+- **Evidence**: [`issues.md`](issues.md:29-36) acknowledges this
 - **Files**: String conversions throughout [`src/sys.rs`](src/sys.rs:1-400)
 
 #### 5. **Incomplete Protocol Implementation**
@@ -394,7 +394,7 @@ src/
 
 **Goal**: Implement protocol-level pure Rust client
 
-**Status**: ✅ **COMPLETE** - See [PHASE3_COMPLETE.md](../PHASE3_COMPLETE.md)
+**Status**: ✅ **COMPLETE** - See [phase3-complete.md](archive/phase3-complete.md)
 
 **Completed Items**:
 
