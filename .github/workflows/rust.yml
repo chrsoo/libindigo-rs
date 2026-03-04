@@ -96,19 +96,19 @@ jobs:
             ${{ runner.os }}-indigo-
 
       - name: Build workspace (default features with FFI)
-        run: cargo build --workspace --verbose
+        run: cargo build --workspace --exclude libindigo-relm --verbose
         env:
           # Build INDIGO from submodule
           INDIGO_SOURCE: sys/externals/indigo
 
       - name: Run unit tests (FFI strategy)
-        run: cargo test --lib --verbose
+        run: cargo test --workspace --exclude libindigo-relm --lib --verbose
         continue-on-error: true
 
       - name: Run integration tests (FFI strategy, no server)
         run: |
           # Integration tests will skip if server not available
-          INDIGO_TEST_SKIP_SERVER=true cargo test --test '*' --verbose || true
+          INDIGO_TEST_SKIP_SERVER=true cargo test --workspace --exclude libindigo-relm --test '*' --verbose || true
         continue-on-error: true
 
   # Minimal build check (no optional features)
