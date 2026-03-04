@@ -57,6 +57,8 @@ use crate::strategies::RsClientStrategy;
 /// ```
 pub struct ClientBuilder {
     strategy: Option<Box<dyn ClientStrategy>>,
+    #[cfg(feature = "rs-strategy")]
+    protocol_preference: Option<(crate::strategies::rs::ProtocolType, bool)>,
 }
 
 impl ClientBuilder {
@@ -70,7 +72,11 @@ impl ClientBuilder {
     /// let builder = ClientBuilder::new();
     /// ```
     pub fn new() -> Self {
-        ClientBuilder { strategy: None }
+        ClientBuilder {
+            strategy: None,
+            #[cfg(feature = "rs-strategy")]
+            protocol_preference: None,
+        }
     }
 
     /// Configures the client to use the async FFI strategy.
@@ -125,9 +131,10 @@ impl ClientBuilder {
         self
     }
 
-    /// Configures the client to use the pure Rust strategy.
+    /// Configures the client to use the Rust strategy.
     ///
     /// This strategy implements the INDIGO protocol entirely in Rust without FFI.
+    /// It provides a complete INDIGO client implementation with zero C dependencies.
     ///
     /// # Availability
     ///
@@ -139,7 +146,43 @@ impl ClientBuilder {
     /// use libindigo::client::ClientBuilder;
     ///
     /// # #[tokio::main]
-    /// # async fn main() -> libindigo::Result<()> {
+    /// # async fn main() -> libindigo::error::Result<()> {
+    /// let client = ClientBuilder::new()
+    ///     .with_rs_strategy()
+    ///     .build()?;
+    ///
+    /// client.connect("localhost:7624").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "rs-strategy")]
+    pub fn with_rs_strategy(mut self) -> Self {
+        let strategy = if let Some((protocol, fallback)) = self.protocol_preference {
+            let negotiator = crate::strategies::rs::ProtocolNegotiator::new(protocol, fallback);
+            crate::strategies::RsClientStrategy::with_protocol_negotiator(negotiator)
+        } else {
+            crate::strategies::RsClientStrategy::new()
+        };
+        self.strategy = Some(Box::new(strategy));
+        self
+    }
+
+    /// Configures the client to use the Rust strategy (legacy alias).
+    ///
+    /// This is an alias for [`with_rs_strategy`](Self::with_rs_strategy)
+    /// for backward compatibility.
+    ///
+    /// # Availability
+    ///
+    /// This method is only available when the `rs-strategy` feature is enabled.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use libindigo::client::ClientBuilder;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> libindigo::error::Result<()> {
     /// let client = ClientBuilder::new()
     ///     .with_rs_strategy()
     ///     .build()?;
@@ -147,9 +190,134 @@ impl ClientBuilder {
     /// # }
     /// ```
     #[cfg(feature = "rs-strategy")]
-    pub fn with_rs_strategy(mut self) -> Self {
-        self.strategy = Some(Box::new(RsClientStrategy::new()));
+    #[deprecated(since = "0.1.3", note = "Use `with_rs_strategy()` instead")]
+    pub fn with_pure_rust_strategy(mut self) -> Self {
+        let strategy = if let Some((protocol, fallback)) = self.protocol_preference {
+            let negotiator = crate::strategies::rs::ProtocolNegotiator::new(protocol, fallback);
+            crate::strategies::RsClientStrategy::with_protocol_negotiator(negotiator)
+        } else {
+            crate::strategies::RsClientStrategy::new()
+        };
+        self.strategy = Some(Box::new(strategy));
         self
+    }
+
+    /// Configures the protocol preference for Rust strategy.
+    ///
+    /// This sets the preferred protocol (JSON or XML) and whether to enable
+    /// fallback to the alternate protocol. This only affects the Rust strategy.
+    ///
+    /// **Note**: This must be called before `with_rs_strategy()`.
+    ///
+    /// # Availability
+    ///
+    /// This method is only available when the `rs-strategy` feature is enabled.
+    ///
+    /// # Arguments
+    ///
+    /// * `protocol` - The preferred protocol type (JSON or XML)
+    /// * `fallback_enabled` - Whether to fall back to alternate protocol if preferred fails
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use libindigo::client::ClientBuilder;
+    /// use libindigo::strategies::rs::ProtocolType;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> libindigo::error::Result<()> {
+    /// // JSON-first with XML fallback (recommended)
+    /// let client = ClientBuilder::new()
+    ///     .with_protocol_preference(ProtocolType::Json, true)
+    ///     .with_rs_strategy()
+    ///     .build()?;
+    ///
+    /// // JSON-only (no fallback)
+    /// let client = ClientBuilder::new()
+    ///     .with_protocol_preference(ProtocolType::Json, false)
+    ///     .with_rs_strategy()
+    ///     .build()?;
+    ///
+    /// // XML-only
+    /// let client = ClientBuilder::new()
+    ///     .with_protocol_preference(ProtocolType::Xml, false)
+    ///     .with_rs_strategy()
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "rs-strategy")]
+    pub fn with_protocol_preference(
+        mut self,
+        protocol: crate::strategies::rs::ProtocolType,
+        fallback_enabled: bool,
+    ) -> Self {
+        self.protocol_preference = Some((protocol, fallback_enabled));
+        self
+    }
+
+    /// Configures the client to use JSON protocol (with XML fallback).
+    ///
+    /// This is a convenience method equivalent to:
+    /// ```ignore
+    /// builder.with_protocol_preference(ProtocolType::Json, true)
+    /// ```
+    ///
+    /// **Note**: This must be called before `with_rs_strategy()`.
+    ///
+    /// # Availability
+    ///
+    /// This method is only available when the `rs-strategy` feature is enabled.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use libindigo::client::ClientBuilder;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> libindigo::error::Result<()> {
+    /// let client = ClientBuilder::new()
+    ///     .with_json_protocol()
+    ///     .with_rs_strategy()
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "rs-strategy")]
+    pub fn with_json_protocol(self) -> Self {
+        self.with_protocol_preference(crate::strategies::rs::ProtocolType::Json, true)
+    }
+
+    /// Configures the client to use XML protocol only.
+    ///
+    /// This is a convenience method equivalent to:
+    /// ```ignore
+    /// builder.with_protocol_preference(ProtocolType::Xml, false)
+    /// ```
+    ///
+    /// **Note**: This must be called before `with_rs_strategy()`.
+    ///
+    /// # Availability
+    ///
+    /// This method is only available when the `rs-strategy` feature is enabled.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use libindigo::client::ClientBuilder;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> libindigo::error::Result<()> {
+    /// let client = ClientBuilder::new()
+    ///     .with_xml_protocol()
+    ///     .with_rs_strategy()
+    ///     .build()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[cfg(feature = "rs-strategy")]
+    pub fn with_xml_protocol(self) -> Self {
+        self.with_protocol_preference(crate::strategies::rs::ProtocolType::Xml, false)
     }
 
     /// Configures the client with a custom strategy.
@@ -219,7 +387,7 @@ impl Default for ClientBuilder {
 /// INDIGO client for interacting with INDIGO servers.
 ///
 /// The client uses a strategy pattern to support different implementations
-/// (FFI-based, pure Rust, etc.). Use [`ClientBuilder`] to construct a client.
+/// (FFI-based, Rust, etc.). Use [`ClientBuilder`] to construct a client.
 ///
 /// # Example
 ///

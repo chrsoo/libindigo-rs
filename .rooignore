@@ -1,2 +1,15 @@
+# Ignored Roo files
+
+## Ignoring the INDIGO external library with some exceptions.
+
 sys/externals/indigo/
 
+## exceptions
+
+!sys/externals/indigo/README.md
+!sys/externals/indigo/indigo_docs/*
+!sys/externals/indigo/indigo_docs/PROTOCOLS.md
+!sys/externals/indigo/indigo_libs/*
+!sys/externals/indigo/indigo_server/*
+!sys/externals/indigo/indigo_mac_drivers/*
+!sys/externals/indigo/indigo_tools/*

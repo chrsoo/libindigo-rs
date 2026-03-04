@@ -1,4 +1,5 @@
-use zeroconf::{MdnsBrowser, ServiceType};
+use std::time::Duration;
+use zeroconf::{MdnsBrowser, ServiceDiscovery, ServiceType};
 
 use crate::{Bus, Controller, NamedObject};
 
@@ -14,9 +15,11 @@ impl NamedObject for AutoDiscovery {
     }
 }
 
-impl<B> Controller<B> for AutoDiscovery where B: Bus {
-
-    fn attach(&mut self, bus: &mut B) -> crate::IndigoResult<()> {
+impl<B> Controller<B> for AutoDiscovery
+where
+    B: Bus,
+{
+    fn attach(&mut self, _bus: &mut B) -> crate::IndigoResult<()> {
         todo!()
     }
 
@@ -26,16 +29,27 @@ impl<B> Controller<B> for AutoDiscovery where B: Bus {
 }
 
 impl AutoDiscovery {
-    fn listen(name: &str, sub_type: &str) {
-        let sub_types: Vec<&str> = match sub_type.as_ref() {
+    #[allow(dead_code)]
+    fn listen(_name: &str, _sub_type: Option<&str>) {
+        // This function is incomplete and not currently used
+        // TODO: Implement proper mDNS service discovery
+        unimplemented!("mDNS service discovery not yet implemented");
+
+        /*
+        let sub_types: Vec<&str> = match sub_type {
             Some(sub_type) => vec![sub_type],
             None => vec![],
         };
 
+        let protocol = "_tcp"; // Default protocol
         let service_type = ServiceType::with_sub_types(
-            &name, &protocol, sub_types).expect("invalid service type");
+            name, protocol, sub_types).expect("invalid service type");
 
         let mut browser = MdnsBrowser::new(service_type);
+
+        let on_service_discovered = |_result: zeroconf::Result<ServiceDiscovery>, _context: Option<std::sync::Arc<dyn std::any::Any>>| {
+            // Handle service discovery
+        };
 
         browser.set_service_discovered_callback(Box::new(on_service_discovered));
 
@@ -45,6 +59,7 @@ impl AutoDiscovery {
             // calling `poll()` will keep this browser alive
             event_loop.poll(Duration::from_secs(0)).unwrap();
         }
+        */
 
         /*
         // Connect to local INDI server.
@@ -63,6 +78,5 @@ impl AutoDiscovery {
             println!("Received from server: {:?}", command);
         }
         */
-
     }
 }

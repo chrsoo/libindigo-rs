@@ -51,12 +51,16 @@ tokio = { version = "1.35", features = [
     "sync",
     "macros",
     "time",
+    "net",
+    "io-util",
 ], optional = true }
 futures = "0.3"
 thiserror = "1.0"
 async-trait = "0.1"
 pin-project = "1.1"
 quick-xml = { version = "0.31", optional = true }
+base64 = { version = "0.21", optional = true }
+serde_json = { version = "1.0", optional = true }
 tracing = "0.1"
 
 #mime = "0.3"
@@ -78,7 +82,7 @@ regex = "1.11"
 default = ["async", "ffi-strategy", "sys", "std", "auto"]
 async = ["tokio"]
 ffi-strategy = ["libindigo-sys"]
-rs-strategy = ["quick-xml", "tokio"]
+rs-strategy = ["quick-xml", "tokio", "base64", "serde_json", "serde/derive"]
 blocking = []
 sys = ["libindigo-sys"]
 std = []

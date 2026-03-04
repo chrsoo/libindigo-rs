@@ -80,7 +80,7 @@ where P: Property {
 }
 
 impl<P: Property> ClientDeviceModel<P> {
-    
+
     pub fn new(name: &str) -> Self {
         Self {
             name: name.to_owned(),
@@ -158,6 +158,7 @@ impl<P: Property> Display for ClientDeviceModel<P> {
         );
         write!(f, "{} ({}) [", self.name(), status)?;
         let mut sep = "";
+        #[cfg(feature = "ffi-strategy")]
         if let Some(ifaces) = self.list_interfaces() {
             for item in ifaces {
                 write!(f, "{sep}{item}")?;

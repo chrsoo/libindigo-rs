@@ -656,6 +656,7 @@ pub trait Device: NamedObject {
 
     /// List all interfaces defined for this device, returning [None] if no
     /// interfaces can be found.
+    #[cfg(feature = "ffi-strategy")]
     fn list_interfaces(&self) -> Option<Vec<Interface>> {
         let p = self.info()?;
         if let Some(item) = p.get_item(name::INFO_DEVICE_INTERFACE_ITEM) {
