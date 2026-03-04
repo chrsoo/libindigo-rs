@@ -623,8 +623,6 @@ fn parse_format_number(buf: &[u8], i: usize, j: usize) -> Result<usize, ParseErr
 
 #[cfg(test)]
 mod tests {
-    use std::{fmt::Debug, io::stdin};
-
     use super::*;
 
     #[test]
