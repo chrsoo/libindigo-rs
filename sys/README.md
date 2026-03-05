@@ -16,8 +16,29 @@ The `libindigo-sys` crate will do one of the following in order of priority when
 1. Attempt to build INDIGO from the path of the git submodule `externals/indigo`, if it has been initialised by git. To initialise the git submodule, execute the following command:
 
     ```bash
-    git submodule update --init --recursive
+    git submodule update --init --recursive --depth 1
     ```
 
 1. Use INDIGO system headers in `/usr/include` and libs from `/usr/lib`, if `/usr/include/indigo/indigo_version.h` exists.
 1. Initialise the git `externals/indigo` git submodule with the command above and build it.
+
+## Updating the indigo submodule to the latest upstream version
+
+1. Update the module to the latest version in the local file system
+
+    ```bash
+    git submodule update --remote
+    ```
+
+1. Build and test the new version
+
+    ```bash
+
+    ```
+
+1. Stage and commit the new version
+
+    ```bash
+    git add indigo
+    git commit -m "updated INDIGO to the latest version"
+    ```
