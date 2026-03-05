@@ -1,0 +1,22 @@
+name: 🛠️ Chore
+description: Internal maintenance or technical tasks.
+labels: ["chore"]
+body:
+  - type: textarea
+    id: details
+    attributes:
+      label: Technical Details
+      description: Describe the technical work to be performed.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      description: How will you verify this work is complete?
+      placeholder: "- [ ] Tests pass...\n- [ ] Documentation updated..."
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why is this work needed? Any dependencies or related issues?

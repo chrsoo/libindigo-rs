@@ -1,0 +1,29 @@
+name: 📍 Tracking Issue
+description: High-level Epic/Feature tracking with task list.
+labels: ["tracking"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Overview of this Epic/Feature
+    validations:
+      required: true
+  - type: textarea
+    id: goals
+    attributes:
+      label: Goals
+      description: What are the high-level objectives?
+  - type: textarea
+    id: tasklist
+    attributes:
+      label: Task List
+      description: List of related issues (use GitHub task list syntax)
+      placeholder: "- [ ] #10 ✨ Enhancement: Feature A\n- [ ] #11 🛠️ Chore: Refactor B\n- [ ] #12 🐛 Bug: Fix C"
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional Notes
+      description: Dependencies, milestones, or other context

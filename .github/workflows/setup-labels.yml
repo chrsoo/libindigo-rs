@@ -1,0 +1,120 @@
+name: "Project Infrastructure: Setup Labels"
+
+on:
+    workflow_dispatch: # Allows manual execution from the GitHub Actions UI
+
+jobs:
+    labeler:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Create Project Labels
+              uses: actions/github-script@v7
+              with:
+                  script: |
+                      const labels = [
+                        {
+                          name: "tracking",
+                          color: "5319e7",
+                          description: "High-level Epic/Feature tracking issue"
+                        },
+                        {
+                          name: "enhancement",
+                          color: "a2eeef",
+                          description: "New functionality or requirement (User Story)"
+                        },
+                        {
+                          name: "chore",
+                          color: "fbca04",
+                          description: "Internal technical tasks and maintenance"
+                        },
+                        {
+                          name: "bug",
+                          color: "d73a4a",
+                          description: "Functional defect or error"
+                        },
+                        {
+                          name: "discussion",
+                          color: "d4c5f9",
+                          description: "Architectural proposals or RFCs"
+                        },
+                        {
+                          name: "priority:high",
+                          color: "b60205",
+                          description: "Urgent items requiring immediate attention"
+                        },
+                        {
+                          name: "priority:medium",
+                          color: "fbca04",
+                          description: "Important but not urgent"
+                        },
+                        {
+                          name: "priority:low",
+                          color: "0e8a16",
+                          description: "Nice to have, low urgency"
+                        },
+                        {
+                          name: "size:small",
+                          color: "c2e0c6",
+                          description: "Small effort (< 1 day)"
+                        },
+                        {
+                          name: "size:medium",
+                          color: "bfd4f2",
+                          description: "Medium effort (1-3 days)"
+                        },
+                        {
+                          name: "size:large",
+                          color: "f9d0c4",
+                          description: "Large effort (> 3 days)"
+                        },
+                        {
+                          name: "area:core",
+                          color: "c5def5",
+                          description: "Core library functionality"
+                        },
+                        {
+                          name: "area:ffi",
+                          color: "c5def5",
+                          description: "FFI bindings and C interop"
+                        },
+                        {
+                          name: "area:protocol",
+                          color: "c5def5",
+                          description: "Protocol implementation (XML/JSON)"
+                        },
+                        {
+                          name: "area:discovery",
+                          color: "c5def5",
+                          description: "Server discovery (ZeroConf/Bonjour)"
+                        },
+                        {
+                          name: "area:testing",
+                          color: "c5def5",
+                          description: "Testing infrastructure and tests"
+                        },
+                        {
+                          name: "area:docs",
+                          color: "c5def5",
+                          description: "Documentation"
+                        }
+                      ];
+
+                      for (const label of labels) {
+                        try {
+                          // Check if label exists, if not, create it
+                          await github.rest.issues.createLabel({
+                            owner: context.repo.owner,
+                            repo: context.repo.repo,
+                            name: label.name,
+                            color: label.color,
+                            description: label.description
+                          });
+                          console.log(`Created label: ${label.name}`);
+                        } catch (error) {
+                          if (error.status === 422) {
+                            console.log(`Label "${label.name}" already exists, skipping.`);
+                          } else {
+                            console.error(`Error creating "${label.name}": ${error.message}`);
+                          }
+                        }
+                      }

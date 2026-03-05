@@ -1,0 +1,30 @@
+name: ✨ Enhancement
+description: Propose a new feature or technical requirement.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What is the desired outcome?
+    validations:
+      required: true
+  - type: textarea
+    id: user_story
+    attributes:
+      label: User Story / Requirement
+      description: Describe the user story or requirement (optional)
+      placeholder: "As a [user], I want [feature] so that [benefit]..."
+  - type: textarea
+    id: ac
+    attributes:
+      label: Acceptance Criteria
+      description: Define what "done" looks like
+      placeholder: "- [ ] Must do X...\n- [ ] Should handle Y..."
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional Notes
+      description: Any other context, dependencies, or technical considerations
