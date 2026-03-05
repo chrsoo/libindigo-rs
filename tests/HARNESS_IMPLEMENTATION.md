@@ -90,14 +90,14 @@ Additional documentation:
 All required dependencies were already present in [`Cargo.toml`](../Cargo.toml):
 
 - `once_cell = "1.19.0"` - For singleton pattern (already in dependencies)
-- `tokio` - For async operations (already configured with rs-strategy feature)
+- `tokio` - For async operations (already configured with rs feature)
 - Standard library components for process management
 
 No additional dependencies were needed.
 
 ## Compilation Status
 
-✅ **Successfully compiles** with `cargo build --features rs-strategy`
+✅ **Successfully compiles** with `cargo build --features rs`
 
 The implementation compiles without errors. Only pre-existing warnings from other parts of the codebase are present.
 
@@ -198,7 +198,7 @@ The implementation includes unit tests for each component:
 Run tests with:
 
 ```bash
-cargo test --features rs-strategy --lib
+cargo test --features rs --lib
 ```
 
 ## Deviations from Architecture

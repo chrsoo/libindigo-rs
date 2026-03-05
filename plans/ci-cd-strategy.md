@@ -8,7 +8,7 @@ This document outlines the CI/CD strategy for the libindigo-rs project, which su
 
 The project supports two main implementation strategies:
 
-### 1. Pure Rust Strategy (`rs-strategy`)
+### 1. Pure Rust Strategy (`rs`)
 
 - **No C dependencies required**
 - Implements INDIGO protocol entirely in Rust
@@ -16,7 +16,7 @@ The project supports two main implementation strategies:
 - Fast build times
 - Recommended for most CI/CD pipelines
 
-### 2. FFI Strategy (`ffi-strategy`)
+### 2. FFI Strategy (`ffi`)
 
 - Requires INDIGO C library
 - Uses FFI bindings to native INDIGO
@@ -47,9 +47,9 @@ The project supports two main implementation strategies:
 **Configuration:**
 
 ```yaml
-cargo build --features rs-strategy
-cargo test --features rs-strategy --lib
-INDIGO_TEST_SKIP_SERVER=true cargo test --features rs-strategy --test '*'
+cargo build --features rs
+cargo test --features rs --lib
+INDIGO_TEST_SKIP_SERVER=true cargo test --features rs --test '*'
 ```
 
 ### Job 2: Build FFI Strategy (Secondary)
@@ -106,7 +106,7 @@ cargo build --no-default-features
 **Configuration:**
 
 ```yaml
-cargo doc --no-deps --features rs-strategy
+cargo doc --no-deps --features rs
 ```
 
 ### Job 5: Multi-Version Rust Check
@@ -116,7 +116,7 @@ cargo doc --no-deps --features rs-strategy
 **Configuration:**
 
 ```yaml
-cargo check --features rs-strategy
+cargo check --features rs
 ```
 
 ## Integration Tests Strategy
@@ -189,7 +189,7 @@ GitHub Actions automatically caches Rust builds via `actions-rust-lang/setup-rus
 
 ```yaml
 jobs:
-  - test-rs-strategy  # Primary - fast, no dependencies
+  - test-rs  # Primary - fast, no dependencies
   - build-minimal     # Quick sanity check
 ```
 
@@ -197,8 +197,8 @@ jobs:
 
 ```yaml
 jobs:
-  - test-rs-strategy      # Pure Rust tests
-  - build-ffi-strategy    # FFI compilation check
+  - test-rs      # Pure Rust tests
+  - build-ffi    # FFI compilation check
   - build-minimal         # Minimal build
   - docs                  # Documentation
   - check-rust-versions   # Multi-version check
@@ -219,7 +219,7 @@ jobs:
 ### Quick Test (Pure Rust)
 
 ```bash
-cargo test --features rs-strategy --lib
+cargo test --features rs --lib
 ```
 
 ### Full Test (with server)
@@ -229,7 +229,7 @@ cargo test --features rs-strategy --lib
 indigo_server -p 7624 indigo_ccd_simulator
 
 # Run tests
-cargo test --features rs-strategy
+cargo test --features rs
 ```
 
 ### FFI Build Test
@@ -350,8 +350,8 @@ The current CI/CD strategy is **highly feasible** and prioritizes:
 
 | Job | First Build | Cached Build | Frequency |
 |-----|-------------|--------------|-----------|
-| test-rs-strategy | 3-5 min | 2-3 min | Every PR |
-| build-ffi-strategy | 15-20 min | 5-7 min | Main branch |
+| test-rs | 3-5 min | 2-3 min | Every PR |
+| build-ffi | 15-20 min | 5-7 min | Main branch |
 | build-minimal | 2 min | 1 min | Every PR |
 | docs | 3-5 min | 2-3 min | Main branch |
 | check-rust-versions | 2-3 min each | 1-2 min each | Main branch |

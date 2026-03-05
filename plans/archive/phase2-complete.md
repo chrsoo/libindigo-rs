@@ -23,7 +23,7 @@ Implemented `AsyncFfiStrategy` with the following features:
 - **Stream Implementation**: Implements the `Stream` trait via `PropertyStream` for property updates
 - **Thread Safety**: Uses `Arc<Mutex<>>` for thread-safe shared state between async tasks and FFI callbacks
 - **Error Handling**: Comprehensive error handling with proper state validation
-- **Feature Gating**: Properly gated with `#[cfg(feature = "ffi-strategy")]` and stub implementation when feature is disabled
+- **Feature Gating**: Properly gated with `#[cfg(feature = "ffi")]` and stub implementation when feature is disabled
 
 Key methods implemented:
 
@@ -35,7 +35,7 @@ Key methods implemented:
 
 ### 3. Updated Strategy Module ([`src/strategies/mod.rs`](src/strategies/mod.rs))
 
-- Added `async_ffi` module export (gated with `ffi-strategy` and `async` features)
+- Added `async_ffi` module export (gated with `ffi` and `async` features)
 - Re-exported `AsyncFfiStrategy` and `PropertyStream` types
 - Updated documentation to reflect async FFI strategy
 
@@ -246,7 +246,7 @@ async fn main() -> libindigo::Result<()> {
 2. **Property Stream Integration**: The property stream channel is set up, but the FFI callbacks that populate it need to be implemented.
 
 3. **Pre-existing Issues**: The `src/auto.rs` file has compilation errors that are unrelated to Phase 2 implementation. These can be resolved by:
-   - Disabling the `auto` feature: `cargo build --no-default-features --features "async,ffi-strategy,std"`
+   - Disabling the `auto` feature: `cargo build --no-default-features --features "async,ffi,std"`
    - Or fixing the auto-discovery implementation in a future phase
 
 ## Next Steps (Phase 3)

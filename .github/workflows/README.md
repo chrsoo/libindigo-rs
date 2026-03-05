@@ -12,13 +12,13 @@ The main workflow runs on every push and pull request to `main`/`master` branche
 
 #### Jobs
 
-1. **test-rs-strategy** (Primary, ~3-5 min)
+1. **test-rs** (Primary, ~3-5 min)
    - Tests pure Rust implementation
    - No system dependencies required
    - Fast feedback for PRs
    - Runs unit and integration tests
 
-2. **build-ffi-strategy** (Secondary, ~10-20 min)
+2. **build-ffi** (Secondary, ~10-20 min)
    - Builds FFI bindings to C library
    - Requires system dependencies
    - Verifies C library integration
@@ -41,7 +41,7 @@ The main workflow runs on every push and pull request to `main`/`master` branche
 ### Quick Test (Pure Rust)
 
 ```bash
-cargo test --features rs-strategy --lib
+cargo test --features rs --lib
 ```
 
 ### Full Build (FFI)
@@ -55,10 +55,10 @@ cargo build --workspace
 
 ```bash
 # Without server (tests will skip gracefully)
-INDIGO_TEST_SKIP_SERVER=true cargo test --features rs-strategy
+INDIGO_TEST_SKIP_SERVER=true cargo test --features rs
 
 # With server (requires INDIGO server running)
-cargo test --features rs-strategy
+cargo test --features rs
 ```
 
 ## Configuration

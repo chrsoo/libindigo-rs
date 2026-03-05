@@ -182,13 +182,13 @@ pub mod prelude {
     };
 
     // Re-export strategy implementations when features are enabled
-    #[cfg(all(feature = "ffi-strategy", feature = "async"))]
+    #[cfg(all(feature = "ffi", feature = "async"))]
     pub use crate::strategies::AsyncFfiStrategy;
 
-    #[cfg(feature = "ffi-strategy")]
+    #[cfg(feature = "ffi")]
     pub use crate::strategies::FfiClientStrategy;
 
-    #[cfg(feature = "rs-strategy")]
+    #[cfg(feature = "rs")]
     pub use crate::strategies::RsClientStrategy;
 }
 
@@ -211,7 +211,7 @@ pub mod property;
 #[deprecated(note = "Use `strategies::ffi` module instead")]
 pub mod sys;
 
-#[cfg(any(feature = "ffi-strategy", feature = "sys"))]
+#[cfg(any(feature = "ffi", feature = "sys"))]
 include!(concat!(env!("OUT_DIR"), "/interface.rs"));
 
 pub mod name {
@@ -247,11 +247,11 @@ use std::collections::hash_map::Values;
 use std::collections::hash_map::ValuesMut;
 use std::collections::HashMap;
 
-#[cfg(feature = "ffi-strategy")]
+#[cfg(feature = "ffi")]
 use enum_primitive::*;
-#[cfg(feature = "ffi-strategy")]
+#[cfg(feature = "ffi")]
 use libindigo_sys::{self, *};
-#[cfg(feature = "ffi-strategy")]
+#[cfg(feature = "ffi")]
 use strum::IntoEnumIterator;
 
 pub type StringMap<T> = HashMap<String, T>;
@@ -260,7 +260,7 @@ pub type StringMap<T> = HashMap<String, T>;
 
 pub use crate::indigo::*;
 
-#[cfg(feature = "ffi-strategy")]
+#[cfg(feature = "ffi")]
 #[allow(deprecated)]
 enum_from_primitive! {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, strum_macros::EnumIter, strum_macros::Display)]
@@ -292,7 +292,7 @@ pub enum Interface  {
 }
 }
 
-#[cfg(feature = "ffi-strategy")]
+#[cfg(feature = "ffi")]
 #[allow(deprecated)]
 impl Interface {
     /// Match the [Interface] against an INDIGO string encoded bitmap.

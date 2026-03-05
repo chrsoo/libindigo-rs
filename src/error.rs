@@ -20,7 +20,7 @@ pub enum IndigoError {
     ProtocolError(String),
 
     /// FFI-related error (only available with `ffi-strategy` feature).
-    #[cfg(feature = "ffi-strategy")]
+    #[cfg(feature = "ffi")]
     #[error("FFI error: {0}")]
     FfiError(String),
 

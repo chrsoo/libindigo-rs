@@ -110,7 +110,7 @@ export INDIGO_SERVER_PATH=/usr/local/bin/indigo_server
 export INDIGO_TEST_DRIVERS="indigo_ccd_simulator,indigo_mount_simulator,indigo_wheel_simulator"
 
 # Run tests
-cargo test --features rs-strategy
+cargo test --features rs
 ```
 
 ## Server Discovery
@@ -127,16 +127,16 @@ If no server is found, the harness will initialize in "unavailable" mode, and te
 
 ```bash
 # Run all tests (unit + integration)
-cargo test --features rs-strategy
+cargo test --features rs
 
 # Run only integration tests
-cargo test --features rs-strategy --test integration
+cargo test --features rs --test integration
 
 # Run with verbose output
-cargo test --features rs-strategy -- --nocapture
+cargo test --features rs -- --nocapture
 
 # Run with single thread (for debugging)
-cargo test --features rs-strategy -- --test-threads=1
+cargo test --features rs -- --test-threads=1
 ```
 
 ## Implementation Details
@@ -228,7 +228,7 @@ export INDIGO_TEST_STARTUP_TIMEOUT=30
 To see server output and debug information:
 
 ```bash
-cargo test --features rs-strategy -- --nocapture
+cargo test --features rs -- --nocapture
 ```
 
 Or access programmatically:

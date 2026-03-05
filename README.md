@@ -221,7 +221,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-libindigo = { version = "0.1", features = ["rs-strategy"] }
+libindigo = { version = "0.1", features = ["rs"] }
 tokio = { version = "1.35", features = ["full"] }
 ```
 
@@ -229,7 +229,7 @@ tokio = { version = "1.35", features = ["full"] }
 
 ```toml
 [dependencies]
-libindigo = { version = "0.1", features = ["ffi-strategy", "async"] }
+libindigo = { version = "0.1", features = ["ffi", "async"] }
 tokio = { version = "1.35", features = ["full"] }
 ```
 
@@ -238,8 +238,8 @@ tokio = { version = "1.35", features = ["full"] }
 | Feature | Description | Default |
 |---------|-------------|---------|
 | `async` | Enable async/await support | ✅ Yes |
-| `ffi-strategy` | Enable FFI-based strategy using C INDIGO library | ✅ Yes |
-| `rs-strategy` | Enable pure Rust strategy implementation | ❌ No |
+| `ffi` | Enable FFI-based strategy using C INDIGO library | ✅ Yes |
+| `rs` | Enable pure Rust strategy implementation | ❌ No |
 | `blocking` | Enable synchronous wrappers around async APIs | ❌ No |
 | `sys` | Include low-level FFI bindings | ✅ Yes |
 | `std` | Enable standard library features | ✅ Yes |
@@ -406,19 +406,19 @@ cargo test --all-features
 
 ```bash
 # All pure Rust tests (including JSON protocol tests)
-cargo test --features rs-strategy
+cargo test --features rs
 
 # JSON protocol tests only (61 tests)
-cargo test --test json_protocol_tests --features rs-strategy
+cargo test --test json_protocol_tests --features rs
 
 # Protocol negotiation tests only (59 tests)
-cargo test --test protocol_negotiation_tests --features rs-strategy
+cargo test --test protocol_negotiation_tests --features rs
 ```
 
 ### Run FFI Strategy Tests
 
 ```bash
-cargo test --features ffi-strategy
+cargo test --features ffi
 ```
 
 ### Integration Tests
@@ -430,7 +430,7 @@ Integration tests require a running INDIGO server:
 indigo_server
 
 # Run integration tests
-cargo test --test rs_client_integration --features rs-strategy
+cargo test --test rs_client_integration --features rs
 ```
 
 ### Test Coverage Summary

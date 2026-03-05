@@ -113,7 +113,7 @@ Converts incoming protocol messages to domain types:
 - Preserves all property metadata
 - Handles optional fields correctly
 - Converts between protocol and domain enums
-- Base64 decoding for BLOB data (when `rs-strategy` feature enabled)
+- Base64 decoding for BLOB data (when `rs` feature enabled)
 
 #### Domain → Protocol Conversion
 
@@ -185,13 +185,13 @@ while let Some(property) = rx.recv().await {
 base64 = { version = "0.21", optional = true }
 
 [features]
-rs-strategy = ["quick-xml", "tokio", "base64"]
+rs = ["quick-xml", "tokio", "base64"]
 ```
 
 **Purpose**:
 
 - `base64`: BLOB data decoding in protocol messages
-- Optional dependency, only included with `rs-strategy` feature
+- Optional dependency, only included with `rs` feature
 
 ## Integration Status
 

@@ -311,7 +311,7 @@ cargo test --lib transport
 Integration tests are in `tests/transport_integration.rs`:
 
 ```bash
-cargo test --test transport_integration --features rs-strategy
+cargo test --test transport_integration --features rs
 ```
 
 ## Performance Considerations

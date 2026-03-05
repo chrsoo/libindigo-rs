@@ -5,14 +5,14 @@ use std::str::Utf8Error;
 
 use enum_primitive::*;
 
-#[cfg(feature = "ffi-strategy")]
+#[cfg(feature = "ffi")]
 use libindigo_sys::buf_to_str;
-#[cfg(feature = "ffi-strategy")]
+#[cfg(feature = "ffi")]
 use log::{debug, error, warn};
-#[cfg(not(feature = "ffi-strategy"))]
+#[cfg(not(feature = "ffi"))]
 use log::{debug, warn};
 use number::NumberFormat;
-#[cfg(feature = "ffi-strategy")]
+#[cfg(feature = "ffi")]
 use std::ffi::CString;
 use strum_macros::Display as StrumDisplay;
 use url_fork::{ParseError, Url};
@@ -659,7 +659,7 @@ pub trait Device: NamedObject {
 
     /// List all interfaces defined for this device, returning [None] if no
     /// interfaces can be found.
-    #[cfg(feature = "ffi-strategy")]
+    #[cfg(feature = "ffi")]
     fn list_interfaces(&self) -> Option<Vec<crate::Interface>> {
         let p = self.info()?;
         if let Some(item) = p.get_item(name::INFO_DEVICE_INTERFACE_ITEM) {

@@ -512,14 +512,14 @@ impl RsClientStrategy {
                 let mut items = HashMap::new();
                 for elem in v.elements {
                     // Decode base64 BLOB data if base64 feature is enabled
-                    #[cfg(feature = "rs-strategy")]
+                    #[cfg(feature = "rs")]
                     let data = {
                         use base64::{engine::general_purpose, Engine as _};
                         general_purpose::STANDARD
                             .decode(&elem.value)
                             .unwrap_or_default()
                     };
-                    #[cfg(not(feature = "rs-strategy"))]
+                    #[cfg(not(feature = "rs"))]
                     let data = Vec::new();
 
                     items.insert(

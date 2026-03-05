@@ -4,7 +4,7 @@ members = [".", "relm", "sys"]
 [package]
 name = "libindigo"
 description = "Rust API for developing INDIGO astronomy clients and devices."
-version = "0.1.2+INDIGO.2.0.300"
+version = "0.2.0+INDIGO.2.0.300"
 license = "MIT"
 homepage = "https://github.com/chrsoo/libindigo-rs"
 repository = "https://github.com/chrsoo/libindigo-rs"
@@ -79,14 +79,26 @@ env_logger = "*"
 regex = "1.11"
 
 [features]
-default = ["async", "ffi-strategy", "sys", "std"]
+# Core client functionality (default)
+default = ["client", "async", "std"]
+client = []
 async = ["tokio"]
-ffi-strategy = ["libindigo-sys"]
-rs-strategy = ["quick-xml", "tokio", "base64", "serde_json", "serde/derive"]
-blocking = []
-sys = ["libindigo-sys"]
 std = []
+
+# Strategy features - mutually exclusive at runtime
+# rs: Pure Rust strategy with zero FFI dependencies
+rs = ["client", "quick-xml", "tokio", "base64", "serde_json", "serde/derive"]
+# ffi: FFI strategy using INDIGO C library
+ffi = ["client", "libindigo-sys"]
+
+# Legacy features for backwards compatibility (deprecated)
+sys = ["libindigo-sys"]
+blocking = []
+
+# Discovery feature - requires FFI (zeroconf wraps Bonjour/Avahi)
+# Note: This is FFI-based and incompatible with pure Rust rs feature
 auto = ["zeroconf"]
+
 # Build INDIGO server for integration tests (build-time only)
 # This allows RS builds to run integration tests without runtime FFI dependencies
 test-server = ["libindigo-sys"]

@@ -281,7 +281,7 @@ Comprehensive unit tests are included in [`protocol_json.rs`](src/strategies/rs/
 Run tests with:
 
 ```bash
-cargo test --features rs-strategy protocol_json --lib
+cargo test --features rs protocol_json --lib
 ```
 
 ## Differences from XML Protocol

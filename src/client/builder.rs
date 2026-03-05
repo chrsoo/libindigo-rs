@@ -22,10 +22,10 @@
 use crate::client::ClientStrategy;
 use crate::error::{IndigoError, Result};
 
-#[cfg(all(feature = "ffi-strategy", feature = "async"))]
+#[cfg(all(feature = "ffi", feature = "async"))]
 use crate::strategies::AsyncFfiStrategy;
 
-#[cfg(feature = "ffi-strategy")]
+#[cfg(feature = "ffi")]
 use crate::strategies::FfiClientStrategy;
 
 /// Builder for constructing INDIGO clients.
@@ -54,7 +54,7 @@ use crate::strategies::FfiClientStrategy;
 /// ```
 pub struct ClientBuilder {
     strategy: Option<Box<dyn ClientStrategy>>,
-    #[cfg(feature = "rs-strategy")]
+    #[cfg(feature = "rs")]
     protocol_preference: Option<(crate::strategies::rs::ProtocolType, bool)>,
 }
 
@@ -71,7 +71,7 @@ impl ClientBuilder {
     pub fn new() -> Self {
         ClientBuilder {
             strategy: None,
-            #[cfg(feature = "rs-strategy")]
+            #[cfg(feature = "rs")]
             protocol_preference: None,
         }
     }
@@ -83,7 +83,7 @@ impl ClientBuilder {
     ///
     /// # Availability
     ///
-    /// This method is only available when both the `ffi-strategy` and `async`
+    /// This method is only available when both the `ffi` and `async`
     /// features are enabled.
     ///
     /// # Example
@@ -99,7 +99,7 @@ impl ClientBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(all(feature = "ffi-strategy", feature = "async"))]
+    #[cfg(all(feature = "ffi", feature = "async"))]
     pub fn with_async_ffi_strategy(mut self) -> Self {
         self.strategy = Some(Box::new(AsyncFfiStrategy::new()));
         self
@@ -122,7 +122,7 @@ impl ClientBuilder {
     ///     .with_ffi_strategy()
     ///     .build()?;
     /// ```
-    #[cfg(feature = "ffi-strategy")]
+    #[cfg(feature = "ffi")]
     pub fn with_ffi_strategy(mut self) -> Self {
         self.strategy = Some(Box::new(FfiClientStrategy::new()));
         self
@@ -152,7 +152,7 @@ impl ClientBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(feature = "rs-strategy")]
+    #[cfg(feature = "rs")]
     pub fn with_rs_strategy(mut self) -> Self {
         let strategy = if let Some((protocol, fallback)) = self.protocol_preference {
             let negotiator = crate::strategies::rs::ProtocolNegotiator::new(protocol, fallback);
@@ -186,7 +186,7 @@ impl ClientBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(feature = "rs-strategy")]
+    #[cfg(feature = "rs")]
     #[deprecated(since = "0.1.3", note = "Use `with_rs_strategy()` instead")]
     pub fn with_pure_rust_strategy(mut self) -> Self {
         let strategy = if let Some((protocol, fallback)) = self.protocol_preference {
@@ -243,7 +243,7 @@ impl ClientBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(feature = "rs-strategy")]
+    #[cfg(feature = "rs")]
     pub fn with_protocol_preference(
         mut self,
         protocol: crate::strategies::rs::ProtocolType,
@@ -280,7 +280,7 @@ impl ClientBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(feature = "rs-strategy")]
+    #[cfg(feature = "rs")]
     pub fn with_json_protocol(self) -> Self {
         self.with_protocol_preference(crate::strategies::rs::ProtocolType::Json, true)
     }
@@ -312,7 +312,7 @@ impl ClientBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(feature = "rs-strategy")]
+    #[cfg(feature = "rs")]
     pub fn with_xml_protocol(self) -> Self {
         self.with_protocol_preference(crate::strategies::rs::ProtocolType::Xml, false)
     }
@@ -689,21 +689,21 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[cfg(all(feature = "ffi-strategy", feature = "async"))]
+    #[cfg(all(feature = "ffi", feature = "async"))]
     #[test]
     fn test_builder_with_async_ffi_strategy() {
         let result = ClientBuilder::new().with_async_ffi_strategy().build();
         assert!(result.is_ok());
     }
 
-    #[cfg(feature = "ffi-strategy")]
+    #[cfg(feature = "ffi")]
     #[test]
     fn test_builder_with_ffi_strategy() {
         let result = ClientBuilder::new().with_ffi_strategy().build();
         assert!(result.is_ok());
     }
 
-    #[cfg(all(feature = "ffi-strategy", feature = "async"))]
+    #[cfg(all(feature = "ffi", feature = "async"))]
     #[tokio::test]
     async fn test_client_connect_invalid_url() {
         let mut client = ClientBuilder::new()

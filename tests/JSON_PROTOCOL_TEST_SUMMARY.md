@@ -216,46 +216,46 @@ End-to-end protocol negotiation tests:
 
 ```bash
 # All JSON protocol tests (61 tests)
-cargo test --test json_protocol_tests --features rs-strategy
+cargo test --test json_protocol_tests --features rs
 
 # All protocol negotiation tests (59 tests)
-cargo test --test protocol_negotiation_tests --features rs-strategy
+cargo test --test protocol_negotiation_tests --features rs
 
 # All pure Rust tests (includes JSON tests)
-cargo test --features rs-strategy
+cargo test --features rs
 ```
 
 ### Run Specific Test Categories
 
 ```bash
 # PROTOCOLS.md examples only
-cargo test --test json_protocol_tests protocols_md_examples --features rs-strategy
+cargo test --test json_protocol_tests protocols_md_examples --features rs
 
 # Protocol detection tests only
-cargo test --test protocol_negotiation_tests protocol_detection --features rs-strategy
+cargo test --test protocol_negotiation_tests protocol_detection --features rs
 
 # Negotiation strategy tests only
-cargo test --test protocol_negotiation_tests negotiation_strategy --features rs-strategy
+cargo test --test protocol_negotiation_tests negotiation_strategy --features rs
 ```
 
 ### Run Individual Tests
 
 ```bash
 # Specific test by name
-cargo test --test json_protocol_tests test_protocols_md_get_properties --features rs-strategy
+cargo test --test json_protocol_tests test_protocols_md_get_properties --features rs
 
 # With output
-cargo test --test json_protocol_tests test_protocols_md_get_properties --features rs-strategy -- --nocapture
+cargo test --test json_protocol_tests test_protocols_md_get_properties --features rs -- --nocapture
 ```
 
 ### Run with Verbose Output
 
 ```bash
 # Show all test names
-cargo test --features rs-strategy -- --test-threads=1 --nocapture
+cargo test --features rs -- --test-threads=1 --nocapture
 
 # Show test execution time
-cargo test --features rs-strategy -- --show-output
+cargo test --features rs -- --show-output
 ```
 
 ## Test Results
@@ -391,9 +391,9 @@ Tests are run automatically on:
 ```yaml
 test:
   script:
-    - cargo test --features rs-strategy
-    - cargo test --test json_protocol_tests --features rs-strategy
-    - cargo test --test protocol_negotiation_tests --features rs-strategy
+    - cargo test --features rs
+    - cargo test --test json_protocol_tests --features rs
+    - cargo test --test protocol_negotiation_tests --features rs
 ```
 
 ## Performance

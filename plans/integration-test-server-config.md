@@ -35,7 +35,7 @@ test-server = ["libindigo-sys"]
 **Purpose:**
 
 - Allows building INDIGO server for integration tests without runtime FFI dependencies
-- For RS builds: `cargo build --features "rs-strategy,test-server"` builds the server
+- For RS builds: `cargo build --features "rs,test-server"` builds the server
 - For FFI builds: Server is built automatically as part of regular build
 
 ### 3. CI/CD Workflow ([`.github/workflows/rust.yml`](../.github/workflows/rust.yml))
@@ -46,7 +46,7 @@ test-server = ["libindigo-sys"]
 - Added system dependencies needed to build INDIGO server
 - Added INDIGO build caching
 - New step: "Build INDIGO server for integration tests"
-  - Uses `--features "rs-strategy,test-server"` to build server
+  - Uses `--features "rs,test-server"` to build server
   - Verifies server binary exists
 - Updated integration test step to run without `INDIGO_TEST_SKIP_SERVER`
 
@@ -62,12 +62,12 @@ test-server = ["libindigo-sys"]
 
 ```bash
 # Build without test-server feature
-$ cargo build --no-default-features --features rs-strategy
+$ cargo build --no-default-features --features rs
 # ✓ No libindigo-sys compilation
 # ✓ No INDIGO FFI dependencies in binary
 
 # Build with test-server feature (for integration tests)
-$ cargo build --no-default-features --features "rs-strategy,test-server"
+$ cargo build --no-default-features --features "rs,test-server"
 # ✓ libindigo-sys compiles (build-time only)
 # ✓ INDIGO server built at sys/externals/indigo/build/bin/indigo_server
 # ✓ Still no runtime FFI dependencies in libindigo binary
@@ -76,7 +76,7 @@ $ cargo build --no-default-features --features "rs-strategy,test-server"
 ### ✅ Integration Tests Discover Built Server
 
 ```bash
-$ cargo test --no-default-features --features rs-strategy --test '*'
+$ cargo test --no-default-features --features rs --test '*'
 # Output shows:
 # [INDIGO] Found server in build directory: sys/externals/indigo/build/bin/indigo_server
 # ✓ 32 tests passed (5 failed due to unrelated tokio runtime issue)
@@ -97,10 +97,10 @@ $ ls -lh sys/externals/indigo/build/bin/indigo_server
 
 ```bash
 # 1. Build the INDIGO server (one-time or when INDIGO updates)
-cargo build --no-default-features --features "rs-strategy,test-server"
+cargo build --no-default-features --features "rs,test-server"
 
 # 2. Run integration tests (server will be discovered automatically)
-cargo test --no-default-features --features rs-strategy --test '*'
+cargo test --no-default-features --features rs --test '*'
 ```
 
 #### For FFI builds

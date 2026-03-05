@@ -40,9 +40,9 @@ Issues:
 Current features in [`Cargo.toml`](../Cargo.toml:81):
 
 ```toml
-default = ["async", "ffi-strategy", "sys", "std", "auto"]
-ffi-strategy = ["libindigo-sys"]
-rs-strategy = ["quick-xml", "tokio", "base64", "serde_json", "serde/derive"]
+default = ["async", "ffi", "sys", "std", "auto"]
+ffi = ["libindigo-sys"]
+rs = ["quick-xml", "tokio", "base64", "serde_json", "serde/derive"]
 ```
 
 Problems:
@@ -209,10 +209,10 @@ indigo-rs = { version = "0.2", path = "../indigo-rs", optional = true }
 indigo-ffi = { version = "0.2", path = "../indigo-ffi", optional = true }
 
 [features]
-default = ["rs-strategy"]
-rs-strategy = ["indigo-rs"]
-ffi-strategy = ["indigo-ffi"]
-async-ffi-strategy = ["indigo-ffi/async"]
+default = ["rs"]
+rs = ["indigo-rs"]
+ffi = ["indigo-ffi"]
+async-ffi = ["indigo-ffi/async"]
 ```
 
 **Usage Example**:
@@ -224,7 +224,7 @@ libindigo = "0.2"
 
 // FFI implementation
 [dependencies]
-libindigo = { version = "0.2", features = ["ffi-strategy"] }
+libindigo = { version = "0.2", features = ["ffi"] }
 ```
 
 ## Dependency Graph
@@ -398,11 +398,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```rust
 // Cargo.toml - Pure Rust
 [dependencies]
-libindigo = "0.2"  # defaults to rs-strategy
+libindigo = "0.2"  # defaults to rs
 
 // Cargo.toml - FFI
 [dependencies]
-libindigo = { version = "0.2", features = ["ffi-strategy"] }
+libindigo = { version = "0.2", features = ["ffi"] }
 
 // main.rs (same for both)
 use libindigo::{Client, ClientBuilder};

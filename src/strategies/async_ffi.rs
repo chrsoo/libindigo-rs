@@ -35,7 +35,7 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use tokio::sync::mpsc;
 
-#[cfg(feature = "ffi-strategy")]
+#[cfg(feature = "ffi")]
 use libindigo_sys::*;
 
 /// Channel capacity for property event streams.
@@ -50,7 +50,7 @@ const PROPERTY_CHANNEL_CAPACITY: usize = 100;
 ///
 /// The strategy uses `Arc<Mutex<>>` internally to ensure thread-safe access to FFI state
 /// from both async tasks and C callbacks.
-#[cfg(feature = "ffi-strategy")]
+#[cfg(feature = "ffi")]
 pub struct AsyncFfiStrategy {
     /// Shared state between async tasks and FFI callbacks.
     inner: Arc<Mutex<AsyncFfiInner>>,
@@ -58,7 +58,7 @@ pub struct AsyncFfiStrategy {
     property_rx: Option<mpsc::Receiver<Property>>,
 }
 
-#[cfg(feature = "ffi-strategy")]
+#[cfg(feature = "ffi")]
 struct AsyncFfiInner {
     /// FFI client structure.
     client: Option<Box<indigo_client>>,
@@ -68,7 +68,7 @@ struct AsyncFfiInner {
     connected: bool,
 }
 
-#[cfg(feature = "ffi-strategy")]
+#[cfg(feature = "ffi")]
 impl AsyncFfiStrategy {
     /// Creates a new async FFI client strategy.
     ///
@@ -119,14 +119,14 @@ impl AsyncFfiStrategy {
     }
 }
 
-#[cfg(feature = "ffi-strategy")]
+#[cfg(feature = "ffi")]
 impl Default for AsyncFfiStrategy {
     fn default() -> Self {
         Self::new()
     }
 }
 
-#[cfg(feature = "ffi-strategy")]
+#[cfg(feature = "ffi")]
 #[async_trait]
 impl ClientStrategy for AsyncFfiStrategy {
     /// Connects to an INDIGO server at the specified URL.
@@ -443,24 +443,24 @@ impl Stream for PropertyStream {
 }
 
 // Stub implementation when ffi-strategy feature is not enabled
-#[cfg(not(feature = "ffi-strategy"))]
+#[cfg(not(feature = "ffi"))]
 pub struct AsyncFfiStrategy;
 
-#[cfg(not(feature = "ffi-strategy"))]
+#[cfg(not(feature = "ffi"))]
 impl AsyncFfiStrategy {
     pub fn new() -> Self {
         AsyncFfiStrategy
     }
 }
 
-#[cfg(not(feature = "ffi-strategy"))]
+#[cfg(not(feature = "ffi"))]
 impl Default for AsyncFfiStrategy {
     fn default() -> Self {
         Self::new()
     }
 }
 
-#[cfg(not(feature = "ffi-strategy"))]
+#[cfg(not(feature = "ffi"))]
 #[async_trait]
 impl ClientStrategy for AsyncFfiStrategy {
     async fn connect(&mut self, _url: &str) -> Result<()> {
@@ -497,7 +497,7 @@ mod tests {
         let _strategy = AsyncFfiStrategy::new();
     }
 
-    #[cfg(feature = "ffi-strategy")]
+    #[cfg(feature = "ffi")]
     #[tokio::test]
     async fn test_connect_invalid_url() {
         let mut strategy = AsyncFfiStrategy::new();
@@ -505,7 +505,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[cfg(feature = "ffi-strategy")]
+    #[cfg(feature = "ffi")]
     #[tokio::test]
     async fn test_disconnect_when_not_connected() {
         let mut strategy = AsyncFfiStrategy::new();
@@ -513,7 +513,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[cfg(feature = "ffi-strategy")]
+    #[cfg(feature = "ffi")]
     #[tokio::test]
     async fn test_enumerate_when_not_connected() {
         let mut strategy = AsyncFfiStrategy::new();

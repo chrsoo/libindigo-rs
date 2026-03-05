@@ -636,35 +636,35 @@ tokio = { version = "1.35", features = ["full"] }
 name = "integration"
 path = "tests/integration/mod.rs"
 harness = true  # Use default test harness
-required-features = ["rs-strategy"]
+required-features = ["rs"]
 
 [[test]]
 name = "unit"
 path = "tests/unit/mod.rs"
 harness = true
-required-features = ["rs-strategy"]
+required-features = ["rs"]
 ```
 
 ### 4.4 Test Execution
 
 ```bash
 # Run all tests (unit + integration)
-cargo test --features rs-strategy
+cargo test --features rs
 
 # Run only unit tests (no server needed)
-cargo test --features rs-strategy --test unit
+cargo test --features rs --test unit
 
 # Run only integration tests (requires server)
-cargo test --features rs-strategy --test integration
+cargo test --features rs --test integration
 
 # Run specific integration test module
-cargo test --features rs-strategy --test integration json_protocol
+cargo test --features rs --test integration json_protocol
 
 # Run with verbose output
-cargo test --features rs-strategy -- --nocapture
+cargo test --features rs -- --nocapture
 
 # Run with single thread (for debugging)
-cargo test --features rs-strategy -- --test-threads=1
+cargo test --features rs -- --test-threads=1
 ```
 
 ---
@@ -1112,7 +1112,7 @@ export INDIGO_TEST_LOG_LEVEL=debug
 export RUST_LOG=libindigo=debug,test_harness=trace
 
 # Run tests with output
-cargo test --features rs-strategy -- --nocapture
+cargo test --features rs -- --nocapture
 ```
 
 ### 11.4 Server Output Capture
@@ -1206,7 +1206,7 @@ cargo test --test json_protocol_tests -- --ignored
 
 ```bash
 # Server starts automatically:
-cargo test --features rs-strategy --test integration
+cargo test --features rs --test integration
 ```
 
 ### 12.2 Migration Checklist
@@ -1218,7 +1218,7 @@ cargo test --features rs-strategy --test integration
 - [ ] Add module-level setup with `#[ctor::ctor]` if needed
 - [ ] Update documentation and comments
 - [ ] Update CI/CD scripts
-- [ ] Test migration with `cargo test --features rs-strategy`
+- [ ] Test migration with `cargo test --features rs`
 
 ### 12.3 Backward Compatibility
 
@@ -1644,14 +1644,14 @@ mod protocol_tests {
 
 ```bash
 export INDIGO_TEST_PORT=7625
-cargo test --features rs-strategy
+cargo test --features rs
 ```
 
 #### Example 2: Custom Drivers
 
 ```bash
 export INDIGO_TEST_DRIVERS="indigo_ccd_simulator,indigo_mount_simulator,indigo_wheel_simulator"
-cargo test --features rs-strategy
+cargo test --features rs
 ```
 
 #### Example 3: Use Existing Server
@@ -1660,7 +1660,7 @@ cargo test --features rs-strategy
 export INDIGO_TEST_SKIP_SERVER=true
 export INDIGO_TEST_SERVER_HOST=192.168.1.100
 export INDIGO_TEST_PORT=7624
-cargo test --features rs-strategy
+cargo test --features rs
 ```
 
 #### Example 4: Debug Mode
@@ -1668,7 +1668,7 @@ cargo test --features rs-strategy
 ```bash
 export INDIGO_TEST_LOG_LEVEL=debug
 export RUST_LOG=libindigo=debug,test_harness=trace
-cargo test --features rs-strategy -- --nocapture
+cargo test --features rs -- --nocapture
 ```
 
 ### 15.3 Appendix C: CI/CD Integration
@@ -1703,7 +1703,7 @@ jobs:
       - name: Run Integration Tests
         run: |
           export INDIGO_SERVER_PATH=/usr/local/bin/indigo_server
-          cargo test --features rs-strategy
+          cargo test --features rs
         env:
           RUST_BACKTRACE: 1
 
@@ -1730,7 +1730,7 @@ test:integration:
 
   script:
     - export INDIGO_SERVER_PATH=/usr/local/bin/indigo_server
-    - cargo test --features rs-strategy
+    - cargo test --features rs
 
   artifacts:
     when: always

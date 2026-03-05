@@ -211,9 +211,9 @@ graph TB
 
 ```toml
 [features]
-default = ["async", "ffi-strategy"]
+default = ["async", "ffi"]
 async = ["tokio"]
-ffi-strategy = ["libindigo-sys"]
+ffi = ["libindigo-sys"]
 pure-rust-strategy = ["quick-xml", "tokio"]
 blocking = []  # Sync wrappers around async
 ```
@@ -859,10 +859,10 @@ async fn main() -> Result<()> {
 ### Example 2: Strategy Selection at Compile Time
 
 ```rust
-#[cfg(feature = "ffi-strategy")]
+#[cfg(feature = "ffi")]
 type DefaultStrategy = FfiStrategy;
 
-#[cfg(all(feature = "pure-rust-strategy", not(feature = "ffi-strategy")))]
+#[cfg(all(feature = "pure-rust-strategy", not(feature = "ffi")))]
 type DefaultStrategy = RustStrategy;
 
 let client = IndigoClient::builder()

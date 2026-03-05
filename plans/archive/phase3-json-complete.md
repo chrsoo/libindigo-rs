@@ -352,16 +352,16 @@ pub fn detect_from_data(data: &[u8]) -> Option<ProtocolType> {
 
 ```bash
 # All JSON protocol tests
-cargo test --test json_protocol_tests --features rs-strategy
+cargo test --test json_protocol_tests --features rs
 
 # All protocol negotiation tests
-cargo test --test protocol_negotiation_tests --features rs-strategy
+cargo test --test protocol_negotiation_tests --features rs
 
 # All pure Rust tests (includes JSON tests)
-cargo test --features rs-strategy
+cargo test --features rs
 
 # Specific test
-cargo test --test json_protocol_tests test_protocols_md_get_properties --features rs-strategy
+cargo test --test json_protocol_tests test_protocols_md_get_properties --features rs
 ```
 
 ### Test Output Example

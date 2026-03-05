@@ -10,25 +10,25 @@
 //! runtime by choosing which strategy implementation to instantiate.
 
 // FFI strategy - available when ffi-strategy feature is enabled
-#[cfg(feature = "ffi-strategy")]
+#[cfg(feature = "ffi")]
 pub mod ffi;
 
 // Async FFI strategy - available when ffi-strategy and async features are enabled
-#[cfg(all(feature = "ffi-strategy", feature = "async"))]
+#[cfg(all(feature = "ffi", feature = "async"))]
 pub mod async_ffi;
 
 // Rust strategy - available when rs-strategy feature is enabled
-#[cfg(feature = "rs-strategy")]
+#[cfg(feature = "rs")]
 pub mod rs;
 
 // Re-export strategy implementations
-#[cfg(feature = "ffi-strategy")]
+#[cfg(feature = "ffi")]
 pub use ffi::FfiClientStrategy;
 
-#[cfg(all(feature = "ffi-strategy", feature = "async"))]
+#[cfg(all(feature = "ffi", feature = "async"))]
 pub use async_ffi::{AsyncFfiStrategy, PropertyStream};
 
-#[cfg(feature = "rs-strategy")]
+#[cfg(feature = "rs")]
 pub use rs::RsClientStrategy;
 
 // TODO: Phase 4 - Implement device strategies

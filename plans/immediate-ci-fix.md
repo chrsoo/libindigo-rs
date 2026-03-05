@@ -47,12 +47,12 @@ pub mod name {
 }
 
 // With this:
-#[cfg(any(feature = "ffi-strategy", feature = "sys", feature = "auto"))]
+#[cfg(any(feature = "ffi", feature = "sys", feature = "auto"))]
 pub mod name {
     include!(concat!(env!("OUT_DIR"), "/name.rs"));
 }
 
-#[cfg(not(any(feature = "ffi-strategy", feature = "sys", feature = "auto")))]
+#[cfg(not(any(feature = "ffi", feature = "sys", feature = "auto")))]
 pub mod name {
     include!("constants.rs");
 }
@@ -68,10 +68,10 @@ pub mod name {
 
 ```toml
 # Change this:
-default = ["async", "ffi-strategy", "sys", "std", "auto"]
+default = ["async", "ffi", "sys", "std", "auto"]
 
 # To this:
-default = ["async", "ffi-strategy", "sys", "std"]
+default = ["async", "ffi", "sys", "std"]
 # auto = ["zeroconf"]  # Keep as optional feature
 ```
 
@@ -150,7 +150,7 @@ fn main() -> std::io::Result<()> {
 **Step 4**: Update `src/lib.rs` for interface
 
 ```rust
-#[cfg(any(feature = "ffi-strategy", feature = "sys"))]
+#[cfg(any(feature = "ffi", feature = "sys"))]
 include!(concat!(env!("OUT_DIR"), "/interface.rs"));
 ```
 
@@ -195,7 +195,7 @@ pub mod name {
 }
 
 // Around line 181 - make conditional
-#[cfg(any(feature = "ffi-strategy", feature = "sys"))]
+#[cfg(any(feature = "ffi", feature = "sys"))]
 include!(concat!(env!("OUT_DIR"), "/interface.rs"));
 ```
 
@@ -207,7 +207,7 @@ Already done in commit `6606589` ✅
 
 ```toml
 [features]
-default = ["async", "ffi-strategy", "sys", "std"]  # Remove "auto"
+default = ["async", "ffi", "sys", "std"]  # Remove "auto"
 ```
 
 ### Step 5: Update CI Workflow
@@ -218,10 +218,10 @@ Add glib development packages to FFI build job.
 
 ```bash
 # Test pure Rust build
-cargo build --no-default-features --features rs-strategy
+cargo build --no-default-features --features rs
 
 # Test FFI build
-cargo build --features ffi-strategy
+cargo build --features ffi
 
 # Test default build
 cargo build

@@ -364,19 +364,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```bash
 # Run all pure Rust tests (includes 120 JSON protocol tests)
-cargo test --features rs-strategy
+cargo test --features rs
 
 # JSON protocol tests only (61 tests)
-cargo test --test json_protocol_tests --features rs-strategy
+cargo test --test json_protocol_tests --features rs
 
 # Protocol negotiation tests only (59 tests)
-cargo test --test protocol_negotiation_tests --features rs-strategy
+cargo test --test protocol_negotiation_tests --features rs
 
 # Run protocol compliance tests
-cargo test --test rs_protocol_compliance --features rs-strategy
+cargo test --test rs_protocol_compliance --features rs
 
 # Run integration tests (requires INDIGO server)
-cargo test --test rs_client_integration --features rs-strategy
+cargo test --test rs_client_integration --features rs
 ```
 
 ### JSON Protocol Test Details
@@ -512,7 +512,7 @@ let client = ClientBuilder::new()
 
 ```bash
 # Generate and view documentation
-cargo doc --no-deps --features rs-strategy --open
+cargo doc --no-deps --features rs --open
 ```
 
 ## Compliance

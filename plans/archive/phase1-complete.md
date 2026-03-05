@@ -22,16 +22,16 @@ Added new dependencies for modern Rust patterns:
 
 ```toml
 [features]
-default = ["async", "ffi-strategy", "sys", "std", "auto"]
+default = ["async", "ffi", "sys", "std", "auto"]
 async = ["tokio"]
-ffi-strategy = ["libindigo-sys"]
-rs-strategy = ["quick-xml", "tokio"]
+ffi = ["libindigo-sys"]
+rs = ["quick-xml", "tokio"]
 blocking = []
 ```
 
 - `async` - Enables async/await support
-- `ffi-strategy` - FFI-based implementation (Phase 2)
-- `rs-strategy` - Pure Rust implementation (Phase 3)
+- `ffi` - FFI-based implementation (Phase 2)
+- `rs` - Pure Rust implementation (Phase 3)
 - `blocking` - Sync wrappers (Phase 5)
 
 ### 3. New Module Structure
@@ -68,7 +68,7 @@ pub enum IndigoError {
     #[error("Protocol error: {0}")]
     ProtocolError(String),
 
-    #[cfg(feature = "ffi-strategy")]
+    #[cfg(feature = "ffi")]
     #[error("FFI error: {0}")]
     FfiError(String),
 
@@ -132,14 +132,14 @@ Both return `NotSupported` errors with clear messages about which phase will imp
 - Added new API exports with comprehensive documentation
 - Created [`prelude`](src/lib.rs:49) module for convenient imports
 - Marked old API as deprecated with migration hints
-- Made old code conditional on `ffi-strategy` feature to avoid conflicts
+- Made old code conditional on `ffi` feature to avoid conflicts
 
 ## Compilation Status
 
 ✅ **Successfully compiles** with the following feature combination:
 
 ```bash
-cargo check --no-default-features --features async,ffi-strategy
+cargo check --no-default-features --features async,ffi
 ```
 
 The build completes with only warnings (97 warnings from deprecated code), no errors.
@@ -150,7 +150,7 @@ The build completes with only warnings (97 warnings from deprecated code), no er
 
 Used `rs` instead of `pure_rust` for consistency:
 
-- Feature: `rs-strategy`
+- Feature: `rs`
 - Module: `strategies::rs`
 - Type: `RsClientStrategy`
 
@@ -267,13 +267,13 @@ To verify the implementation:
 
 ```bash
 # Check compilation
-cargo check --no-default-features --features async,ffi-strategy
+cargo check --no-default-features --features async,ffi
 
 # Check documentation
-cargo doc --no-default-features --features async,ffi-strategy --open
+cargo doc --no-default-features --features async,ffi --open
 
 # View new API
-cargo doc --no-default-features --features async,ffi-strategy --document-private-items
+cargo doc --no-default-features --features async,ffi --document-private-items
 ```
 
 ## Conclusion
