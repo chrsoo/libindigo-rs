@@ -2,19 +2,27 @@
 
 Rust API for writing client applications and device drivers for astronomy equipment using the [INDIGO](https://www.indigo-astronomy.org/index.html) protocol and architecture.
 
-> [!NOTE]
-> **Phase 3 Complete!** ✅ The pure Rust client strategy is now fully implemented and production-ready with **JSON and XML protocol support**. See [plans/archive/phase3-complete.md](plans/archive/phase3-complete.md) for details.
+## Goal
 
-## Implementation Status
+- A pure Rust API that is 100% compatible with the INDIGO platform and its default C-implementation
 
-- ✅ **Phase 1**: Foundation & Core Types (Complete) - [Details](plans/archive/phase1-complete.md)
-- ✅ **Phase 2**: Async FFI Strategy (Complete) - [Details](plans/archive/phase2-complete.md)
-- ✅ **Phase 3**: Rust Client Strategy (Complete) - [Details](plans/archive/phase3-complete.md)
-- 🚧 **Phase 4**: Device Driver Support (Planned)
+## Objectives
 
-## Features
+- Provide an API that uses idiomatic Rust for integrating with the INDIGO Bus.
+- Provide a Service Provider Interface (SPI) for decoupling the API from its implementation.
+- Provide a default RS (Rust) implementation of the SPI without any FFI bindings to the INDIGO C-libraries or other non-rust dependencies.
+- Provide an FFI implementation of the SPI that uses the INDIGO C-library with any necessary dependencies.
 
-### Rust Strategy (Phase 3) ✅
+## Solution
+
+- A `libindigo-core` library crate that defines the INDIGO Rust API and SPI without any FFI dependencies.
+- The Core library only contains a strict minimum of Rust dependencies required for implementing INDIGO Clients, Devices, and Agents using the API and does not rely on any FFI bindings.
+- The SPI allows for multiple implementations and selection using the Strategy Pattern.
+- The RS and FFI SPI implementations reexports the Core API thus allowing developers to add the RS or FFI library as a dependency without explicitly declaring a `libindigo-core` dependency.
+- Selecting one of the two features automatically connects the API with the SPI implementation.
+- Selecting both features allows a developer to implement code to switch from one SPI implementation to the other.
+
+### Rust Strategy
 
 The pure Rust strategy provides a complete INDIGO client implementation without C FFI dependencies:
 
@@ -25,7 +33,7 @@ The pure Rust strategy provides a complete INDIGO client implementation without 
 - **Dual Protocol**: Full INDIGO JSON and XML protocol support with automatic negotiation
 - **JSON-First**: Defaults to modern JSON protocol with XML fallback
 
-### FFI Strategy (Phase 2) ✅
+### FFI Strategy
 
 The FFI strategy wraps the official C INDIGO library:
 
