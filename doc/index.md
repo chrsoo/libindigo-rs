@@ -142,7 +142,7 @@ See [CHANGES.md](../CHANGES.md) for complete roadmap.
 cargo test --features rs --lib
 
 # FFI strategy
-cargo test --features ffi --lib
+cargo test --features ffi-strategy --lib
 ```
 
 ### Integration Tests
@@ -152,7 +152,7 @@ cargo test --features ffi --lib
 cargo test --features rs --test '*'
 
 # FFI strategy (requires INDIGO server)
-cargo test --features ffi --test '*'
+cargo test --features ffi-strategy --test '*'
 ```
 
 See [Testing Guide](../tests/README.md) for details.
