@@ -2,7 +2,7 @@
 
 ## Format
 
-```
+```text
 <type>: <summary (max 72 characters)>
 
 <optional body>
@@ -28,7 +28,8 @@
 ## Examples
 
 Good:
-```
+
+```text
 feat: Add timeout handling to integration tests
 
 - Add 5-second timeout wrappers around connection attempts
@@ -36,7 +37,8 @@ feat: Add timeout handling to integration tests
 ```
 
 Bad:
-```
+
+```text
 ❌ Update CI/CD pipeline for pure Rust and FFI strategies with comprehensive configuration...
 (Too long - exceeds 72 characters)
 
