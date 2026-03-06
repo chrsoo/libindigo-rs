@@ -6,56 +6,35 @@
 //! # Example
 //!
 //! ```ignore
-//! use libindigo::client::ClientBuilder;
+//! use libindigo::client::{ClientBuilder, ClientStrategy};
 //!
-//! #[tokio::main]
-//! async fn main() -> libindigo::Result<()> {
-//!     let client = ClientBuilder::new()
-//!         .with_async_ffi_strategy()
-//!         .build()?;
-//!
-//!     // Use the client...
-//!     Ok(())
-//! }
+//! // Strategy implementations are provided by libindigo-rs or libindigo-ffi
+//! let strategy: Box<dyn ClientStrategy> = // ... get from implementation crate
+//! let client = ClientBuilder::new()
+//!     .with_strategy(strategy)
+//!     .build()?;
 //! ```
 
 use crate::client::ClientStrategy;
 use crate::error::{IndigoError, Result};
 
-#[cfg(all(feature = "ffi", feature = "async"))]
-use crate::strategies::AsyncFfiStrategy;
-
-#[cfg(feature = "ffi")]
-use crate::strategies::FfiClientStrategy;
-
 /// Builder for constructing INDIGO clients.
 ///
 /// The builder provides a fluent API for configuring and creating clients
-/// with different strategies and options.
+/// with different strategies. Strategy implementations are provided by
+/// separate crates (`libindigo-rs` for pure Rust, `libindigo-ffi` for FFI-based).
 ///
 /// # Example
 ///
 /// ```ignore
 /// use libindigo::client::ClientBuilder;
 ///
-/// # #[tokio::main]
-/// # async fn main() -> libindigo::Result<()> {
-/// // Create a client with async FFI strategy
 /// let client = ClientBuilder::new()
-///     .with_async_ffi_strategy()
+///     .with_strategy(my_strategy)
 ///     .build()?;
-///
-/// // Create a client with synchronous FFI strategy
-/// let client = ClientBuilder::new()
-///     .with_ffi_strategy()
-///     .build()?;
-/// # Ok(())
-/// # }
 /// ```
 pub struct ClientBuilder {
     strategy: Option<Box<dyn ClientStrategy>>,
-    #[cfg(feature = "rs")]
-    protocol_preference: Option<(crate::strategies::rs::ProtocolType, bool)>,
 }
 
 impl ClientBuilder {
@@ -69,257 +48,15 @@ impl ClientBuilder {
     /// let builder = ClientBuilder::new();
     /// ```
     pub fn new() -> Self {
-        ClientBuilder {
-            strategy: None,
-            #[cfg(feature = "rs")]
-            protocol_preference: None,
-        }
+        ClientBuilder { strategy: None }
     }
 
-    /// Configures the client to use the async FFI strategy.
+    /// Sets the strategy implementation for the client.
     ///
-    /// This strategy wraps synchronous FFI calls in `tokio::task::spawn_blocking`
-    /// for non-blocking operation.
-    ///
-    /// # Availability
-    ///
-    /// This method is only available when both the `ffi` and `async`
-    /// features are enabled.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// use libindigo::client::ClientBuilder;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> libindigo::Result<()> {
-    /// let client = ClientBuilder::new()
-    ///     .with_async_ffi_strategy()
-    ///     .build()?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(all(feature = "ffi", feature = "async"))]
-    pub fn with_async_ffi_strategy(mut self) -> Self {
-        self.strategy = Some(Box::new(AsyncFfiStrategy::new()));
-        self
-    }
-
-    /// Configures the client to use the synchronous FFI strategy.
-    ///
-    /// This strategy directly calls the C INDIGO library via FFI.
-    ///
-    /// # Availability
-    ///
-    /// This method is only available when the `ffi-strategy` feature is enabled.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// use libindigo::client::ClientBuilder;
-    ///
-    /// let client = ClientBuilder::new()
-    ///     .with_ffi_strategy()
-    ///     .build()?;
-    /// ```
-    #[cfg(feature = "ffi")]
-    pub fn with_ffi_strategy(mut self) -> Self {
-        self.strategy = Some(Box::new(FfiClientStrategy::new()));
-        self
-    }
-
-    /// Configures the client to use the Rust strategy.
-    ///
-    /// This strategy implements the INDIGO protocol entirely in Rust without FFI.
-    /// It provides a complete INDIGO client implementation with zero C dependencies.
-    ///
-    /// # Availability
-    ///
-    /// This method is only available when the `rs-strategy` feature is enabled.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// use libindigo::client::ClientBuilder;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> libindigo::error::Result<()> {
-    /// let client = ClientBuilder::new()
-    ///     .with_rs_strategy()
-    ///     .build()?;
-    ///
-    /// client.connect("localhost:7624").await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(feature = "rs")]
-    pub fn with_rs_strategy(mut self) -> Self {
-        let strategy = if let Some((protocol, fallback)) = self.protocol_preference {
-            let negotiator = crate::strategies::rs::ProtocolNegotiator::new(protocol, fallback);
-            crate::strategies::RsClientStrategy::with_protocol_negotiator(negotiator)
-        } else {
-            crate::strategies::RsClientStrategy::new()
-        };
-        self.strategy = Some(Box::new(strategy));
-        self
-    }
-
-    /// Configures the client to use the Rust strategy (legacy alias).
-    ///
-    /// This is an alias for [`with_rs_strategy`](Self::with_rs_strategy)
-    /// for backward compatibility.
-    ///
-    /// # Availability
-    ///
-    /// This method is only available when the `rs-strategy` feature is enabled.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// use libindigo::client::ClientBuilder;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> libindigo::error::Result<()> {
-    /// let client = ClientBuilder::new()
-    ///     .with_rs_strategy()
-    ///     .build()?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(feature = "rs")]
-    #[deprecated(since = "0.1.3", note = "Use `with_rs_strategy()` instead")]
-    pub fn with_pure_rust_strategy(mut self) -> Self {
-        let strategy = if let Some((protocol, fallback)) = self.protocol_preference {
-            let negotiator = crate::strategies::rs::ProtocolNegotiator::new(protocol, fallback);
-            crate::strategies::RsClientStrategy::with_protocol_negotiator(negotiator)
-        } else {
-            crate::strategies::RsClientStrategy::new()
-        };
-        self.strategy = Some(Box::new(strategy));
-        self
-    }
-
-    /// Configures the protocol preference for Rust strategy.
-    ///
-    /// This sets the preferred protocol (JSON or XML) and whether to enable
-    /// fallback to the alternate protocol. This only affects the Rust strategy.
-    ///
-    /// **Note**: This must be called before `with_rs_strategy()`.
-    ///
-    /// # Availability
-    ///
-    /// This method is only available when the `rs-strategy` feature is enabled.
-    ///
-    /// # Arguments
-    ///
-    /// * `protocol` - The preferred protocol type (JSON or XML)
-    /// * `fallback_enabled` - Whether to fall back to alternate protocol if preferred fails
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// use libindigo::client::ClientBuilder;
-    /// use libindigo::strategies::rs::ProtocolType;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> libindigo::error::Result<()> {
-    /// // JSON-first with XML fallback (recommended)
-    /// let client = ClientBuilder::new()
-    ///     .with_protocol_preference(ProtocolType::Json, true)
-    ///     .with_rs_strategy()
-    ///     .build()?;
-    ///
-    /// // JSON-only (no fallback)
-    /// let client = ClientBuilder::new()
-    ///     .with_protocol_preference(ProtocolType::Json, false)
-    ///     .with_rs_strategy()
-    ///     .build()?;
-    ///
-    /// // XML-only
-    /// let client = ClientBuilder::new()
-    ///     .with_protocol_preference(ProtocolType::Xml, false)
-    ///     .with_rs_strategy()
-    ///     .build()?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(feature = "rs")]
-    pub fn with_protocol_preference(
-        mut self,
-        protocol: crate::strategies::rs::ProtocolType,
-        fallback_enabled: bool,
-    ) -> Self {
-        self.protocol_preference = Some((protocol, fallback_enabled));
-        self
-    }
-
-    /// Configures the client to use JSON protocol (with XML fallback).
-    ///
-    /// This is a convenience method equivalent to:
-    /// ```ignore
-    /// builder.with_protocol_preference(ProtocolType::Json, true)
-    /// ```
-    ///
-    /// **Note**: This must be called before `with_rs_strategy()`.
-    ///
-    /// # Availability
-    ///
-    /// This method is only available when the `rs-strategy` feature is enabled.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// use libindigo::client::ClientBuilder;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> libindigo::error::Result<()> {
-    /// let client = ClientBuilder::new()
-    ///     .with_json_protocol()
-    ///     .with_rs_strategy()
-    ///     .build()?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(feature = "rs")]
-    pub fn with_json_protocol(self) -> Self {
-        self.with_protocol_preference(crate::strategies::rs::ProtocolType::Json, true)
-    }
-
-    /// Configures the client to use XML protocol only.
-    ///
-    /// This is a convenience method equivalent to:
-    /// ```ignore
-    /// builder.with_protocol_preference(ProtocolType::Xml, false)
-    /// ```
-    ///
-    /// **Note**: This must be called before `with_rs_strategy()`.
-    ///
-    /// # Availability
-    ///
-    /// This method is only available when the `rs-strategy` feature is enabled.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// use libindigo::client::ClientBuilder;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> libindigo::error::Result<()> {
-    /// let client = ClientBuilder::new()
-    ///     .with_xml_protocol()
-    ///     .with_rs_strategy()
-    ///     .build()?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(feature = "rs")]
-    pub fn with_xml_protocol(self) -> Self {
-        self.with_protocol_preference(crate::strategies::rs::ProtocolType::Xml, false)
-    }
-
-    /// Configures the client with a custom strategy.
-    ///
-    /// This allows using a custom implementation of the [`ClientStrategy`] trait.
+    /// The strategy determines how the client communicates with INDIGO servers.
+    /// Strategy implementations are provided by:
+    /// - `libindigo-rs` - Pure Rust implementation
+    /// - `libindigo-ffi` - FFI-based implementation using C INDIGO library
     ///
     /// # Arguments
     ///
@@ -328,13 +65,11 @@ impl ClientBuilder {
     /// # Example
     ///
     /// ```ignore
-    /// use libindigo::client::{ClientBuilder, ClientStrategy};
+    /// use libindigo::client::ClientBuilder;
     ///
-    /// struct MyStrategy;
-    /// // ... implement ClientStrategy for MyStrategy ...
-    ///
+    /// let strategy = // ... get from implementation crate
     /// let client = ClientBuilder::new()
-    ///     .with_strategy(Box::new(MyStrategy))
+    ///     .with_strategy(strategy)
     ///     .build()?;
     /// ```
     pub fn with_strategy(mut self, strategy: Box<dyn ClientStrategy>) -> Self {
@@ -353,329 +88,56 @@ impl ClientBuilder {
     /// ```ignore
     /// use libindigo::client::ClientBuilder;
     ///
-    /// # #[tokio::main]
-    /// # async fn main() -> libindigo::Result<()> {
     /// let client = ClientBuilder::new()
-    ///     .with_async_ffi_strategy()
+    ///     .with_strategy(my_strategy)
     ///     .build()?;
-    /// # Ok(())
-    /// # }
     /// ```
     pub fn build(self) -> Result<Client> {
-        let strategy = self.strategy.ok_or_else(|| {
-            IndigoError::InvalidState(
-                "No strategy configured. Call one of the with_*_strategy() methods.".to_string(),
-            )
-        })?;
+        let strategy = self
+            .strategy
+            .ok_or_else(|| IndigoError::InvalidParameter("No strategy configured".to_string()))?;
 
-        Ok(Client::new(strategy))
+        Ok(Client { strategy })
     }
 }
 
 impl Default for ClientBuilder {
-    /// Creates a new client builder with default settings.
-    ///
-    /// This is equivalent to calling [`ClientBuilder::new()`].
     fn default() -> Self {
         Self::new()
     }
 }
 
-/// INDIGO client for interacting with INDIGO servers.
+/// An INDIGO client that communicates with INDIGO servers.
 ///
-/// The client uses a strategy pattern to support different implementations
-/// (FFI-based, Rust, etc.). Use [`ClientBuilder`] to construct a client.
+/// The client is constructed using [`ClientBuilder`] and uses a strategy
+/// implementation to handle the actual communication.
 ///
 /// # Example
 ///
 /// ```ignore
-/// use libindigo::client::ClientBuilder;
-/// use futures::StreamExt;
+/// use libindigo::client::{Client, ClientBuilder};
 ///
-/// #[tokio::main]
-/// async fn main() -> libindigo::Result<()> {
-///     let mut client = ClientBuilder::new()
-///         .with_async_ffi_strategy()
-///         .build()?;
-///
-///     // Connect to server
-///     client.connect("localhost:7624").await?;
-///
-///     // Enumerate properties
-///     client.enumerate_properties(None).await?;
-///
-///     // Disconnect
-///     client.disconnect().await?;
-///
-///     Ok(())
-/// }
+/// let client = ClientBuilder::new()
+///     .with_strategy(my_strategy)
+///     .build()?;
 /// ```
 pub struct Client {
     strategy: Box<dyn ClientStrategy>,
 }
 
 impl Client {
-    /// Creates a new client with the given strategy.
+    /// Returns a reference to the client's strategy.
     ///
-    /// Most users should use [`ClientBuilder`] instead of calling this directly.
-    ///
-    /// # Arguments
-    ///
-    /// * `strategy` - The strategy implementation to use
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// use libindigo::client::Client;
-    /// use libindigo::strategies::AsyncFfiStrategy;
-    ///
-    /// let client = Client::new(Box::new(AsyncFfiStrategy::new()));
-    /// ```
-    pub fn new(strategy: Box<dyn ClientStrategy>) -> Self {
-        Client { strategy }
-    }
-
-    /// Connects to an INDIGO server at the specified URL.
-    ///
-    /// # Arguments
-    ///
-    /// * `url` - Server URL in the format "host:port" (e.g., "localhost:7624")
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the connection fails.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// # use libindigo::client::ClientBuilder;
-    /// # #[tokio::main]
-    /// # async fn main() -> libindigo::Result<()> {
-    /// let mut client = ClientBuilder::new()
-    ///     .with_async_ffi_strategy()
-    ///     .build()?;
-    ///
-    /// client.connect("localhost:7624").await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn connect(&mut self, url: &str) -> Result<()> {
-        self.strategy.connect(url).await
-    }
-
-    /// Disconnects from the INDIGO server.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if disconnection fails or if not currently connected.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// # use libindigo::client::ClientBuilder;
-    /// # #[tokio::main]
-    /// # async fn main() -> libindigo::Result<()> {
-    /// let mut client = ClientBuilder::new()
-    ///     .with_async_ffi_strategy()
-    ///     .build()?;
-    ///
-    /// client.connect("localhost:7624").await?;
-    /// client.disconnect().await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn disconnect(&mut self) -> Result<()> {
-        self.strategy.disconnect().await
-    }
-
-    /// Requests enumeration of properties from the server.
-    ///
-    /// # Arguments
-    ///
-    /// * `device` - Optional device name to enumerate properties for.
-    ///   If `None`, enumerates properties for all devices.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the request fails.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// # use libindigo::client::ClientBuilder;
-    /// # #[tokio::main]
-    /// # async fn main() -> libindigo::Result<()> {
-    /// let mut client = ClientBuilder::new()
-    ///     .with_async_ffi_strategy()
-    ///     .build()?;
-    ///
-    /// client.connect("localhost:7624").await?;
-    ///
-    /// // Enumerate all properties
-    /// client.enumerate_properties(None).await?;
-    ///
-    /// // Enumerate properties for a specific device
-    /// client.enumerate_properties(Some("CCD Simulator")).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn enumerate_properties(&mut self, device: Option<&str>) -> Result<()> {
-        self.strategy.enumerate_properties(device).await
-    }
-
-    /// Sends a property update to the server.
-    ///
-    /// # Arguments
-    ///
-    /// * `property` - The property to send
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if sending fails.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// # use libindigo::client::ClientBuilder;
-    /// # use libindigo::types::{Property, PropertyType};
-    /// # #[tokio::main]
-    /// # async fn main() -> libindigo::Result<()> {
-    /// let mut client = ClientBuilder::new()
-    ///     .with_async_ffi_strategy()
-    ///     .build()?;
-    ///
-    /// client.connect("localhost:7624").await?;
-    ///
-    /// let property = Property::builder()
-    ///     .device("CCD Simulator")
-    ///     .name("CONNECTION")
-    ///     .property_type(PropertyType::Switch)
-    ///     .build();
-    ///
-    /// client.send_property(property).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn send_property(&mut self, property: crate::types::Property) -> Result<()> {
-        self.strategy.send_property(property).await
-    }
-
-    /// Returns a reference to the underlying strategy.
-    ///
-    /// This can be used to access strategy-specific functionality.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// # use libindigo::client::ClientBuilder;
-    /// # #[tokio::main]
-    /// # async fn main() -> libindigo::Result<()> {
-    /// let client = ClientBuilder::new()
-    ///     .with_async_ffi_strategy()
-    ///     .build()?;
-    ///
-    /// let strategy = client.strategy();
-    /// # Ok(())
-    /// # }
-    /// ```
+    /// This allows direct access to strategy-specific functionality.
     pub fn strategy(&self) -> &dyn ClientStrategy {
-        self.strategy.as_ref()
+        &*self.strategy
     }
 
-    /// Returns a mutable reference to the underlying strategy.
+    /// Returns a mutable reference to the client's strategy.
     ///
-    /// This can be used to access strategy-specific functionality.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// # use libindigo::client::ClientBuilder;
-    /// # #[tokio::main]
-    /// # async fn main() -> libindigo::Result<()> {
-    /// let mut client = ClientBuilder::new()
-    ///     .with_async_ffi_strategy()
-    ///     .build()?;
-    ///
-    /// let strategy = client.strategy_mut();
-    /// # Ok(())
-    /// # }
-    /// ```
+    /// This allows direct access to strategy-specific functionality.
     pub fn strategy_mut(&mut self) -> &mut dyn ClientStrategy {
-        self.strategy.as_mut()
-    }
-
-    /// Discovers INDIGO servers on the local network.
-    ///
-    /// This is a convenience method that performs one-shot server discovery
-    /// using default configuration (5 second timeout).
-    ///
-    /// # Availability
-    ///
-    /// This method is only available when the `auto` feature is enabled.
-    ///
-    /// # Returns
-    ///
-    /// A list of discovered servers, or an error if discovery fails.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// use libindigo::client::Client;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> libindigo::Result<()> {
-    /// let servers = Client::discover_servers().await?;
-    /// for server in servers {
-    ///     println!("Found: {} at {}", server.name, server.url());
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(feature = "auto")]
-    pub async fn discover_servers() -> Result<Vec<crate::discovery::DiscoveredServer>> {
-        crate::discovery::ServerDiscoveryApi::discover(crate::discovery::DiscoveryConfig::new())
-            .await
-    }
-
-    /// Discovers INDIGO servers with custom configuration.
-    ///
-    /// This method allows you to customize the discovery behavior using
-    /// a [`DiscoveryConfig`](crate::discovery::DiscoveryConfig).
-    ///
-    /// # Availability
-    ///
-    /// This method is only available when the `auto` feature is enabled.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - Discovery configuration
-    ///
-    /// # Returns
-    ///
-    /// A list of discovered servers, or an error if discovery fails.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// use libindigo::client::Client;
-    /// use libindigo::discovery::DiscoveryConfig;
-    /// use std::time::Duration;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> libindigo::Result<()> {
-    /// let config = DiscoveryConfig::new()
-    ///     .timeout(Duration::from_secs(10))
-    ///     .filter(|server| server.name.contains("Observatory"));
-    ///
-    /// let servers = Client::discover_servers_with_config(config).await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[cfg(feature = "auto")]
-    pub async fn discover_servers_with_config(
-        config: crate::discovery::DiscoveryConfig,
-    ) -> Result<Vec<crate::discovery::DiscoveredServer>> {
-        crate::discovery::ServerDiscoveryApi::discover(config).await
+        &mut *self.strategy
     }
 }
 
@@ -684,34 +146,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_builder_without_strategy_fails() {
+    fn test_builder_requires_strategy() {
         let result = ClientBuilder::new().build();
         assert!(result.is_err());
-    }
-
-    #[cfg(all(feature = "ffi", feature = "async"))]
-    #[test]
-    fn test_builder_with_async_ffi_strategy() {
-        let result = ClientBuilder::new().with_async_ffi_strategy().build();
-        assert!(result.is_ok());
-    }
-
-    #[cfg(feature = "ffi")]
-    #[test]
-    fn test_builder_with_ffi_strategy() {
-        let result = ClientBuilder::new().with_ffi_strategy().build();
-        assert!(result.is_ok());
-    }
-
-    #[cfg(all(feature = "ffi", feature = "async"))]
-    #[tokio::test]
-    async fn test_client_connect_invalid_url() {
-        let mut client = ClientBuilder::new()
-            .with_async_ffi_strategy()
-            .build()
-            .unwrap();
-
-        let result = client.connect("invalid").await;
-        assert!(result.is_err());
+        assert!(matches!(result, Err(IndigoError::InvalidParameter(_))));
     }
 }

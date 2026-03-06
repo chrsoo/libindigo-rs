@@ -3,12 +3,55 @@ use gtk::{
     prelude::*,
     EntryBuffer, Frame, Label, SizeGroup,
 };
-use libindigo::{
-    property::{PropertyData, PropertyItem, PropertyValue},
-    BlobItem, LightItem, NamedObject as _, NumberItem, Property, PropertyType, SwitchItem as _,
-    TextItem,
-};
+
+// Temporarily disabled - old API types no longer exist
+// use libindigo::{
+//     property::{PropertyData, PropertyItem, PropertyValue},
+//     BlobItem, LightItem, NamedObject as _, NumberItem, Property, PropertyType, SwitchItem as _,
+//     TextItem,
+// };
+
+// TODO: Update to use new API types:
+// use libindigo::types::{Property, PropertyValue, PropertyType};
+
 use log::warn;
+
+// Placeholder types for compilation
+type PropertyData = ();
+type PropertyItem = ();
+#[derive(Clone)]
+enum PropertyValue {
+    Text(TextPlaceholder),
+    Number(NumberPlaceholder),
+    Light(LightPlaceholder),
+    Switch(SwitchPlaceholder),
+    Blob(BlobPlaceholder),
+}
+#[derive(Clone)]
+struct TextPlaceholder;
+impl TextPlaceholder {
+    fn value(&self) -> &str {
+        ""
+    }
+}
+#[derive(Clone)]
+struct NumberPlaceholder;
+impl NumberPlaceholder {
+    fn formatted_number(&self) -> String {
+        String::new()
+    }
+}
+#[derive(Clone)]
+struct LightPlaceholder;
+#[derive(Clone)]
+struct SwitchPlaceholder;
+impl SwitchPlaceholder {
+    fn on(&self) -> bool {
+        false
+    }
+}
+#[derive(Clone)]
+struct BlobPlaceholder;
 use relm4::{
     factory::{FactoryHashMap, FactoryVecDequeBuilder, FactoryView},
     gtk,

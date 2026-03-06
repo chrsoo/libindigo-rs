@@ -1,21 +1,21 @@
-//! Server discovery API for INDIGO servers using ZeroConf/Bonjour.
+//! Server discovery API for INDIGO servers using mDNS.
 //!
 //! This module provides automatic discovery of INDIGO servers on the local network
-//! using mDNS/DNS-SD (ZeroConf/Bonjour). It supports both one-shot discovery and
-//! continuous monitoring for server changes.
+//! using mDNS/DNS-SD. It supports both one-shot discovery and continuous monitoring
+//! for server changes.
 //!
 //! # Feature Flag
 //!
-//! This module is only available when the `auto` feature is enabled.
+//! This module is only available when the `discovery` feature is enabled.
 //!
 //! # Example: One-Shot Discovery
 //!
 //! ```ignore
-//! use libindigo::discovery::{DiscoveryConfig, ServerDiscoveryApi};
+//! use libindigo_rs::discovery::{DiscoveryConfig, ServerDiscoveryApi};
 //! use std::time::Duration;
 //!
 //! #[tokio::main]
-//! async fn main() -> libindigo::error::Result<()> {
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let config = DiscoveryConfig::new()
 //!         .timeout(Duration::from_secs(5));
 //!
@@ -32,10 +32,10 @@
 //! # Example: Continuous Discovery
 //!
 //! ```ignore
-//! use libindigo::discovery::{DiscoveryConfig, DiscoveryEvent, ServerDiscoveryApi};
+//! use libindigo_rs::discovery::{DiscoveryConfig, DiscoveryEvent, ServerDiscoveryApi};
 //!
 //! #[tokio::main]
-//! async fn main() -> libindigo::error::Result<()> {
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let config = DiscoveryConfig::continuous();
 //!     let mut discovery = ServerDiscoveryApi::start_continuous(config).await?;
 //!
@@ -61,9 +61,7 @@ use std::time::{Duration, SystemTime};
 
 mod api;
 mod error;
-
-#[cfg(feature = "auto")]
-mod zeroconf_impl;
+mod mdns_impl;
 
 pub use api::{ServerDiscovery, ServerDiscoveryApi};
 pub use error::DiscoveryError;
@@ -129,7 +127,7 @@ pub enum DiscoveryMode {
 /// # Example
 ///
 /// ```ignore
-/// use libindigo::discovery::DiscoveryConfig;
+/// use libindigo_rs::discovery::DiscoveryConfig;
 /// use std::time::Duration;
 ///
 /// let config = DiscoveryConfig::new()

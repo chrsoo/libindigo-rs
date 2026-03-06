@@ -1,9 +1,18 @@
 use gtk::prelude::*;
-use libindigo::property::PropertyData;
-use libindigo::property::PropertyItem;
-use libindigo::NamedObject;
+// Temporarily disabled - old API types no longer exist
+// use libindigo::property::PropertyData;
+// use libindigo::property::PropertyItem;
+// use libindigo::NamedObject;
+
+// TODO: Update to use new API types:
+// use libindigo::types::{Property, PropertyValue};
+
 use log::debug;
 use log::trace;
+
+// Placeholder types for compilation
+type PropertyData = ();
+type PropertyItem = ();
 use relm4::factory::FactoryHashMap;
 use relm4::{gtk, prelude::FactoryComponent, FactorySender};
 

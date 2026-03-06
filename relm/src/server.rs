@@ -3,7 +3,16 @@ use gtk::{
     prelude::*,
     EntryBuffer, Label,
 };
-use libindigo::{INDIGO_DEFAULT_HOST, INDIGO_DEFAULT_PORT};
+
+// Temporarily disabled - old API constants no longer exist in this location
+// use libindigo::{INDIGO_DEFAULT_HOST, INDIGO_DEFAULT_PORT};
+
+// TODO: Update to use new API constants:
+// use libindigo::name::{INDIGO_DEFAULT_HOST, INDIGO_DEFAULT_PORT};
+// For now, use hardcoded values:
+const INDIGO_DEFAULT_HOST: &str = "localhost";
+const INDIGO_DEFAULT_PORT: u16 = 7624;
+
 use log::{error, warn};
 use relm4::{gtk, Component, ComponentParts, ComponentSender, RelmWidgetExt};
 use url_fork::Url;

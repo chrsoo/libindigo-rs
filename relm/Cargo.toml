@@ -5,8 +5,8 @@ version = "0.1.2+INDIGO.2.0.300"
 license = "MIT"
 repository = "https://github.com/chrsoo/libindigo-rs"
 readme = "README.md"
-keywords = [ "astronomy", "astrophotography", "indigo", "gtk", "relm" ]
-categories = [ "asynchronous", "gui", "hardware-support" ]
+keywords = ["astronomy", "astrophotography", "indigo", "gtk", "relm"]
+categories = ["asynchronous", "gui", "hardware-support"]
 edition = "2021"
 
 [features]
@@ -16,7 +16,7 @@ sys = []
 relm4 = "0.9.1"
 relm4-components = "0.9.1"
 tokio = { version = "1.40.0", features = ["rt", "time"] }
-libindigo = { path = ".." }
+libindigo-rs = { path = "../rs", version = "0.3.0" }
 log = "0.4.22"
 glib_logger = "0.1.0"
 gtk = { version = "0.9.2", package = "gtk4", features = ["v4_16"] }

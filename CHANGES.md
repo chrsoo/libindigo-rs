@@ -1,6 +1,9 @@
 # Changes and Feature Backlog
 
-This file tracks user-facing features organized by release version. For implementation tasks and technical work, see the `plans/` directory.
+This file tracks user-facing features organized by release version.
+
+**For implementation tasks**: See [GitHub Issues](https://github.com/chrsoo/libindigo-rs/issues)
+**For technical documentation**: See [`plans/`](plans/) directory
 
 ## [Unreleased]
 
@@ -8,15 +11,15 @@ This file tracks user-facing features organized by release version. For implemen
 
 #### Features
 
-- **High-level Trait-based Device API**: Implement a trait-based API for common device types (Camera, Mount, Focuser, FilterWheel, etc.) with their required and optional properties following INDIGO terminology. This provides type-safe, ergonomic access to device-specific functionality.
+- **High-level Trait-based Device API**: Type-safe traits for common device types (Camera, Mount, Focuser, FilterWheel, etc.) with required and optional properties following INDIGO terminology ([#4](https://github.com/chrsoo/libindigo-rs/issues/4), [#12](https://github.com/chrsoo/libindigo-rs/issues/12))
 
 ### Planned for 0.2.0
 
-#### Tasks (see plans/ for details)
+#### Tasks
 
-- Generate props.rs from upstream INDIGO headers as part of build process
-- Replace hardcoded property name strings with generated constants throughout codebase
-- Extract comprehensive documentation from plans/ to doc/ directory for better organization
+- Automate INDIGO constants extraction from headers ([#1](https://github.com/chrsoo/libindigo-rs/issues/1), [#10](https://github.com/chrsoo/libindigo-rs/issues/10))
+- Replace hardcoded property strings with constants ([#2](https://github.com/chrsoo/libindigo-rs/issues/2))
+- Complete documentation organization ([#3](https://github.com/chrsoo/libindigo-rs/issues/3), [#11](https://github.com/chrsoo/libindigo-rs/issues/11))
 
 ## [0.2.0] - Pending Release
 

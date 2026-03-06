@@ -1,0 +1,53 @@
+[package]
+name = "libindigo-rs"
+version = "0.3.0"
+edition = "2021"
+authors = ["Christian Soop <christian.soop@gmail.com>"]
+description = "Pure Rust implementation of the INDIGO protocol client"
+license = "MIT"
+homepage = "https://github.com/chrsoo/libindigo-rs"
+repository = "https://github.com/chrsoo/libindigo-rs"
+readme = "README.md"
+keywords = ["astronomy", "astrophotography", "indigo", "indi"]
+categories = ["api-bindings", "asynchronous", "hardware-support"]
+
+[features]
+default = ["client"]
+client = []
+device = []             # Stub for future device driver support
+discovery = ["mdns-sd"] # Optional server discovery via mDNS
+
+[dependencies]
+# Core API from libindigo crate
+libindigo = { path = "..", version = "0.2.0" }
+
+# Async runtime
+tokio = { version = "1.35", features = [
+    "net",
+    "io-util",
+    "sync",
+    "time",
+    "rt",
+] }
+
+# XML parsing
+quick-xml = { version = "0.36", features = ["serialize"] }
+
+# JSON parsing
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Base64 encoding for BLOBs
+base64 = "0.22"
+
+# Error handling
+thiserror = "2"
+
+# Logging
+tracing = "0.1"
+
+# Async trait support
+async-trait = "0.1"
+
+# Optional: mDNS server discovery (pure Rust)
+mdns-sd = { version = "0.11", optional = true }

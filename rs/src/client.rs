@@ -34,23 +34,23 @@
 //! client.connect("localhost:7624").await?;
 //! ```
 
-use crate::client::ClientStrategy;
-use crate::error::{IndigoError, Result};
-use crate::types::property::PropertyItem;
-use crate::types::value::{LightState, PropertyValue, SwitchState as DomainSwitchState};
-use crate::types::{Property, PropertyPerm, PropertyState, PropertyType};
 use async_trait::async_trait;
+use libindigo::client::strategy::ClientStrategy;
+use libindigo::error::{IndigoError, Result};
+use libindigo::types::property::PropertyItem;
+use libindigo::types::value::{LightState, PropertyValue, SwitchState as DomainSwitchState};
+use libindigo::types::{Property, PropertyPerm, PropertyState, PropertyType};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
 
-use super::protocol::{
+use crate::protocol::{
     GetProperties, NewNumberVector, NewSwitchVector, NewTextVector, NewVectorAttributes, OneNumber,
     OneSwitch, OneText, ProtocolMessage, SwitchState as ProtocolSwitchState,
 };
-use super::protocol_negotiation::{ProtocolNegotiator, ProtocolType};
-use super::transport::Transport;
+use crate::protocol_negotiation::{ProtocolNegotiator, ProtocolType};
+use crate::transport::Transport;
 
 /// Rust client strategy implementation.
 ///
@@ -511,16 +511,13 @@ impl RsClientStrategy {
             ProtocolMessage::SetBLOBVector(v) => {
                 let mut items = HashMap::new();
                 for elem in v.elements {
-                    // Decode base64 BLOB data if base64 feature is enabled
-                    #[cfg(feature = "rs")]
+                    // Decode base64 BLOB data
                     let data = {
                         use base64::{engine::general_purpose, Engine as _};
                         general_purpose::STANDARD
                             .decode(&elem.value)
                             .unwrap_or_default()
                     };
-                    #[cfg(not(feature = "rs"))]
-                    let data = Vec::new();
 
                     items.insert(
                         elem.name.clone(),
@@ -863,7 +860,7 @@ mod tests {
 
     #[test]
     fn test_convert_def_text_vector() {
-        use super::super::protocol::{DefText, DefTextVector, VectorAttributes};
+        use crate::protocol::{DefText, DefTextVector, VectorAttributes};
 
         let protocol_msg = ProtocolMessage::DefTextVector(DefTextVector {
             attrs: VectorAttributes {
@@ -895,7 +892,7 @@ mod tests {
 
     #[test]
     fn test_convert_def_number_vector() {
-        use super::super::protocol::{DefNumber, DefNumberVector, VectorAttributes};
+        use crate::protocol::{DefNumber, DefNumberVector, VectorAttributes};
 
         let protocol_msg = ProtocolMessage::DefNumberVector(DefNumberVector {
             attrs: VectorAttributes {
@@ -930,7 +927,7 @@ mod tests {
 
     #[test]
     fn test_convert_def_switch_vector() {
-        use super::super::protocol::{DefSwitch, DefSwitchVector, SwitchRule, VectorAttributes};
+        use crate::protocol::{DefSwitch, DefSwitchVector, SwitchRule, VectorAttributes};
 
         let protocol_msg = ProtocolMessage::DefSwitchVector(DefSwitchVector {
             attrs: VectorAttributes {

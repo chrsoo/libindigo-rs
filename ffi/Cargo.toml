@@ -1,0 +1,37 @@
+[package]
+name = "libindigo-ffi"
+version = "0.3.0"
+edition = "2021"
+authors = ["Christian Soop <christian.soop@gmail.com>"]
+description = "FFI-based implementation of the INDIGO protocol client using C library"
+license = "MIT"
+homepage = "https://github.com/chrsoo/libindigo-rs"
+repository = "https://github.com/chrsoo/libindigo-rs"
+readme = "README.md"
+keywords = ["astronomy", "astrophotography", "indigo", "indi"]
+categories = ["api-bindings", "asynchronous", "hardware-support"]
+
+[features]
+default = ["client"]
+client = []
+device = []          # Stub for future device driver support
+async = ["tokio"]
+
+[dependencies]
+# Core API from libindigo crate
+libindigo = { path = "..", version = "0.2.0" }
+
+# FFI bindings to C INDIGO library
+libindigo-sys = { path = "../sys", version = "0.2.0" }
+
+# Async runtime (optional, for async FFI wrapper)
+tokio = { version = "1.35", features = ["sync", "rt"], optional = true }
+
+# Error handling
+thiserror = "2"
+
+# Logging
+tracing = "0.1"
+
+# Async trait support
+async-trait = "0.1"

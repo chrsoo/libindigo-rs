@@ -1,15 +1,10 @@
 //! Server discovery API implementation.
 
-use super::{DiscoveredServer, DiscoveryConfig, DiscoveryEvent, DiscoveryMode};
-use crate::error::Result;
+use super::{DiscoveredServer, DiscoveryConfig, DiscoveryEvent};
 use std::collections::HashMap;
 use std::sync::Arc;
-
-#[cfg(feature = "auto")]
-use tokio::sync::Mutex;
-#[cfg(feature = "auto")]
 use tokio::sync::mpsc;
-#[cfg(feature = "auto")]
+use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 
 /// Main server discovery API.
@@ -19,7 +14,7 @@ use tokio::task::JoinHandle;
 /// # Example: One-Shot Discovery
 ///
 /// ```ignore
-/// use libindigo::discovery::{DiscoveryConfig, ServerDiscoveryApi};
+/// use libindigo_rs::discovery::{DiscoveryConfig, ServerDiscoveryApi};
 ///
 /// let servers = ServerDiscoveryApi::discover(DiscoveryConfig::new()).await?;
 /// for server in servers {
@@ -45,7 +40,7 @@ impl ServerDiscoveryApi {
     /// # Example
     ///
     /// ```ignore
-    /// use libindigo::discovery::{DiscoveryConfig, ServerDiscoveryApi};
+    /// use libindigo_rs::discovery::{DiscoveryConfig, ServerDiscoveryApi};
     /// use std::time::Duration;
     ///
     /// let config = DiscoveryConfig::new()
@@ -54,8 +49,10 @@ impl ServerDiscoveryApi {
     /// let servers = ServerDiscoveryApi::discover(config).await?;
     /// println!("Found {} servers", servers.len());
     /// ```
-    pub async fn discover(config: DiscoveryConfig) -> Result<Vec<DiscoveredServer>> {
-        Self::discover_impl(config).await
+    pub async fn discover(
+        config: DiscoveryConfig,
+    ) -> Result<Vec<DiscoveredServer>, Box<dyn std::error::Error + Send + Sync>> {
+        super::mdns_impl::discover_servers(config).await
     }
 
     /// Starts continuous server discovery.
@@ -74,7 +71,7 @@ impl ServerDiscoveryApi {
     /// # Example
     ///
     /// ```ignore
-    /// use libindigo::discovery::{DiscoveryConfig, DiscoveryEvent, ServerDiscoveryApi};
+    /// use libindigo_rs::discovery::{DiscoveryConfig, DiscoveryEvent, ServerDiscoveryApi};
     ///
     /// let mut discovery = ServerDiscoveryApi::start_continuous(
     ///     DiscoveryConfig::continuous()
@@ -89,34 +86,10 @@ impl ServerDiscoveryApi {
     ///     }
     /// }
     /// ```
-    pub async fn start_continuous(config: DiscoveryConfig) -> Result<ServerDiscovery> {
-        Self::start_continuous_impl(config).await
-    }
-
-    #[cfg(feature = "auto")]
-    async fn discover_impl(config: DiscoveryConfig) -> Result<Vec<DiscoveredServer>> {
-        super::zeroconf_impl::discover_servers(config).await
-    }
-
-    #[cfg(not(feature = "auto"))]
-    async fn discover_impl(_config: DiscoveryConfig) -> Result<Vec<DiscoveredServer>> {
-        Err(crate::error::IndigoError::NotSupported(
-            "Server discovery requires the 'auto' feature flag. \
-             Enable it in Cargo.toml: features = [\"auto\"]".to_string()
-        ))
-    }
-
-    #[cfg(feature = "auto")]
-    async fn start_continuous_impl(config: DiscoveryConfig) -> Result<ServerDiscovery> {
-        super::zeroconf_impl::start_continuous_discovery(config).await
-    }
-
-    #[cfg(not(feature = "auto"))]
-    async fn start_continuous_impl(_config: DiscoveryConfig) -> Result<ServerDiscovery> {
-        Err(crate::error::IndigoError::NotSupported(
-            "Server discovery requires the 'auto' feature flag. \
-             Enable it in Cargo.toml: features = [\"auto\"]".to_string()
-        ))
+    pub async fn start_continuous(
+        config: DiscoveryConfig,
+    ) -> Result<ServerDiscovery, Box<dyn std::error::Error + Send + Sync>> {
+        super::mdns_impl::start_continuous_discovery(config).await
     }
 }
 
@@ -142,15 +115,9 @@ impl ServerDiscoveryApi {
 /// discovery.stop().await?;
 /// ```
 pub struct ServerDiscovery {
-    #[cfg(feature = "auto")]
     rx: mpsc::UnboundedReceiver<DiscoveryEvent>,
-    #[cfg(feature = "auto")]
     task: JoinHandle<()>,
-    #[cfg(feature = "auto")]
     servers: Arc<Mutex<HashMap<String, DiscoveredServer>>>,
-
-    #[cfg(not(feature = "auto"))]
-    _phantom: std::marker::PhantomData<()>,
 }
 
 impl ServerDiscovery {
@@ -173,14 +140,8 @@ impl ServerDiscovery {
     ///     }
     /// }
     /// ```
-    #[cfg(feature = "auto")]
     pub async fn next_event(&mut self) -> Option<DiscoveryEvent> {
         self.rx.recv().await
-    }
-
-    #[cfg(not(feature = "auto"))]
-    pub async fn next_event(&mut self) -> Option<DiscoveryEvent> {
-        None
     }
 
     /// Returns the current list of discovered servers.
@@ -191,15 +152,9 @@ impl ServerDiscovery {
     /// let servers = discovery.servers();
     /// println!("Currently {} servers online", servers.len());
     /// ```
-    #[cfg(feature = "auto")]
     pub fn servers(&self) -> Vec<DiscoveredServer> {
         let servers = self.servers.blocking_lock();
         servers.values().cloned().collect()
-    }
-
-    #[cfg(not(feature = "auto"))]
-    pub fn servers(&self) -> Vec<DiscoveredServer> {
-        Vec::new()
     }
 
     /// Stops the continuous discovery.
@@ -211,20 +166,13 @@ impl ServerDiscovery {
     /// ```ignore
     /// discovery.stop().await?;
     /// ```
-    #[cfg(feature = "auto")]
-    pub async fn stop(self) -> Result<()> {
+    pub async fn stop(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.task.abort();
         let _ = self.task.await;
         Ok(())
     }
-
-    #[cfg(not(feature = "auto"))]
-    pub async fn stop(self) -> Result<()> {
-        Ok(())
-    }
 }
 
-#[cfg(feature = "auto")]
 impl ServerDiscovery {
     pub(crate) fn new(
         rx: mpsc::UnboundedReceiver<DiscoveryEvent>,
@@ -232,34 +180,5 @@ impl ServerDiscovery {
         servers: Arc<Mutex<HashMap<String, DiscoveredServer>>>,
     ) -> Self {
         Self { rx, task, servers }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    #[cfg(not(feature = "auto"))]
-    async fn test_discovery_without_feature() {
-        let result = ServerDiscoveryApi::discover(DiscoveryConfig::new()).await;
-        assert!(result.is_err());
-
-        if let Err(e) = result {
-            assert!(matches!(e, crate::error::IndigoError::NotSupported(_)));
-        }
-    }
-
-    #[tokio::test]
-    #[cfg(not(feature = "auto"))]
-    async fn test_continuous_discovery_without_feature() {
-        let result = ServerDiscoveryApi::start_continuous(
-            DiscoveryConfig::continuous()
-        ).await;
-        assert!(result.is_err());
-
-        if let Err(e) = result {
-            assert!(matches!(e, crate::error::IndigoError::NotSupported(_)));
-        }
     }
 }

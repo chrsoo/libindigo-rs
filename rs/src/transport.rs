@@ -33,10 +33,10 @@
 //! - We track brace depth to detect message boundaries
 //! - Handle escaped braces in strings
 
-use super::protocol::{ProtocolMessage, ProtocolParser, ProtocolSerializer};
-use super::protocol_json::{JsonProtocolParser, JsonProtocolSerializer};
-use super::protocol_negotiation::ProtocolType;
-use crate::error::{IndigoError, Result};
+use crate::protocol::{ProtocolMessage, ProtocolParser, ProtocolSerializer};
+use crate::protocol_json::{JsonProtocolParser, JsonProtocolSerializer};
+use crate::protocol_negotiation::ProtocolType;
+use libindigo::error::{IndigoError, Result};
 use std::time::Duration as StdDuration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;

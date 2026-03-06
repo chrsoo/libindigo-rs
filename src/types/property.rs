@@ -70,14 +70,36 @@ pub enum PropertyState {
     Alert,
 }
 
+impl PropertyState {
+    /// Parses a property state from a string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the string is not a valid property state.
+    pub fn from_str(s: &str) -> Result<Self, String> {
+        match s {
+            "Idle" => Ok(PropertyState::Idle),
+            "Ok" => Ok(PropertyState::Ok),
+            "Busy" => Ok(PropertyState::Busy),
+            "Alert" => Ok(PropertyState::Alert),
+            _ => Err(format!("Invalid property state: {}", s)),
+        }
+    }
+
+    /// Converts the property state to a string.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PropertyState::Idle => "Idle",
+            PropertyState::Ok => "Ok",
+            PropertyState::Busy => "Busy",
+            PropertyState::Alert => "Alert",
+        }
+    }
+}
+
 impl std::fmt::Display for PropertyState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PropertyState::Idle => write!(f, "Idle"),
-            PropertyState::Ok => write!(f, "Ok"),
-            PropertyState::Busy => write!(f, "Busy"),
-            PropertyState::Alert => write!(f, "Alert"),
-        }
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -93,13 +115,34 @@ pub enum PropertyPerm {
     ReadWrite,
 }
 
+impl PropertyPerm {
+    /// Parses a property permission from a string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the string is not a valid property permission.
+    pub fn from_str(s: &str) -> Result<Self, String> {
+        match s {
+            "ro" => Ok(PropertyPerm::ReadOnly),
+            "wo" => Ok(PropertyPerm::WriteOnly),
+            "rw" => Ok(PropertyPerm::ReadWrite),
+            _ => Err(format!("Invalid property permission: {}", s)),
+        }
+    }
+
+    /// Converts the property permission to a string.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PropertyPerm::ReadOnly => "ro",
+            PropertyPerm::WriteOnly => "wo",
+            PropertyPerm::ReadWrite => "rw",
+        }
+    }
+}
+
 impl std::fmt::Display for PropertyPerm {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PropertyPerm::ReadOnly => write!(f, "ro"),
-            PropertyPerm::WriteOnly => write!(f, "wo"),
-            PropertyPerm::ReadWrite => write!(f, "rw"),
-        }
+        write!(f, "{}", self.as_str())
     }
 }
 

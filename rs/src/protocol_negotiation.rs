@@ -25,9 +25,9 @@
 //! let protocol = negotiator.negotiate(&mut transport).await?;
 //! ```
 
-use super::protocol::{GetProperties, ProtocolMessage};
-use super::transport::Transport;
-use crate::error::{IndigoError, Result};
+use crate::protocol::{GetProperties, ProtocolMessage};
+use crate::transport::Transport;
+use libindigo::error::{IndigoError, Result};
 
 /// Protocol type for INDIGO communication.
 ///

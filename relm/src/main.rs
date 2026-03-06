@@ -1,3 +1,15 @@
+// NOTE: This relm demo application is currently broken due to the Phase 1-6 refactoring.
+// It was using deprecated FFI types (SysBus, SysClientController, SysRemoteResource) that
+// have been removed. The application needs to be refactored to use the new ClientStrategy
+// pattern with either RsClientStrategy or FfiClientStrategy.
+//
+// TODO: Refactor this application to use the new libindigo-rs API:
+// - Replace SysBus/SysClientController with Client + RsClientStrategy
+// - Update the callback pattern to use async streams
+// - Remove direct FFI dependencies
+//
+// See examples/ directory for reference implementations using the new API.
+
 mod device;
 mod property;
 mod server;
@@ -7,13 +19,19 @@ use std::env;
 use device::{Device, DeviceInput, DeviceOutput};
 use gtk::glib;
 use gtk::{glib::ExitCode, prelude::*};
-use libindigo::IndigoResult;
-use libindigo::{
-    property::{PropertyData, PropertyItem},
-    sys::{LogLevel, SysBus, SysClientController, SysRemoteResource},
-    Bus, ClientController, ClientDelegate, Controller as BusController, Delegate, NamedObject,
-    Property, RemoteResource,
-};
+
+// New imports for libindigo-rs
+// use libindigo_rs::{Client, ClientBuilder, RsClientStrategy};
+// use libindigo::types::Property;
+// use libindigo::error::Result as IndigoResult;
+
+// Old imports - these types no longer exist:
+// use libindigo::{
+//     property::{PropertyData, PropertyItem},
+//     sys::{LogLevel, SysBus, SysClientController, SysRemoteResource},
+//     Bus, ClientController, ClientDelegate, Controller as BusController, Delegate, NamedObject,
+//     Property, RemoteResource,
+// };
 use log::{error, warn};
 use relm4::{
     factory::FactoryHashMap, Component, ComponentController, ComponentParts, ComponentSender,
@@ -22,6 +40,8 @@ use relm4::{
 use server::{Server, ServerInput, ServerOutput};
 use url_fork::Url;
 
+// Temporarily disabled - needs refactoring for new API
+/*
 static BROKER: MessageBroker<AppInput> = MessageBroker::new();
 
 fn main() -> glib::ExitCode {
@@ -47,7 +67,18 @@ fn main() -> glib::ExitCode {
         }
     }
 }
+*/
 
+// Temporary stub main function
+fn main() -> glib::ExitCode {
+    eprintln!("ERROR: The libindigo-relm demo application is currently disabled.");
+    eprintln!("It needs to be refactored to use the new libindigo-rs API.");
+    eprintln!("See the TODO comments in main.rs for details.");
+    ExitCode::FAILURE
+}
+
+// All the following code is temporarily disabled pending refactoring to new API
+/*
 #[derive(Debug, Clone)]
 enum AppInput {
     // -- commands
@@ -398,3 +429,4 @@ impl ClientDelegate for DeviceCallbackHandler {
         Ok(())
     }
 }
+*/

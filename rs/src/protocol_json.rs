@@ -23,11 +23,11 @@
 //! let message = JsonProtocolParser::parse_message(json)?;
 //! ```
 
-use crate::error::{IndigoError, Result};
+use libindigo::error::{IndigoError, Result};
 use serde_json::{json, Map, Value};
 
 // Re-export protocol types from the main protocol module
-pub use super::protocol::{
+pub use crate::protocol::{
     BLOBEnable, DefBLOB, DefBLOBVector, DefLight, DefLightVector, DefNumber, DefNumberVector,
     DefSwitch, DefSwitchVector, DefText, DefTextVector, DelProperty, EnableBLOB, GetProperties,
     Message, NewBLOBVector, NewNumberVector, NewSwitchVector, NewTextVector, NewVectorAttributes,
@@ -148,7 +148,8 @@ impl JsonProtocolParser {
             name: Self::get_string(obj, "name")?,
             label: Self::get_opt_string(obj, "label").unwrap_or_default(),
             group: Self::get_opt_string(obj, "group").unwrap_or_default(),
-            state: PropertyState::from_str(&Self::get_string(obj, "state")?)?,
+            state: PropertyState::from_str(&Self::get_string(obj, "state")?)
+                .map_err(|e| IndigoError::ParseError(e))?,
             timeout: Self::get_opt_f64(obj, "timeout"),
             timestamp: Self::get_opt_string(obj, "timestamp"),
             message: Self::get_opt_string(obj, "message"),
@@ -161,7 +162,7 @@ impl JsonProtocolParser {
             device: Self::get_string(obj, "device")?,
             name: Self::get_string(obj, "name")?,
             state: Self::get_opt_string(obj, "state")
-                .map(|s| PropertyState::from_str(&s))
+                .map(|s| PropertyState::from_str(&s).map_err(|e| IndigoError::ParseError(e)))
                 .transpose()?,
             timeout: Self::get_opt_f64(obj, "timeout"),
             timestamp: Self::get_opt_string(obj, "timestamp"),
@@ -207,7 +208,8 @@ impl JsonProtocolParser {
             .ok_or_else(|| IndigoError::ParseError("Expected object".to_string()))?;
 
         let attrs = Self::parse_vector_attrs(obj)?;
-        let perm = PropertyPerm::from_str(&Self::get_string(obj, "perm")?)?;
+        let perm = PropertyPerm::from_str(&Self::get_string(obj, "perm")?)
+            .map_err(|e| IndigoError::ParseError(e))?;
 
         let items = obj
             .get("items")
@@ -240,7 +242,8 @@ impl JsonProtocolParser {
             .ok_or_else(|| IndigoError::ParseError("Expected object".to_string()))?;
 
         let attrs = Self::parse_vector_attrs(obj)?;
-        let perm = PropertyPerm::from_str(&Self::get_string(obj, "perm")?)?;
+        let perm = PropertyPerm::from_str(&Self::get_string(obj, "perm")?)
+            .map_err(|e| IndigoError::ParseError(e))?;
 
         let items = obj
             .get("items")
@@ -289,7 +292,8 @@ impl JsonProtocolParser {
             .ok_or_else(|| IndigoError::ParseError("Expected object".to_string()))?;
 
         let attrs = Self::parse_vector_attrs(obj)?;
-        let perm = PropertyPerm::from_str(&Self::get_string(obj, "perm")?)?;
+        let perm = PropertyPerm::from_str(&Self::get_string(obj, "perm")?)
+            .map_err(|e| IndigoError::ParseError(e))?;
         let rule = SwitchRule::from_str(&Self::get_string(obj, "rule")?)?;
 
         let items = obj
@@ -343,7 +347,8 @@ impl JsonProtocolParser {
             elements.push(DefLight {
                 name: Self::get_string(item_obj, "name")?,
                 label: Self::get_opt_string(item_obj, "label").unwrap_or_default(),
-                value: PropertyState::from_str(&value_str)?,
+                value: PropertyState::from_str(&value_str)
+                    .map_err(|e| IndigoError::ParseError(e))?,
             });
         }
 
@@ -360,7 +365,8 @@ impl JsonProtocolParser {
             .ok_or_else(|| IndigoError::ParseError("Expected object".to_string()))?;
 
         let attrs = Self::parse_vector_attrs(obj)?;
-        let perm = PropertyPerm::from_str(&Self::get_string(obj, "perm")?)?;
+        let perm = PropertyPerm::from_str(&Self::get_string(obj, "perm")?)
+            .map_err(|e| IndigoError::ParseError(e))?;
 
         let items = obj
             .get("items")
@@ -503,7 +509,8 @@ impl JsonProtocolParser {
             let value_str = Self::get_string(item_obj, "value")?;
             elements.push(OneLight {
                 name: Self::get_string(item_obj, "name")?,
-                value: PropertyState::from_str(&value_str)?,
+                value: PropertyState::from_str(&value_str)
+                    .map_err(|e| IndigoError::ParseError(e))?,
             });
         }
 

@@ -32,13 +32,13 @@
 //! let message = ProtocolParser::parse_message(xml)?;
 //! ```
 
-use crate::error::{IndigoError, Result};
+use libindigo::error::{IndigoError, Result};
 use quick_xml::events::{attributes::Attributes, BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::{Reader, Writer};
 use std::io::Cursor;
 
 // Re-export types from the types module
-pub use crate::types::property::{PropertyPerm, PropertyState};
+pub use libindigo::types::property::{PropertyPerm, PropertyState};
 
 // ============================================================================
 // Protocol Enums
@@ -160,56 +160,6 @@ impl BLOBEnable {
 impl std::fmt::Display for BLOBEnable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_str())
-    }
-}
-
-impl PropertyState {
-    /// Parses a property state from a string.
-    pub fn from_str(s: &str) -> Result<Self> {
-        match s {
-            "Idle" => Ok(PropertyState::Idle),
-            "Ok" => Ok(PropertyState::Ok),
-            "Busy" => Ok(PropertyState::Busy),
-            "Alert" => Ok(PropertyState::Alert),
-            _ => Err(IndigoError::ParseError(format!(
-                "Invalid property state: {}",
-                s
-            ))),
-        }
-    }
-
-    /// Converts the property state to a string.
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            PropertyState::Idle => "Idle",
-            PropertyState::Ok => "Ok",
-            PropertyState::Busy => "Busy",
-            PropertyState::Alert => "Alert",
-        }
-    }
-}
-
-impl PropertyPerm {
-    /// Parses a property permission from a string.
-    pub fn from_str(s: &str) -> Result<Self> {
-        match s {
-            "ro" => Ok(PropertyPerm::ReadOnly),
-            "wo" => Ok(PropertyPerm::WriteOnly),
-            "rw" => Ok(PropertyPerm::ReadWrite),
-            _ => Err(IndigoError::ParseError(format!(
-                "Invalid property permission: {}",
-                s
-            ))),
-        }
-    }
-
-    /// Converts the property permission to a string.
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            PropertyPerm::ReadOnly => "ro",
-            PropertyPerm::WriteOnly => "wo",
-            PropertyPerm::ReadWrite => "rw",
-        }
     }
 }
 
@@ -641,7 +591,7 @@ impl ProtocolParser {
     /// The XML should contain a single message element (not wrapped in `<INDI>`).
     pub fn parse_message(xml: &[u8]) -> Result<ProtocolMessage> {
         let mut reader = Reader::from_reader(xml);
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
 
         let mut buf = Vec::new();
 
@@ -764,7 +714,8 @@ impl ProtocolParser {
             name: Self::get_attr(&attrs, "name")?,
             label: Self::get_opt_attr(&attrs, "label")?.unwrap_or_default(),
             group: Self::get_opt_attr(&attrs, "group")?.unwrap_or_default(),
-            state: PropertyState::from_str(&Self::get_attr(&attrs, "state")?)?,
+            state: PropertyState::from_str(&Self::get_attr(&attrs, "state")?)
+                .map_err(|e| IndigoError::ParseError(e))?,
             timeout: Self::get_opt_attr(&attrs, "timeout")?.and_then(|s| s.parse().ok()),
             timestamp: Self::get_opt_attr(&attrs, "timestamp")?,
             message: Self::get_opt_attr(&attrs, "message")?,
@@ -777,7 +728,7 @@ impl ProtocolParser {
             device: Self::get_attr(&attrs, "device")?,
             name: Self::get_attr(&attrs, "name")?,
             state: Self::get_opt_attr(&attrs, "state")?
-                .map(|s| PropertyState::from_str(&s))
+                .map(|s| PropertyState::from_str(&s).map_err(|e| IndigoError::ParseError(e)))
                 .transpose()?,
             timeout: Self::get_opt_attr(&attrs, "timeout")?.and_then(|s| s.parse().ok()),
             timestamp: Self::get_opt_attr(&attrs, "timestamp")?,
@@ -824,7 +775,8 @@ impl ProtocolParser {
         attrs: Attributes,
     ) -> Result<DefTextVector> {
         let vector_attrs = Self::parse_vector_attrs(attrs.clone())?;
-        let perm = PropertyPerm::from_str(&Self::get_attr(&attrs, "perm")?)?;
+        let perm = PropertyPerm::from_str(&Self::get_attr(&attrs, "perm")?)
+            .map_err(|e| IndigoError::ParseError(e))?;
         let mut elements = Vec::new();
         let mut buf = Vec::new();
 
@@ -859,7 +811,8 @@ impl ProtocolParser {
         attrs: Attributes,
     ) -> Result<DefNumberVector> {
         let vector_attrs = Self::parse_vector_attrs(attrs.clone())?;
-        let perm = PropertyPerm::from_str(&Self::get_attr(&attrs, "perm")?)?;
+        let perm = PropertyPerm::from_str(&Self::get_attr(&attrs, "perm")?)
+            .map_err(|e| IndigoError::ParseError(e))?;
         let mut elements = Vec::new();
         let mut buf = Vec::new();
 
@@ -916,7 +869,8 @@ impl ProtocolParser {
         attrs: Attributes,
     ) -> Result<DefSwitchVector> {
         let vector_attrs = Self::parse_vector_attrs(attrs.clone())?;
-        let perm = PropertyPerm::from_str(&Self::get_attr(&attrs, "perm")?)?;
+        let perm = PropertyPerm::from_str(&Self::get_attr(&attrs, "perm")?)
+            .map_err(|e| IndigoError::ParseError(e))?;
         let rule = SwitchRule::from_str(&Self::get_attr(&attrs, "rule")?)?;
         let mut elements = Vec::new();
         let mut buf = Vec::new();
@@ -963,7 +917,8 @@ impl ProtocolParser {
                     let name = Self::get_attr(&e.attributes(), "name")?;
                     let label = Self::get_opt_attr(&e.attributes(), "label")?.unwrap_or_default();
                     let value_str = Self::read_text_content(reader)?;
-                    let value = PropertyState::from_str(value_str.trim())?;
+                    let value = PropertyState::from_str(value_str.trim())
+                        .map_err(|e| IndigoError::ParseError(e))?;
                     elements.push(DefLight { name, label, value });
                 }
                 Ok(Event::End(e)) if e.name().as_ref() == b"defLightVector" => break,
@@ -988,7 +943,8 @@ impl ProtocolParser {
         attrs: Attributes,
     ) -> Result<DefBLOBVector> {
         let vector_attrs = Self::parse_vector_attrs(attrs.clone())?;
-        let perm = PropertyPerm::from_str(&Self::get_attr(&attrs, "perm")?)?;
+        let perm = PropertyPerm::from_str(&Self::get_attr(&attrs, "perm")?)
+            .map_err(|e| IndigoError::ParseError(e))?;
         let mut elements = Vec::new();
         let mut buf = Vec::new();
 
@@ -1131,7 +1087,8 @@ impl ProtocolParser {
                 Ok(Event::Start(e)) if e.name().as_ref() == b"oneLight" => {
                     let name = Self::get_attr(&e.attributes(), "name")?;
                     let value_str = Self::read_text_content(reader)?;
-                    let value = PropertyState::from_str(value_str.trim())?;
+                    let value = PropertyState::from_str(value_str.trim())
+                        .map_err(|e| IndigoError::ParseError(e))?;
                     elements.push(OneLight { name, value });
                 }
                 Ok(Event::End(e)) if e.name().as_ref() == b"setLightVector" => break,

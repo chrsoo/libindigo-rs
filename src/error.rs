@@ -19,11 +19,6 @@ pub enum IndigoError {
     #[error("Protocol error: {0}")]
     ProtocolError(String),
 
-    /// FFI-related error (only available with `ffi-strategy` feature).
-    #[cfg(feature = "ffi")]
-    #[error("FFI error: {0}")]
-    FfiError(String),
-
     /// I/O error occurred during network or file operations.
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
