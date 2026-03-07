@@ -86,7 +86,7 @@ Related to #789
 3. **Create issue** for any new work
 4. **Reference issues** in commits and PRs
 5. **Update status** as work progresses
-6. **Work on feature branches** (never directly on `develop` or `main`)
+6. **Work on feature branches** (never directly on `develop` or `master`)
 7. **Document completion** in issue comments
 8. **Close issues** when work is complete
 
@@ -98,7 +98,7 @@ Related to #789
 4. Start work without a GitHub Issue
 5. Duplicate work that has an issue
 6. Use `gh` CLI when MCP tools work
-7. Commit directly to `main` or `develop`
+7. Commit directly to `master` or `develop`
 
 ## GitHub MCP Tools
 

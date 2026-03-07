@@ -2,19 +2,19 @@
 
 ## Gitflow Branches
 
-- `main` - Production releases only, tagged with semantic versions
+- `master` - Production releases only, tagged with semantic versions
 - `develop` - Integration branch for features
 - `feature/*` - New features, branch from `develop`
 - `release/*` - Release preparation, branch from `develop`
-- `hotfix/*` - Emergency fixes, branch from `main`
+- `hotfix/*` - Emergency fixes, branch from `master`
 
 ## Branch Rules
 
-- **Never commit directly to `main` or `develop`**
+- **Never commit directly to `master` or `develop`**
 - Always work on `feature/*` branches
 - Branch from `develop` for new work: `feature/issue-123-description`
 - Merge to `develop` via PR after tests pass
-- After release/hotfix, merge to BOTH `main` and `develop`
+- After release/hotfix, merge to BOTH `master` and `develop`
 
 ## Workflow: Executing Plans
 
@@ -116,11 +116,11 @@ git push origin release/v0.3.0
 ### Finishing a Release
 
 ```bash
-# Merge to main
-git checkout main
+# Merge to master
+git checkout master
 git merge --no-ff release/v0.3.0
 git tag -a v0.3.0 -m "Release v0.3.0"
-git push origin main --tags
+git push origin master --tags
 
 # Merge back to develop
 git checkout develop
@@ -135,18 +135,18 @@ git push origin --delete release/v0.3.0
 ## Hotfix Workflow
 
 ```bash
-# Create hotfix from main
-git checkout main
+# Create hotfix from master
+git checkout master
 git checkout -b hotfix/v0.2.1
 
 # Fix and commit
 git commit -m "fix: Critical bug in discovery module"
 
-# Merge to main
-git checkout main
+# Merge to master
+git checkout master
 git merge --no-ff hotfix/v0.2.1
 git tag -a v0.2.1 -m "Hotfix v0.2.1"
-git push origin main --tags
+git push origin master --tags
 
 # Merge to develop
 git checkout develop
