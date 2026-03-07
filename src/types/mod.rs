@@ -8,5 +8,5 @@ pub mod property;
 pub mod value;
 
 pub use device::{Device, DeviceInfo};
-pub use property::{Property, PropertyPerm, PropertyState, PropertyType};
-pub use value::{PropertyValue, SwitchRule, SwitchState};
+pub use property::{Property, PropertyItem, PropertyPerm, PropertyState, PropertyType};
+pub use value::{LightState, PropertyValue, SwitchRule, SwitchState};
