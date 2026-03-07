@@ -1,5 +1,14 @@
 # Git Commit Rules
 
+## Gitflow Rules
+
+- Always branch 'feature/*' from 'develop'.
+- Always branch 'release/*' from 'develop'.
+- Always branch 'hotfix/*' from 'main'.
+- Never merge 'feature/*' directly into 'main'.
+- After finishing a release or hotfix, merge into BOTH 'main' and 'develop'.
+- Use semantic versioning (vX.X.X) for tags on 'main'.
+
 ## Format
 
 ```text
@@ -7,6 +16,10 @@
 
 <optional body>
 ```
+
+## Temporary Files
+
+The body of commit message is created as temporary file in /tmp/[issue].md and deleted after commit is complete.
 
 ## Types
 
@@ -20,6 +33,8 @@
 - `ci`: CI/CD changes
 
 ## Rules
+
+> [!NOTE] Use temporary files for the issue body is using `git` on the command line!
 
 - **Summary line**: Max 72 characters, imperative mood, no period
 - **Body**: Wrap at 72 characters, explain what/why not how

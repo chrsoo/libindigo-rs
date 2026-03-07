@@ -4,17 +4,15 @@
 
 **GitHub Issues are the single source of truth for all actionable work items.**
 
-Local files in `plans/` are for:
-- Architecture documentation
-- Design proposals
-- Technical specifications
-- Reference material
-
 GitHub Issues are for:
+
+- Coordination of work
 - All actionable tasks
 - Bug reports
 - Feature requests
 - Work tracking
+
+Git Hub issues are NOT for [documenting the project](documentation.md)!
 
 ## Workflow
 
@@ -23,6 +21,8 @@ GitHub Issues are for:
 **Always create a GitHub Issue first** before starting work using the **GitHub MCP tool**.
 
 **Never** create tasks in:
+
+- ❌ `doc/*.md` files
 - ❌ `plans/*.md` files
 - ❌ `CHANGES.md` task sections
 - ❌ Local TODO files
@@ -43,32 +43,60 @@ See detailed architecture in [`plans/feature-name.md`](plans/feature-name.md)
 - [ ] Specific, testable criteria
 ```
 
-### 3. Issue Labels
+### Classifying work items as issues
 
-Use consistent labels for categorization:
+| Icon | Name | Summary |
+| --- | --- | --- |
+| 📍 | **Tracking** | A parent issue using task lists to manage the progress of an Epic or Feature. |
+| ✨ | **Enhancement** | A request for new functionality or improvements (User Stories & Requirements). |
+| 🛠️ | **Chore** | Technical tasks, refactoring, or maintenance that doesn't add direct user value. |
+| 🐛 | **Bug** | A report of a functional defect, regression, or unintended behavior. |
+| 🔍 | **Discussion** | A proposal for architectural changes or RFCs to gather feedback before coding. |
 
-**Type:**
-- `enhancement` - New features
-- `bug` - Bug fixes
-- `chore` - Internal tasks
-- `documentation` - Documentation work
+### Understanding hierarchical issue relationships
 
-**Priority:**
+```text
+📍 Tracking
+└── ✨ Enhancement
+    ├── 📄 Task List Item
+    └── 📄 Task List Item
+└── 🛠️ Chore
+    ├── 📄 Task List Item
+    └── 📄 Task List Item
+└── 🐛 Bug
+🔍 Discussion
+```
+
+### Using labels to organize issues
+
+> [!NOTE] Use label names without emojis (e.g., "chore" not "🛠️ chore")
+
+**Type**: `chore`, `bug`, `enhancement`, `documentation`, `tracking`, `discussion`
+**Priority**: `priority:high`, `priority:medium`, `priority:low`
+**Area**: `area:core`, `area:docs`, `area:protocol`, `area:build`, `area:tests`, `area:rs`, `area:ffi`
+**Size**: `size:small`, `size:medium`, `size:large`
+
+#### Priority
+
 - `priority:high` - Urgent, blocking work
 - `priority:medium` - Important but not urgent
 - `priority:low` - Nice to have
 
-**Size:**
+#### Size
+
 - `size:small` - < 1 day
 - `size:medium` - 1-3 days
 - `size:large` - > 3 days
 
-**Area:**
+#### Area
+
 - `area:core` - Core library
+- `area:docs` - Project Documentation
 - `area:protocol` - Protocol implementation
-- `area:docs` - Documentation
 - `area:build` - Build system
 - `area:tests` - Testing
+- `area:rs` - Pure Rust strategy for integration with the INDIGO bus
+- `area:ffi` - FFI strategy for integration with INDIGO bus
 
 ### 4. Issue Lifecycle
 
@@ -106,17 +134,20 @@ Related to #789
 
 When working on this project:
 
-### ✅ DO:
+### ✅ DO
+
 1. **Use GitHub MCP tools** for all GitHub operations (issues, PRs, etc.)
 2. **Check GitHub Issues first** before creating any task
-3. **Create a GitHub Issue** for any new work item
+3. **Create a GitHub Issue** for any new work item or plan
 4. **Reference existing issues** in commit messages and PRs
 5. **Update issue status** as work progresses
 6. **Document what was done in issue comments** when finishing a task
-7. **Close issues** when work is complete
-8. **Link to detailed plans** in `plans/` from issues
+7. **Work on branches** for logically grouped tasks
+8. **Close issues** when work is complete
+9. **Link to detailed plans** in `plans/` from issues
 
-### ❌ DON'T:
+### ❌ DON'T
+
 1. Create tasks in `plans/*.md` files
 2. Add task sections to `CHANGES.md`
 3. Create local TODO lists
@@ -130,33 +161,39 @@ When working on this project:
 ### Tool Priority
 
 **Always use GitHub MCP tools first.** Only use `gh` CLI when:
+
 - The MCP tool doesn't provide the needed functionality
 - You need advanced CLI-specific features (e.g., complex queries, bulk operations)
 
 ### Common Operations with MCP Tools
 
-#### Check for existing issues:
-```
+#### Check for existing issues
+
+```text
 Use: mcp--github--list_issues or mcp--github--search_issues
 ```
 
-#### Create new issue:
-```
+#### Create new issue
+
+```text
 Use: mcp--github--create_issue
 ```
 
-#### View issue details:
-```
+#### View issue details
+
+```text
 Use: mcp--github--get_issue
 ```
 
-#### Update issue:
-```
+#### Update issue
+
+```text
 Use: mcp--github--update_issue
 ```
 
-#### Add issue comment:
-```
+#### Add issue comment
+
+```text
 Use: mcp--github--add_issue_comment
 ```
 
@@ -164,12 +201,14 @@ Use: mcp--github--add_issue_comment
 
 Only use these when MCP tools don't provide the functionality:
 
-#### Advanced search with complex filters:
+#### Advanced search with complex filters
+
 ```bash
 gh issue list --repo chrsoo/libindigo-rs --search "keyword" --state all --json number,title,labels
 ```
 
-#### Bulk operations:
+#### Bulk operations
+
 ```bash
 gh issue list --repo chrsoo/libindigo-rs --label "needs-triage" --json number | jq -r '.[].number' | xargs -I {} gh issue edit {} --add-label "triaged"
 ```
@@ -181,6 +220,7 @@ If you find tasks in local files:
 1. **Create GitHub Issue** for each task
 2. **Link to detailed plan** if one exists
 3. **Remove task from local file** or convert to reference:
+
    ```markdown
    See GitHub Issue #123 for implementation tracking
    ```

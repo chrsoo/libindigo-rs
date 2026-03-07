@@ -13,6 +13,7 @@ plans/
 ## When to Create a Plan
 
 Create a plan for:
+
 - New features or subsystems
 - Significant architectural changes
 - Complex refactoring
@@ -50,9 +51,10 @@ How to verify
 ## Workflow
 
 1. Create plan in `plans/`
-2. Move to `plans/active/` when starting work
-3. Move to `plans/archive/` when complete
-4. Update status section with completion date/commit
+2. Create a Github **tracking** issue linking the plan
+3. Move to `plans/active/` when starting work
+4. Move to `plans/archive/` when complete
+5. Update status section with completion date/commit
 
 ## Naming
 
@@ -61,14 +63,14 @@ How to verify
 
 ## Commit References
 
-Reference plans in commits:
-```
-feat: Add zeroconf discovery support
+Reference plans in the **body** of commits:
 
+```text
 See plans/zeroconf-discovery-architecture.md for details.
 ```
 
 Update plans with commits:
+
 ```markdown
 ✅ Core discovery API - commit abc1234
 ```
