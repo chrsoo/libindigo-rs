@@ -82,7 +82,8 @@ pub use libindigo::{
     error::{IndigoError, Result},
     // Core types
     types::{
-        Device, DeviceInfo, Property, PropertyPerm, PropertyState, PropertyType, PropertyValue,
+        Device, DeviceInfo, LightState, Property, PropertyItem, PropertyPerm, PropertyState,
+        PropertyType, PropertyValue, SwitchState,
     },
 };
 
