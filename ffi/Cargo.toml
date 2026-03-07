@@ -2,7 +2,7 @@
 name = "libindigo-ffi"
 version = "0.3.0"
 edition = "2021"
-authors = ["Christian Soop <christian.soop@gmail.com>"]
+authors = ["Christoffer Soop <christoffer.soop@gmail.com>"]
 description = "FFI-based implementation of the INDIGO protocol client using C library"
 license = "MIT"
 homepage = "https://github.com/chrsoo/libindigo-rs"
