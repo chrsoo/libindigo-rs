@@ -1,0 +1,7 @@
+# Cargo configuration for macOS builds
+# This ensures the correct pkg-config is used to find GTK4 libraries
+
+[env]
+# Use Homebrew's pkg-config on Apple Silicon Macs
+# This allows cargo to find GTK4, Pango, Cairo, and other system libraries
+PKG_CONFIG = "/opt/homebrew/bin/pkg-config"

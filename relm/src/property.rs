@@ -4,54 +4,10 @@ use gtk::{
     EntryBuffer, Frame, Label, SizeGroup,
 };
 
-// Temporarily disabled - old API types no longer exist
-// use libindigo::{
-//     property::{PropertyData, PropertyItem, PropertyValue},
-//     BlobItem, LightItem, NamedObject as _, NumberItem, Property, PropertyType, SwitchItem as _,
-//     TextItem,
-// };
-
-// TODO: Update to use new API types:
-// use libindigo::types::{Property, PropertyValue, PropertyType};
+use libindigo_rs::{LightState, Property, PropertyItem, PropertyValue, SwitchState};
 
 use log::warn;
 
-// Placeholder types for compilation
-type PropertyData = ();
-type PropertyItem = ();
-#[derive(Clone)]
-enum PropertyValue {
-    Text(TextPlaceholder),
-    Number(NumberPlaceholder),
-    Light(LightPlaceholder),
-    Switch(SwitchPlaceholder),
-    Blob(BlobPlaceholder),
-}
-#[derive(Clone)]
-struct TextPlaceholder;
-impl TextPlaceholder {
-    fn value(&self) -> &str {
-        ""
-    }
-}
-#[derive(Clone)]
-struct NumberPlaceholder;
-impl NumberPlaceholder {
-    fn formatted_number(&self) -> String {
-        String::new()
-    }
-}
-#[derive(Clone)]
-struct LightPlaceholder;
-#[derive(Clone)]
-struct SwitchPlaceholder;
-impl SwitchPlaceholder {
-    fn on(&self) -> bool {
-        false
-    }
-}
-#[derive(Clone)]
-struct BlobPlaceholder;
 use relm4::{
     factory::{FactoryHashMap, FactoryVecDequeBuilder, FactoryView},
     gtk,
@@ -68,24 +24,24 @@ thread_local! {
 
 #[derive(Debug)]
 pub(crate) struct RelmProperty {
-    property: PropertyData,
+    property: Property,
     items: FactoryVecDeque<RelmPropertyItem>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) enum RelmPropertyInput {
-    UpdateProperty(PropertyData),
+    UpdateProperty(Property),
 }
 
 #[derive(Debug, Clone)]
 pub(crate) enum RelmPropertyOutput {
-    RequestPropertyUpdate(PropertyData),
+    RequestPropertyUpdate(Property),
     RequestItemUpdate(PropertyItem),
 }
 
 #[relm4::factory(pub)]
 impl FactoryComponent for RelmProperty {
-    type Init = PropertyData;
+    type Init = Property;
     type Input = RelmPropertyInput;
     type Output = RelmPropertyOutput;
     type CommandOutput = ();
@@ -95,7 +51,7 @@ impl FactoryComponent for RelmProperty {
     view! {
         #[root]
         gtk::Frame {
-            set_label: Some(self.property.label()),
+            set_label: Some(&self.property.label),
             self.items.widget() ->
             &gtk::Box {
                 set_orientation: gtk::Orientation::Vertical,
@@ -107,9 +63,6 @@ impl FactoryComponent for RelmProperty {
         let items = FactoryVecDeque::builder()
             .launch(Self::ParentWidget::default())
             .detach();
-        // .forward(sender.input_sender(), |output| match output {
-        //     Prop => PropertyInput::,
-        // });
         Self { property, items }
     }
 
@@ -122,7 +75,7 @@ impl FactoryComponent for RelmProperty {
     ) -> Self::Widgets {
         let widgets = view_output!();
 
-        for item in self.property.items() {
+        for (name, item) in &self.property.items {
             self.items.guard().push_back(item.clone());
         }
 
@@ -131,7 +84,11 @@ impl FactoryComponent for RelmProperty {
 
     fn update(&mut self, message: Self::Input, _sender: FactorySender<Self>) {
         match message {
-            RelmPropertyInput::UpdateProperty(p) => self.property.update(&p),
+            RelmPropertyInput::UpdateProperty(p) => {
+                // Update the property data
+                self.property = p;
+                // TODO: Update individual items in the UI
+            }
         }
     }
 }
@@ -164,7 +121,7 @@ impl FactoryComponent for RelmPropertyItem {
         gtk::Box {
             set_orientation: gtk::Orientation::Horizontal,
             set_spacing: 10,
-            append = match &self.item.value() {
+            append = match &self.item.value {
                 PropertyValue::Text(text) => {
                     gtk::Box {
                         set_orientation: gtk::Orientation::Horizontal,
@@ -173,20 +130,19 @@ impl FactoryComponent for RelmPropertyItem {
                             set_size_group: &PROP_COLUMN_1.with(|w| w.clone() ),
                             gtk::Label {
                                 #[watch]
-                                set_label: &self.item.label(),
+                                set_label: &self.item.label,
                             },
                         },
                         gtk::Box {
                             set_size_group: &PROP_COLUMN_2.with(|w| w.clone() ),
                             gtk::Label {
                                 #[watch]
-                                set_label: text.value(),
+                                set_label: text.as_str(),
                             }
                         }
                     }
                 }
-                // PropertyValue::Number{format, min, max, step, value, target} => {
-                PropertyValue::Number(number) => {
+                PropertyValue::Number{value, min, max, step, format} => {
                     gtk::Box {
                         set_orientation: gtk::Orientation::Horizontal,
                         set_spacing: 10,
@@ -194,36 +150,51 @@ impl FactoryComponent for RelmPropertyItem {
                             set_size_group: &PROP_COLUMN_1.with(|w| w.clone()),
                             gtk::Label {
                                 #[watch]
-                                set_label: &self.item.name(),
+                                set_label: &self.item.name,
                             },
                         },
                         gtk::Box {
                             set_size_group: &PROP_COLUMN_2.with(|w| w.clone() ),
                             gtk::Label {
                                 #[watch]
-                                set_label: number.formatted_number().as_str(),
+                                set_label: &format!("{}", value),
                             }
                         }
-                    }                }
-                PropertyValue::Light(_light) => {
-                    gtk::Label {
-                        set_label: "TODO: render light property"
                     }
                 }
-                PropertyValue::Switch(switch) => {
+                PropertyValue::Light{state} => {
+                    gtk::Box {
+                        set_orientation: gtk::Orientation::Horizontal,
+                        set_spacing: 10,
+                        gtk::Label {
+                            #[watch]
+                            set_label: &self.item.name,
+                        },
+                        gtk::Label {
+                            #[watch]
+                            set_label: &format!("{:?}", state),
+                        }
+                    }
+                }
+                PropertyValue::Switch{state} => {
                     gtk::CheckButton {
                         #[watch]
-                        set_active: switch.on(),
-                        set_label: Some(&self.item.name()),
-                        // TODO group checkbuttons depending on the property SwitchType...
-                        // #[track(true)]
-                        // set_group: Some("apa"),
+                        set_active: matches!(state, SwitchState::On),
+                        set_label: Some(&self.item.name),
                     }
                 }
-                // PropertyValue::Blob{format, url, size, value} => {
-                PropertyValue::Blob(_blob) => {
-                    gtk::Label {
-                        set_label: "TODO: render blob property"
+                PropertyValue::Blob{data: _, format, size} => {
+                    gtk::Box {
+                        set_orientation: gtk::Orientation::Horizontal,
+                        set_spacing: 10,
+                        gtk::Label {
+                            #[watch]
+                            set_label: &self.item.name,
+                        },
+                        gtk::Label {
+                            #[watch]
+                            set_label: &std::format!("BLOB ({} bytes, {})", size, format),
+                        }
                     }
                 }
             },
@@ -238,7 +209,7 @@ impl FactoryComponent for RelmPropertyItem {
 
 impl RelmPropertyItem {
     fn label(&self) -> &str {
-        &self.item.label()
+        &self.item.label
     }
 
     fn new(item: PropertyItem) -> Self {
@@ -292,15 +263,16 @@ impl FactoryComponent for SwitchItem {
 
 impl SwitchItem {
     fn label(&self) -> &str {
-        self.item.label()
+        &self.item.label
     }
+
     fn value(&self) -> bool {
-        if let PropertyValue::Switch(switch) = self.item.value() {
-            switch.on()
+        if let PropertyValue::Switch { state } = &self.item.value {
+            matches!(state, SwitchState::On)
         } else {
             warn!(
                 "defaulting to 'off': expected switch, found {:?}",
-                self.item.value()
+                self.item.value
             );
             false
         }

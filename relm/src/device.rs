@@ -1,25 +1,16 @@
 use gtk::prelude::*;
-// Temporarily disabled - old API types no longer exist
-// use libindigo::property::PropertyData;
-// use libindigo::property::PropertyItem;
-// use libindigo::NamedObject;
-
-// TODO: Update to use new API types:
-// use libindigo::types::{Property, PropertyValue};
+use libindigo_rs::Property;
 
 use log::debug;
 use log::trace;
 
-// Placeholder types for compilation
-type PropertyData = ();
-type PropertyItem = ();
 use relm4::factory::FactoryHashMap;
 use relm4::{gtk, prelude::FactoryComponent, FactorySender};
 
 use crate::property::RelmProperty;
 use crate::property::RelmPropertyInput;
 
-/// Relm model for a [ClientDevice].
+/// Relm model for a Device.
 #[derive(Debug)]
 pub struct Device {
     name: String,
@@ -31,9 +22,9 @@ pub struct Device {
 #[derive(Debug)]
 pub enum DeviceInput {
     /// Add a new property to the device.
-    DefineProperty(PropertyData, Option<String>),
+    DefineProperty(Property, Option<String>),
     /// Update an existing property to the device.
-    UpdateProperty(PropertyData, Option<String>),
+    UpdateProperty(Property, Option<String>),
     /// Add a new property to the device.
     DeleteProperty(String, Option<String>),
     /// Send an INDIGO message to the device.
@@ -41,23 +32,21 @@ pub enum DeviceInput {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-/// Events for an INDIGO [ClientDevice].
+/// Events for an INDIGO Device.
 pub enum DeviceOutput {
-    /// Connect [Device] to INDIGO bus.
+    /// Connect Device to INDIGO bus.
     RequestConnection,
-    /// Connect [Device] to INDIGO bus.
+    /// Connect Device to INDIGO bus.
     RequestDisconnection,
-    /// Request a new [Property] to be defined on the [Device].
+    /// Request a new Property to be defined on the Device.
     RequestDefinition(String, String),
-    /// Request all properties for the [Device] to be defined.
+    /// Request all properties for the Device to be defined.
     RequestEnumeration(String),
-    /// Request update of a [Property] on the [Device].
-    RequestUpdate(PropertyData),
-    /// Request update of an [Item] of a [Property] on the [Device].
-    RequestItemUpdate(PropertyItem, String, String),
-    /// Request deletion of an [Property] on the [Device].
+    /// Request update of a Property on the Device.
+    RequestUpdate(Property),
+    /// Request deletion of a Property on the Device.
     RequestDeletion(String, String),
-    /// Send a message to the [Device].
+    /// Send a message to the Device.
     SendMessage(String, String),
 }
 
@@ -74,7 +63,6 @@ impl FactoryComponent for Device {
         #[root]
         gtk::Box {
             set_orientation: gtk::Orientation::Vertical,
-            // set_spacing: 10,
             self.props.widget() ->
             &gtk::Box {
                 set_orientation: gtk::Orientation::Vertical,
@@ -91,14 +79,6 @@ impl FactoryComponent for Device {
     fn init_model(name: Self::Init, _index: &String, sender: FactorySender<Self>) -> Self {
         let props = FactoryHashMap::builder()
             .launch(gtk::Box::default())
-            // .forward(sender.input_sender(), |output| match output {
-            //     DeviceInput::Connected(d) => AppCommand::UpdateStatus(format!("Connected device '{d}'")),
-            //     DeviceInput::Disconnected(d) => AppCommand::UpdateStatus(format!("Disconnected device '{d}'")),
-            //     DeviceInput::PropertyDefined(p) => AppCommand::UpdateStatus(format!("Defined property '{p}'")),
-            //     DeviceInput::PropertyUpdated(p) => AppCommand::UpdateStatus(format!("Defined property '{p}'")),
-            //     DeviceInput::PropertyDeleted(p) => AppCommand::UpdateStatus(format!("Defined property '{p}'")),
-            //     DeviceInput::Busy(d) => AppCommand::UpdateStatus(format!("Device is busy '{d}'")),
-            // })
             .detach();
 
         Self {
@@ -116,17 +96,7 @@ impl FactoryComponent for Device {
             DeviceInput::Message(m) => self.set_message(m),
         }
     }
-
-    // fn update_view(&self, widgets: &mut Self::Widgets, sender: FactorySender<Self>) {
-    //     sender.output(DeviceInput::PropertyDefined(widgets)).unwrap();
-    // }
 }
-
-// impl CloneableFactoryComponent for Device {
-//     fn get_init(&self) -> Self::Init {
-//         self.device.clone()
-//     }
-// }
 
 impl Device {
     fn message(&self) -> &str {
@@ -136,25 +106,15 @@ impl Device {
             .unwrap_or("<none>")
     }
 
-    fn define_property(
-        &mut self,
-        p: PropertyData,
-        m: Option<String>,
-        _sender: FactorySender<Self>,
-    ) {
-        let name = p.name().to_owned();
-        self.props.insert(name.to_owned(), p);
+    fn define_property(&mut self, p: Property, m: Option<String>, _sender: FactorySender<Self>) {
+        let name = p.name.clone();
+        self.props.insert(name.clone(), p);
         trace!("defined property {name}: {}", self.message());
         self.message = m;
     }
 
-    fn update_property(
-        &mut self,
-        p: PropertyData,
-        m: Option<String>,
-        _sender: FactorySender<Self>,
-    ) {
-        let name = &p.name().to_owned();
+    fn update_property(&mut self, p: Property, m: Option<String>, _sender: FactorySender<Self>) {
+        let name = p.name.clone();
         self.props.send(&name, RelmPropertyInput::UpdateProperty(p));
         self.message = m;
         trace!("updated property {name}: {}", self.message());

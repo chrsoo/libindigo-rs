@@ -4,23 +4,15 @@ use gtk::{
     EntryBuffer, Label,
 };
 
-// Temporarily disabled - old API constants no longer exist in this location
-// use libindigo::{INDIGO_DEFAULT_HOST, INDIGO_DEFAULT_PORT};
-
-// TODO: Update to use new API constants:
-// use libindigo::name::{INDIGO_DEFAULT_HOST, INDIGO_DEFAULT_PORT};
-// For now, use hardcoded values:
+// Default INDIGO server connection parameters
 const INDIGO_DEFAULT_HOST: &str = "localhost";
-const INDIGO_DEFAULT_PORT: u16 = 7624;
+const INDIGO_DEFAULT_PORT: u32 = 7624;
 
 use log::{error, warn};
 use relm4::{gtk, Component, ComponentParts, ComponentSender, RelmWidgetExt};
 use url_fork::Url;
 
 const DEFAULT_SERVER_NAME: &str = "INDIGO";
-// const DEFAULT_SERVER_HOSTNAME: &str = "indigosky.local";
-// const DEFAULT_SERVER_HOST: &str = "localhost";
-// const DEFAULT_SERVER_PORT: u16 = 7624;
 
 const SERVER_CONNECT_MSG: &str = "Press play to connect";
 const SERVER_CONNECTING_MSG: &str = "Connecting to server...";
@@ -195,35 +187,6 @@ impl Component for Server {
             ServerInput::UpdateStatus(s) => self.update_status(s),
         }
     }
-
-    /*
-    fn update_cmd(
-        &mut self,
-        status: Self::CommandOutput,
-        sender: ComponentSender<Self>,
-        _: &Self::Root
-    ){
-        self.status = status;
-        // TODO set the server status
-        match self.status {
-            ServerStatus::Connected => {
-                self.message = format!("Connected to '{}'.", self.connection.as_ref().unwrap());
-            },
-            ServerStatus::Disconnected => {
-                self.message = format!("Disconnected from '{}'", self.connection.as_ref().unwrap());
-                self.connection = None;
-            },
-            ServerStatus::Busy(m) => {
-                self.message = m.clone();
-            },
-            ServerStatus::Error(e) => {
-                self.connection = None;
-                self.message = format!("{e}");
-            },
-        }
-        sender.output(self.status.clone()).unwrap();
-    }
-     */
 }
 
 impl Server {
@@ -254,7 +217,7 @@ impl Server {
             ServerStatus::Disconnected(_) => {
                 let name = text_entry(&self.name, DEFAULT_SERVER_NAME.to_string());
                 let host = text_entry(&self.host, INDIGO_DEFAULT_HOST.to_string());
-                let port = port_entry(&self.port, INDIGO_DEFAULT_PORT);
+                let port = port_entry(&self.port, INDIGO_DEFAULT_PORT as u16);
                 let url = &format!("tcp://{host}:{port}");
                 match Url::parse(url) {
                     Ok(url) => {
