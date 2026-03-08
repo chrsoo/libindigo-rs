@@ -50,6 +50,17 @@ This project is organized as a Cargo workspace with multiple crates:
 
 ## Quick Start
 
+### ⚠️ Important: Crate Name vs Import Name
+
+**The crate `libindigo-rs` must be imported as `libindigo_rs` (with underscore) in your code.**
+
+Rust automatically converts hyphens to underscores in crate names. Always use:
+
+```rust
+use libindigo_rs::{...};  // ✅ CORRECT (underscore)
+// NOT: use libindigo::{...};  // ❌ WRONG
+```
+
 ### Pure Rust Client (Recommended - No C Dependencies)
 
 Add to your `Cargo.toml`:
@@ -500,6 +511,26 @@ If you're upgrading from the old monolithic API, see the migration guide in [`RE
 - use libindigo::client::ClientBuilder;
 + use libindigo_rs::{RsClientStrategy, ClientBuilder};
 ```
+
+### Troubleshooting: "unresolved module `libindigo`" Error
+
+If you see this error after adding `libindigo-rs` to your dependencies:
+
+```
+error[E0432]: unresolved import `libindigo`
+```
+
+**Solution**: The crate name uses a hyphen (`libindigo-rs`) but imports must use an underscore (`libindigo_rs`).
+
+```rust
+// ❌ WRONG - causes "unresolved module" error
+use libindigo::{Client, ClientBuilder};
+
+// ✅ CORRECT - use underscore in imports
+use libindigo_rs::{Client, ClientBuilder};
+```
+
+This is a Rust convention: hyphens in crate names are automatically converted to underscores for imports.
 
 ## Contributing
 

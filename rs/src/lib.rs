@@ -1,3 +1,17 @@
+//! # libindigo-rs
+//!
+//! **⚠️ Important**: This crate is named `libindigo-rs` in Cargo.toml, but you must
+//! import it as `libindigo_rs` (with underscore) in your code:
+//!
+//! ```rust
+//! use libindigo_rs::{Client, ClientBuilder, RsClientStrategy};
+//! ```
+//!
+//! Rust automatically converts hyphens to underscores in crate names. Using `libindigo::`
+//! instead of `libindigo_rs::` will cause "unresolved module" errors.
+//!
+//! ---
+//!
 //! Pure Rust implementation of the INDIGO protocol
 //!
 //! This crate provides a complete implementation of the INDIGO astronomy protocol
