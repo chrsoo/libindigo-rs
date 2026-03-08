@@ -74,7 +74,10 @@ struct ClientState {
     /// Channel sender for property updates.
     property_tx: Option<mpsc::UnboundedSender<Property>>,
     /// Channel receiver for property updates (moved to stream).
+    /// DEPRECATED: Use property_subscribers instead.
     property_rx: Option<mpsc::UnboundedReceiver<Property>>,
+    /// List of property subscribers for multi-subscriber pattern.
+    property_subscribers: Vec<mpsc::UnboundedSender<Property>>,
     /// Background task handle for receiving messages.
     background_task: Option<JoinHandle<()>>,
     /// Connection state flag.
@@ -117,6 +120,7 @@ impl RsClientStrategy {
                 transport: None,
                 property_tx: None,
                 property_rx: None,
+                property_subscribers: Vec::new(),
                 background_task: None,
                 connected: false,
                 protocol: ProtocolType::default(),
@@ -158,12 +162,67 @@ impl RsClientStrategy {
         state.protocol
     }
 
+    /// Subscribes to property updates from the server.
+    ///
+    /// This method creates a new receiver channel for property updates, allowing
+    /// multiple subscribers to receive property updates simultaneously. Each call
+    /// to this method returns a new independent receiver.
+    ///
+    /// # Returns
+    ///
+    /// A new `UnboundedReceiver<Property>` that will receive all property updates
+    /// from the server.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use libindigo::client::ClientBuilder;
+    /// use libindigo::strategies::rs::RsClientStrategy;
+    ///
+    /// let mut strategy = RsClientStrategy::new();
+    /// let client = ClientBuilder::new()
+    ///     .with_strategy(strategy)
+    ///     .build();
+    ///
+    /// client.connect("localhost:7624").await?;
+    ///
+    /// // Create multiple subscribers
+    /// let mut subscriber1 = strategy.subscribe_properties().await;
+    /// let mut subscriber2 = strategy.subscribe_properties().await;
+    ///
+    /// // Both subscribers will receive all property updates
+    /// tokio::spawn(async move {
+    ///     while let Some(property) = subscriber1.recv().await {
+    ///         println!("Subscriber 1: {:?}", property);
+    ///     }
+    /// });
+    ///
+    /// tokio::spawn(async move {
+    ///     while let Some(property) = subscriber2.recv().await {
+    ///         println!("Subscriber 2: {:?}", property);
+    ///     }
+    /// });
+    /// ```
+    ///
+    /// # Notes
+    ///
+    /// - Each subscriber receives a clone of every property update
+    /// - Subscribers are automatically removed when their receiver is dropped
+    /// - This method can be called multiple times to create multiple subscribers
+    /// - Property updates are broadcast to all active subscribers
+    pub async fn subscribe_properties(&self) -> mpsc::UnboundedReceiver<Property> {
+        let mut state = self.state.lock().await;
+        let (tx, rx) = mpsc::unbounded_channel();
+        state.property_subscribers.push(tx);
+        rx
+    }
+
     /// Starts the background task for receiving messages from the server.
     ///
     /// This task continuously reads messages from the transport, converts them
-    /// to domain `Property` types, and sends them through the property channel.
+    /// to domain `Property` types, and broadcasts them to all subscribers.
     async fn start_receiver_task(state: Arc<Mutex<ClientState>>) -> Result<()> {
-        // Create channel for property updates
+        // Create channel for property updates (for backward compatibility)
         let (tx, rx) = mpsc::unbounded_channel();
 
         // Clone the state Arc for the background task
@@ -192,12 +251,19 @@ impl RsClientStrategy {
 
                         // Convert protocol message to property
                         if let Some(property) = Self::convert_to_property(msg) {
-                            // Send property update through channel
-                            let state = task_state.lock().await;
+                            // Broadcast property update to all subscribers
+                            let mut state = task_state.lock().await;
+
+                            // Send to legacy channel (backward compatibility)
                             if let Some(ref tx) = state.property_tx {
-                                // Ignore send errors (receiver may have been dropped)
-                                let _ = tx.send(property);
+                                let _ = tx.send(property.clone());
                             }
+
+                            // Broadcast to all subscribers
+                            // Remove disconnected subscribers while iterating
+                            state
+                                .property_subscribers
+                                .retain(|subscriber| subscriber.send(property.clone()).is_ok());
                         }
                     }
                     Err(e) => {
@@ -633,7 +699,28 @@ impl RsClientStrategy {
 
     /// Returns a receiver for property updates.
     ///
-    /// This allows the client to receive property updates as a stream.
+    /// **DEPRECATED**: This method uses `take()` which makes the receiver unavailable
+    /// for subsequent calls, breaking property streaming for multiple subscribers.
+    /// Use [`subscribe_properties()`](Self::subscribe_properties) instead, which supports
+    /// multiple concurrent subscribers.
+    ///
+    /// This method is kept for backward compatibility but will be removed in a future version.
+    ///
+    /// # Migration
+    ///
+    /// Replace:
+    /// ```ignore
+    /// let mut rx = strategy.property_receiver().await.unwrap();
+    /// ```
+    ///
+    /// With:
+    /// ```ignore
+    /// let mut rx = strategy.subscribe_properties().await;
+    /// ```
+    #[deprecated(
+        since = "0.1.0",
+        note = "Use subscribe_properties() instead for multi-subscriber support"
+    )]
     pub async fn property_receiver(&self) -> Option<mpsc::UnboundedReceiver<Property>> {
         let mut state = self.state.lock().await;
         state.property_rx.take()
@@ -856,7 +943,7 @@ impl ClientStrategy for RsClientStrategy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::value::SwitchState as DomainSwitchState;
+    use libindigo::types::value::SwitchState as DomainSwitchState;
 
     #[test]
     fn test_convert_def_text_vector() {

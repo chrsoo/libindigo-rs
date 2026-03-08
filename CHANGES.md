@@ -21,6 +21,23 @@ This file tracks user-facing features organized by release version.
 - Replace hardcoded property strings with constants ([#2](https://github.com/chrsoo/libindigo-rs/issues/2))
 - Complete documentation organization ([#3](https://github.com/chrsoo/libindigo-rs/issues/3), [#11](https://github.com/chrsoo/libindigo-rs/issues/11))
 
+## [0.3.1] - 2026-03-08
+
+### Fixed
+
+- **Critical Property Streaming Bug**: Fixed bug in `property_receiver()` where the method consumed the channel receiver, preventing multiple concurrent subscribers from receiving property updates
+
+### Added
+
+- **Multiple Concurrent Subscribers**: New `subscribe_properties()` method that supports multiple concurrent subscribers to property updates using broadcast channels
+- **Property Streaming Example**: Added comprehensive example in `examples/property_streaming.rs` demonstrating both single and multiple subscriber patterns
+- **Documentation**: Updated `rs/README.md` with detailed property streaming guide and best practices
+- **Issue Tracking**: Added 63 GitHub issues tracking known issues, planned features, and technical debt
+
+### Deprecated
+
+- **property_receiver() Method**: Deprecated in favor of `subscribe_properties()` which supports multiple concurrent subscribers. The old method will be removed in v0.4.0
+
 ## [0.2.0] - Pending Release
 
 ### Added
