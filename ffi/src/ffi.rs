@@ -4,15 +4,16 @@
 //! implementing the `ClientStrategy` trait for use with the core API.
 
 use crate::callback::CallbackHandler;
-use crate::conversion::blob_mode_to_c_str;
 #[cfg(feature = "sys-available")]
-use crate::conversion::string_to_c_string;
+use crate::conversion::{blob_mode_to_c_str, string_to_c_string};
 use async_trait::async_trait;
 use libindigo::client::ClientStrategy;
 use libindigo::error::{IndigoError, Result};
 use libindigo::types::{BlobTransferMode, Property};
 use std::sync::{Arc, Mutex as StdMutex};
-use tracing::{debug, error, info, warn};
+use tracing::warn;
+#[cfg(feature = "sys-available")]
+use tracing::{debug, error, info};
 
 // Conditional compilation for sys types
 #[cfg(feature = "sys-available")]
