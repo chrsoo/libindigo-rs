@@ -48,6 +48,9 @@ pub mod types;
 /// Client API and strategy trait (SPI).
 pub mod client;
 
+/// Device Driver SPI for implementing INDIGO devices in Rust.
+pub mod device;
+
 // Re-export commonly used types
 pub use client::ClientStrategy;
 pub use error::{IndigoError, Result};
@@ -62,6 +65,7 @@ pub use types::{Device, DeviceInfo};
 /// ```
 pub mod prelude {
     pub use crate::client::{Client, ClientBuilder, ClientStrategy};
+    pub use crate::device::{DeviceDriver, DeviceInterface, DriverInfo};
     pub use crate::error::{IndigoError, Result};
     pub use crate::types::{
         Device, DeviceInfo, Property, PropertyPerm, PropertyState, PropertyType, PropertyValue,

@@ -4,17 +4,17 @@
 //!
 //! Run with:
 //! ```bash
-//! cargo run --example continuous_discovery --features auto
+//! cargo run --example continuous_discovery --features discovery
 //! ```
 
-#[cfg(feature = "auto")]
-use libindigo::discovery::{DiscoveryConfig, DiscoveryEvent, ServerDiscoveryApi};
-#[cfg(feature = "auto")]
+#[cfg(feature = "discovery")]
+use libindigo_rs::discovery::{DiscoveryConfig, DiscoveryEvent, ServerDiscoveryApi};
+#[cfg(feature = "discovery")]
 use std::time::Duration;
 
-#[cfg(feature = "auto")]
+#[cfg(feature = "discovery")]
 #[tokio::main]
-async fn main() -> libindigo::error::Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Starting continuous INDIGO server discovery...");
     println!("Press Ctrl+C to stop\n");
 
@@ -57,9 +57,9 @@ async fn main() -> libindigo::error::Result<()> {
     Ok(())
 }
 
-#[cfg(not(feature = "auto"))]
+#[cfg(not(feature = "discovery"))]
 fn main() {
-    eprintln!("This example requires the 'auto' feature.");
-    eprintln!("Run with: cargo run --example continuous_discovery --features auto");
+    eprintln!("This example requires the 'discovery' feature.");
+    eprintln!("Run with: cargo run --example continuous_discovery --features discovery");
     std::process::exit(1);
 }

@@ -8,7 +8,7 @@
 //! but in JSON format. Key differences from XML:
 //!
 //! - **Version**: JSON protocol uses version number 512 (equivalent to XML 2.0)
-//! - **BLOB Handling**: JSON protocol **only supports URL-referenced BLOBs**, no inline BASE64 data
+//! - **BLOB Handling**: JSON protocol supports both URL-referenced BLOBs and inline BASE64 data
 //! - **Boolean Values**: Switch states use `true`/`false` instead of "On"/"Off"
 //! - **Numeric Values**: Numbers are JSON numbers, not strings
 //! - **Message Structure**: XML tag names become JSON object keys, attributes become properties,
@@ -28,12 +28,12 @@ use serde_json::{json, Map, Value};
 
 // Re-export protocol types from the main protocol module
 pub use crate::protocol::{
-    BLOBEnable, DefBLOB, DefBLOBVector, DefLight, DefLightVector, DefNumber, DefNumberVector,
-    DefSwitch, DefSwitchVector, DefText, DefTextVector, DelProperty, EnableBLOB, GetProperties,
-    Message, NewBLOBVector, NewNumberVector, NewSwitchVector, NewTextVector, NewVectorAttributes,
-    OneBLOB, OneLight, OneNumber, OneSwitch, OneText, PropertyPerm, PropertyState, ProtocolMessage,
-    SetBLOBVector, SetLightVector, SetNumberVector, SetSwitchVector, SetTextVector,
-    SetVectorAttributes, SwitchRule, SwitchState, VectorAttributes,
+    decode_blob, encode_blob, BLOBEnable, DefBLOB, DefBLOBVector, DefLight, DefLightVector,
+    DefNumber, DefNumberVector, DefSwitch, DefSwitchVector, DefText, DefTextVector, DelProperty,
+    EnableBLOB, GetProperties, Message, NewBLOBVector, NewNumberVector, NewSwitchVector,
+    NewTextVector, NewVectorAttributes, OneBLOB, OneLight, OneNumber, OneSwitch, OneText,
+    PropertyPerm, PropertyState, ProtocolMessage, SetBLOBVector, SetLightVector, SetNumberVector,
+    SetSwitchVector, SetTextVector, SetVectorAttributes, SwitchRule, SwitchState, VectorAttributes,
 };
 
 // ============================================================================
@@ -538,12 +538,16 @@ impl JsonProtocolParser {
             let item_obj = item
                 .as_object()
                 .ok_or_else(|| IndigoError::ParseError("Expected item object".to_string()))?;
-            // In JSON protocol, BLOBs are URL references only
+
+            // JSON protocol supports both URL references and inline base64 data
+            let value = Self::get_string(item_obj, "value")?;
+            let size = item_obj.get("size").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+
             elements.push(OneBLOB {
                 name: Self::get_string(item_obj, "name")?,
-                size: 0, // Size not used for URL references
+                size,
                 format: Self::get_opt_string(item_obj, "format").unwrap_or_default(),
-                value: Self::get_string(item_obj, "value")?, // URL path
+                value, // Can be URL path or base64 data
             });
         }
 
@@ -1045,7 +1049,10 @@ impl JsonProtocolSerializer {
             .map(|e| {
                 let mut item = Map::new();
                 item.insert("name".to_string(), json!(e.name));
-                item.insert("value".to_string(), json!(e.value)); // URL path
+                item.insert("format".to_string(), json!(e.format));
+                item.insert("size".to_string(), json!(e.size));
+                // Include base64-encoded data or URL
+                item.insert("value".to_string(), json!(e.value));
                 Value::Object(item)
             })
             .collect();
@@ -1126,6 +1133,9 @@ impl JsonProtocolSerializer {
                 let mut item = Map::new();
                 item.insert("name".to_string(), json!(e.name));
                 item.insert("format".to_string(), json!(e.format));
+                item.insert("size".to_string(), json!(e.size));
+                // Include base64-encoded data
+                item.insert("value".to_string(), json!(e.value));
                 Value::Object(item)
             })
             .collect();

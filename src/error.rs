@@ -54,6 +54,34 @@ pub enum IndigoError {
     /// Property builder error occurred.
     #[error("Property builder error: {0}")]
     PropertyBuilderError(#[from] PropertyBuilderError),
+
+    /// BLOB-related error occurred.
+    #[error("BLOB error: {0}")]
+    BlobError(String),
+
+    /// Property already exists.
+    #[error("Property already exists: {0}")]
+    PropertyAlreadyExists(String),
+
+    /// Driver already registered.
+    #[error("Driver already registered: {0}")]
+    DriverAlreadyRegistered(String),
+
+    /// Driver not found.
+    #[error("Driver not found: {0}")]
+    DriverNotFound(String),
+
+    /// Driver already attached.
+    #[error("Driver already attached: {0}")]
+    DriverAlreadyAttached(String),
+
+    /// Driver not attached.
+    #[error("Driver not attached: {0}")]
+    DriverNotAttached(String),
+
+    /// Driver still attached (cannot unregister).
+    #[error("Driver still attached: {0}")]
+    DriverStillAttached(String),
 }
 
 /// Error type for property builder operations.

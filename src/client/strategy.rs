@@ -4,7 +4,7 @@
 //! client implementation strategies (FFI-based or pure Rust).
 
 use crate::error::Result;
-use crate::types::Property;
+use crate::types::{BlobTransferMode, Property};
 use async_trait::async_trait;
 
 /// Strategy trait for INDIGO client implementations.
@@ -83,12 +83,43 @@ pub trait ClientStrategy: Send + Sync {
     /// Returns an error if sending fails.
     async fn send_property(&mut self, property: Property) -> Result<()>;
 
+    /// Enables or configures BLOB transfer mode for a device.
+    ///
+    /// This method sends an `enableBLOB` message to the server to control
+    /// how BLOBs (Binary Large Objects) are transferred for the specified device.
+    ///
+    /// # Arguments
+    ///
+    /// * `device` - The device name to configure BLOB transfer for
+    /// * `name` - Optional property name to limit BLOB configuration to a specific property.
+    ///            If `None`, applies to all BLOB properties on the device.
+    /// * `mode` - The BLOB transfer mode to use
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request fails or if not connected.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use libindigo::types::BlobTransferMode;
+    ///
+    /// // Enable BLOB transfer for CCD images
+    /// client.enable_blob("CCD Simulator", None, BlobTransferMode::Also).await?;
+    ///
+    /// // Disable BLOB transfer for a specific property
+    /// client.enable_blob("CCD Simulator", Some("CCD_IMAGE"), BlobTransferMode::Never).await?;
+    /// ```
+    async fn enable_blob(
+        &mut self,
+        device: &str,
+        name: Option<&str>,
+        mode: BlobTransferMode,
+    ) -> Result<()>;
+
     // TODO: Phase 2 - Add property stream methods
     // fn property_stream(&self) -> PropertyStream;
 
     // TODO: Phase 2 - Add device enumeration
     // async fn enumerate_devices(&mut self) -> Result<Vec<Device>>;
-
-    // TODO: Phase 2 - Add BLOB handling
-    // async fn enable_blob(&mut self, device: &str, name: Option<&str>) -> Result<()>;
 }

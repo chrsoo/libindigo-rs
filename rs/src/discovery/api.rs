@@ -1,6 +1,9 @@
 //! Server discovery API implementation.
 
-use super::{DiscoveredServer, DiscoveryConfig, DiscoveryEvent};
+use super::{
+    announce_service, AnnouncementHandle, DiscoveredServer, DiscoveryConfig, DiscoveryEvent,
+    ServiceAnnouncement,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -90,6 +93,43 @@ impl ServerDiscoveryApi {
         config: DiscoveryConfig,
     ) -> Result<ServerDiscovery, Box<dyn std::error::Error + Send + Sync>> {
         super::mdns_impl::start_continuous_discovery(config).await
+    }
+
+    /// Announces an INDIGO service on the local network.
+    ///
+    /// This method registers the service with mDNS, making it discoverable by clients
+    /// on the local network. The service will remain announced as long as the returned
+    /// handle exists.
+    ///
+    /// # Arguments
+    ///
+    /// * `announcement` - Service configuration including name, port, and properties
+    ///
+    /// # Returns
+    ///
+    /// An [`AnnouncementHandle`] that keeps the service announced. When dropped, the
+    /// announcement is automatically removed.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use libindigo_rs::discovery::{ServiceAnnouncement, ServerDiscoveryApi};
+    ///
+    /// let announcement = ServiceAnnouncement::new("My INDIGO Server", 7624)
+    ///     .with_property("version", "2.0");
+    ///
+    /// let handle = ServerDiscoveryApi::announce(announcement).await?;
+    ///
+    /// // Service is now discoverable
+    /// // Keep handle alive as long as you want the service announced
+    ///
+    /// // Stop announcing
+    /// handle.stop().await?;
+    /// ```
+    pub async fn announce(
+        announcement: ServiceAnnouncement,
+    ) -> Result<AnnouncementHandle, Box<dyn std::error::Error + Send + Sync>> {
+        announce_service(announcement).await
     }
 }
 

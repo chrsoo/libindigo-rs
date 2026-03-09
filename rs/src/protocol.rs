@@ -41,6 +41,49 @@ use std::io::Cursor;
 pub use libindigo::types::property::{PropertyPerm, PropertyState};
 
 // ============================================================================
+// BLOB Encoding/Decoding Utilities
+// ============================================================================
+
+/// Decodes base64-encoded BLOB data.
+///
+/// This function decodes base64 data received from the INDIGO protocol.
+/// It handles whitespace and newlines that may be present in the encoded data.
+///
+/// # Arguments
+///
+/// * `base64_data` - The base64-encoded string
+///
+/// # Errors
+///
+/// Returns a `BlobError` if the base64 data is invalid.
+pub fn decode_blob(base64_data: &str) -> Result<Vec<u8>> {
+    use base64::prelude::*;
+
+    // Remove whitespace and newlines that may be present in the base64 data
+    let cleaned: String = base64_data.chars().filter(|c| !c.is_whitespace()).collect();
+
+    BASE64_STANDARD
+        .decode(cleaned.as_bytes())
+        .map_err(|e| IndigoError::BlobError(format!("Failed to decode base64 BLOB: {}", e)))
+}
+
+/// Encodes binary data as base64 for BLOB transmission.
+///
+/// This function encodes binary data for transmission via the INDIGO protocol.
+///
+/// # Arguments
+///
+/// * `data` - The binary data to encode
+///
+/// # Returns
+///
+/// A base64-encoded string suitable for inclusion in BLOB messages.
+pub fn encode_blob(data: &[u8]) -> String {
+    use base64::prelude::*;
+    BASE64_STANDARD.encode(data)
+}
+
+// ============================================================================
 // Protocol Enums
 // ============================================================================
 

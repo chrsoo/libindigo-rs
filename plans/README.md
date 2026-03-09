@@ -31,6 +31,14 @@ Currently, all active work is tracked in the root-level plans. Move plans to `ac
   - Issue #28: Comprehensive Integration Test Harness
   - Issue #39: Integration Tests Migration
 
+- [`PHASE2_COMPLETE.md`](PHASE2_COMPLETE.md) - **Phase 2: Core Features** ✅ (2026-03-09)
+  - Issue #21: BLOB Sending/Receiving in Pure Rust (27 tests)
+  - Issue #19: ZeroConf Backend with Full mDNS Integration
+  - Issue #17: Device Driver API (27 tests)
+  - Issue #20: FFI Integration with C INDIGO Library
+  - Issue #18: Trait-Based Device API (28 tests)
+  - **Total**: 5 issues, 110+ tests, 43 files changed
+
 ## Current Plans
 
 ### Architecture & Design

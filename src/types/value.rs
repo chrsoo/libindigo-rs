@@ -5,6 +5,68 @@
 
 use std::fmt;
 
+/// BLOB transfer mode configuration.
+///
+/// Controls how BLOBs (Binary Large Objects) are transferred between
+/// the client and server. This is used with the `enableBLOB` protocol
+/// message to configure BLOB transfer behavior.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BlobTransferMode {
+    /// Never send BLOBs to this client.
+    ///
+    /// The server will not send any BLOB data, only property definitions
+    /// without the actual binary content.
+    Never,
+
+    /// Send BLOBs alongside other properties (default mode).
+    ///
+    /// BLOBs are sent through the same channel as other property updates.
+    Also,
+
+    /// Only send BLOBs, suppress other property updates.
+    ///
+    /// The server will only send BLOB properties and suppress updates
+    /// for other property types.
+    Only,
+}
+
+impl Default for BlobTransferMode {
+    fn default() -> Self {
+        BlobTransferMode::Also
+    }
+}
+
+impl BlobTransferMode {
+    /// Converts the BLOB transfer mode to a protocol string.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            BlobTransferMode::Never => "Never",
+            BlobTransferMode::Also => "Also",
+            BlobTransferMode::Only => "Only",
+        }
+    }
+
+    /// Parses a BLOB transfer mode from a protocol string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the string is not a valid BLOB transfer mode.
+    pub fn from_str(s: &str) -> Result<Self, String> {
+        match s {
+            "Never" => Ok(BlobTransferMode::Never),
+            "Also" => Ok(BlobTransferMode::Also),
+            "Only" => Ok(BlobTransferMode::Only),
+            _ => Err(format!("Invalid BLOB transfer mode: {}", s)),
+        }
+    }
+}
+
+impl fmt::Display for BlobTransferMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 /// Represents the different types of values that can be stored in a property.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PropertyValue {

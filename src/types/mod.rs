@@ -9,4 +9,4 @@ pub mod value;
 
 pub use device::{Device, DeviceInfo};
 pub use property::{Property, PropertyItem, PropertyPerm, PropertyState, PropertyType};
-pub use value::{LightState, PropertyValue, SwitchRule, SwitchState};
+pub use value::{BlobTransferMode, LightState, PropertyValue, SwitchRule, SwitchState};

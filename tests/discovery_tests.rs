@@ -4,10 +4,11 @@
 //! as `#[ignore]` because they require an actual INDIGO server running on the
 //! local network.
 
-#[cfg(feature = "auto")]
+#[cfg(feature = "discovery")]
 mod discovery_integration {
-    use libindigo::client::Client;
-    use libindigo::discovery::{DiscoveryConfig, DiscoveryEvent, ServerDiscoveryApi};
+    use libindigo_rs::discovery::{
+        DiscoveryConfig, DiscoveryEvent, ServerDiscoveryApi, ServiceAnnouncement,
+    };
     use std::time::Duration;
 
     #[tokio::test]
@@ -24,10 +25,8 @@ mod discovery_integration {
     #[tokio::test]
     async fn test_continuous_config() {
         let config = DiscoveryConfig::continuous();
-        assert_eq!(
-            config.get_mode(),
-            libindigo::discovery::DiscoveryMode::Continuous
-        );
+        use libindigo_rs::discovery::DiscoveryMode;
+        assert_eq!(config.get_mode(), DiscoveryMode::Continuous);
     }
 
     #[tokio::test]
@@ -54,19 +53,67 @@ mod discovery_integration {
     }
 
     #[tokio::test]
-    #[ignore] // Requires actual INDIGO server running
-    async fn test_client_discover_servers() {
-        let result = Client::discover_servers().await;
+    async fn test_service_announcement_builder() {
+        let announcement = ServiceAnnouncement::new("Test Server", 7624)
+            .with_property("version", "2.0")
+            .with_property("devices", "3");
 
-        match result {
-            Ok(servers) => {
-                println!("Client::discover_servers found {} servers", servers.len());
-                for server in servers {
-                    println!("  - {} at {}", server.name, server.url());
+        assert_eq!(announcement.name, "Test Server");
+        assert_eq!(announcement.port, 7624);
+        assert_eq!(announcement.properties.len(), 2);
+        assert_eq!(
+            announcement.properties.get("version"),
+            Some(&"2.0".to_string())
+        );
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires network access
+    async fn test_announce_and_discover() {
+        // Announce a test service
+        let announcement = ServiceAnnouncement::new("Test INDIGO Server", 17624)
+            .with_property("version", "2.0-test")
+            .with_property("test", "true");
+
+        let handle = ServerDiscoveryApi::announce(announcement).await;
+
+        match handle {
+            Ok(handle) => {
+                println!("Service announced: {}", handle.fullname());
+
+                // Give mDNS time to propagate
+                tokio::time::sleep(Duration::from_secs(2)).await;
+
+                // Try to discover it
+                let config = DiscoveryConfig::new()
+                    .timeout(Duration::from_secs(3))
+                    .filter(|server| server.name.contains("Test INDIGO Server"));
+
+                match ServerDiscoveryApi::discover(config).await {
+                    Ok(servers) => {
+                        println!("Found {} matching servers", servers.len());
+                        for server in &servers {
+                            println!("  - {} at {}", server.name, server.url());
+                            if server.name.contains("Test INDIGO Server") {
+                                assert_eq!(server.port, 17624);
+                                assert_eq!(
+                                    server.txt_records.get("version"),
+                                    Some(&"2.0-test".to_string())
+                                );
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        println!("Discovery error: {}", e);
+                    }
                 }
+
+                // Stop announcing
+                handle.stop().await.unwrap();
+                println!("Service announcement stopped");
             }
             Err(e) => {
-                println!("Discovery error (expected if no servers): {}", e);
+                println!("Announcement error (may require network): {}", e);
             }
         }
     }
@@ -138,22 +185,28 @@ mod discovery_integration {
             }
         }
     }
-}
-
-#[cfg(not(feature = "auto"))]
-mod discovery_disabled {
-    use libindigo::client::Client;
-    use libindigo::error::IndigoError;
 
     #[tokio::test]
-    async fn test_discovery_requires_auto_feature() {
-        // This test verifies that discovery is properly gated behind the auto feature
-        // When auto feature is disabled, the discovery module should not be available
+    #[ignore] // Requires network access
+    async fn test_announcement_handle_drop() {
+        let announcement = ServiceAnnouncement::new("Drop Test Server", 27624);
 
-        // We can't call Client::discover_servers() here because it doesn't exist
-        // without the auto feature, which is the correct behavior
+        let result = ServerDiscoveryApi::announce(announcement).await;
 
-        // This test just ensures the module compiles without the auto feature
+        if let Ok(handle) = result {
+            println!("Service announced: {}", handle.fullname());
+            // Handle will be dropped here, automatically stopping the announcement
+        }
+    }
+}
+
+#[cfg(not(feature = "discovery"))]
+mod discovery_disabled {
+    #[tokio::test]
+    async fn test_discovery_requires_feature() {
+        // This test verifies that discovery is properly gated behind the discovery feature
+        // When discovery feature is disabled, the discovery module should not be available
+        // This test just ensures the module compiles without the discovery feature
         assert!(true);
     }
 }

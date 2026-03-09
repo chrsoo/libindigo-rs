@@ -1,11 +1,6 @@
 #![allow(dead_code, unused_variables)]
 
-use std::{
-    sync::{Arc, Condvar, Mutex},
-    thread::sleep,
-    time::Duration,
-};
-use test_log::test;
+use std::sync::{Arc, Condvar, Mutex};
 
 // TODO run indigio sky in Docker as test harness
 use libindigo::*;
@@ -42,14 +37,14 @@ impl TestMonitor {
         }
     }
 
-    fn visit(&self) -> Result<(), IndigoError> {
+    fn visit(&self) -> Result<()> {
         let (lock, cvar) = &*self.visited;
         let mut visited = lock.lock().unwrap();
         *visited = true; // set
         cvar.notify_one();
         Ok(())
     }
-    fn wait(&self) -> Result<(), IndigoError> {
+    fn wait(&self) -> Result<()> {
         let (lock, cvar) = &*self.visited;
         let mut visited = lock.lock().unwrap();
         while !*visited {

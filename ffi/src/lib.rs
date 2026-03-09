@@ -86,8 +86,22 @@ pub use libindigo::{
 // Re-export the name module (INDIGO constants)
 pub use libindigo::name;
 
-// Internal modules
+// ============================================================================
+// FFI Implementation Modules
+// ============================================================================
+
+/// Core FFI client strategy implementation.
 mod ffi;
+
+/// Type conversions between C and Rust.
+pub mod conversion;
+
+/// C callback handlers and event bridge.
+pub mod callback;
+
+/// Device driver bridge for FFI.
+#[cfg(feature = "device")]
+pub mod device_bridge;
 
 // Export the FFI strategy implementation
 pub use ffi::FfiClientStrategy;
@@ -98,5 +112,22 @@ mod async_ffi;
 #[cfg(feature = "async")]
 pub use async_ffi::{AsyncFfiStrategy, PropertyStream};
 
-// Note: The FFI module is kept mostly internal as it contains unsafe code.
-// Users should interact through FfiClientStrategy which provides a safe API.
+// Re-export device bridge types when device feature is enabled
+#[cfg(feature = "device")]
+pub use device_bridge::FfiDriverBridge;
+
+// ============================================================================
+// Feature Configuration
+// ============================================================================
+
+/// Indicates whether the sys crate is available.
+///
+/// This is determined at compile time based on whether the `libindigo-sys`
+/// crate was successfully built. On platforms where the C INDIGO library
+/// is not available, this will be `false` and FFI operations will return
+/// `NotSupported` errors.
+#[cfg(feature = "sys-available")]
+pub const SYS_AVAILABLE: bool = true;
+
+#[cfg(not(feature = "sys-available"))]
+pub const SYS_AVAILABLE: bool = false;

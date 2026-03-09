@@ -59,10 +59,12 @@ use std::collections::HashMap;
 use std::net::IpAddr;
 use std::time::{Duration, SystemTime};
 
+mod announce;
 mod api;
 mod error;
 mod mdns_impl;
 
+pub use announce::{announce_service, AnnouncementHandle, ServiceAnnouncement};
 pub use api::{ServerDiscovery, ServerDiscoveryApi};
 pub use error::DiscoveryError;
 

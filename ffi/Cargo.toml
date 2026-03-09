@@ -14,8 +14,9 @@ categories = ["api-bindings", "asynchronous", "hardware-support"]
 [features]
 default = ["client"]
 client = []
-device = []          # Stub for future device driver support
-async = ["tokio"]
+device = []                  # Device driver support
+async = ["tokio", "futures"]
+sys-available = []           # Automatically enabled when sys crate builds successfully
 
 [dependencies]
 # Core API from libindigo crate
@@ -25,7 +26,14 @@ libindigo = { path = "..", version = "0.3.1" }
 libindigo-sys = { path = "../sys", version = "0.3.1" }
 
 # Async runtime (optional, for async FFI wrapper)
-tokio = { version = "1.35", features = ["sync", "rt"], optional = true }
+tokio = { version = "1.35", features = [
+    "sync",
+    "rt",
+    "rt-multi-thread",
+], optional = true }
+
+# Futures for Stream trait (optional, for async FFI wrapper)
+futures = { version = "0.3", optional = true }
 
 # Error handling
 thiserror = "2"
@@ -35,3 +43,7 @@ tracing = "0.1"
 
 # Async trait support
 async-trait = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1.35", features = ["full"] }
+futures = "0.3"

@@ -4,19 +4,22 @@
 //!
 //! Run with:
 //! ```bash
-//! cargo run --example discover_servers --features auto
+//! cargo run --example discover_servers --features discovery
 //! ```
 
-#[cfg(feature = "auto")]
-use libindigo::prelude::*;
+#[cfg(feature = "discovery")]
+use libindigo_rs::discovery::{DiscoveryConfig, ServerDiscoveryApi};
+#[cfg(feature = "discovery")]
+use libindigo_rs::{ClientBuilder, RsClientStrategy};
 
-#[cfg(feature = "auto")]
+#[cfg(feature = "discovery")]
 #[tokio::main]
 async fn main() -> Result<()> {
     // Simple discovery with default settings (5 second timeout)
     println!("Discovering INDIGO servers...");
 
-    let servers = Client::discover_servers().await?;
+    let config = DiscoveryConfig::new();
+    let servers = ServerDiscoveryApi::discover(config).await?;
 
     println!("\nFound {} INDIGO server(s):", servers.len());
     for server in &servers {
@@ -44,7 +47,8 @@ async fn main() -> Result<()> {
     if let Some(server) = servers.first() {
         println!("\n\nConnecting to {}...", server.name);
 
-        let mut client = ClientBuilder::new().with_rs_strategy().build()?;
+        let strategy = RsClientStrategy::new();
+        let mut client = ClientBuilder::new().with_strategy(strategy).build();
 
         client.connect(&server.url()).await?;
         println!("Connected successfully!");
@@ -61,9 +65,9 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(feature = "auto"))]
+#[cfg(not(feature = "discovery"))]
 fn main() {
-    eprintln!("This example requires the 'auto' feature.");
-    eprintln!("Run with: cargo run --example discover_servers --features auto");
+    eprintln!("This example requires the 'discovery' feature.");
+    eprintln!("Run with: cargo run --example discover_servers --features discovery");
     std::process::exit(1);
 }

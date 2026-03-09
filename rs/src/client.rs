@@ -39,14 +39,15 @@ use libindigo::client::strategy::ClientStrategy;
 use libindigo::error::{IndigoError, Result};
 use libindigo::types::property::PropertyItem;
 use libindigo::types::value::{LightState, PropertyValue, SwitchState as DomainSwitchState};
-use libindigo::types::{Property, PropertyPerm, PropertyState, PropertyType};
+use libindigo::types::{BlobTransferMode, Property, PropertyPerm, PropertyState, PropertyType};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
 
 use crate::protocol::{
-    GetProperties, NewNumberVector, NewSwitchVector, NewTextVector, NewVectorAttributes, OneNumber,
+    decode_blob, encode_blob, BLOBEnable, EnableBLOB, GetProperties, NewBLOBVector,
+    NewNumberVector, NewSwitchVector, NewTextVector, NewVectorAttributes, OneBLOB, OneNumber,
     OneSwitch, OneText, ProtocolMessage, SwitchState as ProtocolSwitchState,
 };
 use crate::protocol_negotiation::{ProtocolNegotiator, ProtocolType};
@@ -578,11 +579,16 @@ impl RsClientStrategy {
                 let mut items = HashMap::new();
                 for elem in v.elements {
                     // Decode base64 BLOB data
-                    let data = {
-                        use base64::{engine::general_purpose, Engine as _};
-                        general_purpose::STANDARD
-                            .decode(&elem.value)
-                            .unwrap_or_default()
+                    let data = match decode_blob(&elem.value) {
+                        Ok(decoded) => decoded,
+                        Err(e) => {
+                            tracing::warn!(
+                                "Failed to decode BLOB {}: {}. Using empty data.",
+                                elem.name,
+                                e
+                            );
+                            Vec::new()
+                        }
                     };
 
                     items.insert(
@@ -689,10 +695,24 @@ impl RsClientStrategy {
                 "Cannot send Light properties (read-only)".to_string(),
             )),
             PropertyType::Blob => {
-                // TODO: Implement BLOB sending in future phase
-                Err(IndigoError::NotSupported(
-                    "BLOB property sending not yet implemented".to_string(),
-                ))
+                // Convert BLOB property to newBLOBVector message
+                let mut elements = Vec::new();
+                for (name, item) in &prop.items {
+                    if let PropertyValue::Blob { data, format, size } = &item.value {
+                        // Encode binary data as base64
+                        let encoded = encode_blob(data);
+                        elements.push(OneBLOB {
+                            name: name.clone(),
+                            size: *size,
+                            format: format.clone(),
+                            value: encoded,
+                        });
+                    }
+                }
+                Ok(ProtocolMessage::NewBLOBVector(NewBLOBVector {
+                    attrs,
+                    elements,
+                }))
             }
         }
     }
@@ -922,6 +942,70 @@ impl ClientStrategy for RsClientStrategy {
 
         // Convert property to protocol message
         let msg = Self::convert_from_property(property)?;
+
+        // Send via transport
+        if let Some(ref mut transport) = state.transport {
+            transport.send_message(&msg).await?;
+        } else {
+            return Err(IndigoError::InvalidState(
+                "Transport not available".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Enables or configures BLOB transfer mode for a device.
+    ///
+    /// This sends an `enableBLOB` message to the server to control how BLOBs
+    /// are transferred for the specified device.
+    ///
+    /// # Arguments
+    ///
+    /// * `device` - The device name to configure BLOB transfer for
+    /// * `name` - Optional property name to limit BLOB configuration to a specific property
+    /// * `mode` - The BLOB transfer mode to use
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if not connected or if sending fails.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use libindigo::types::BlobTransferMode;
+    ///
+    /// // Enable BLOB transfer for all properties on CCD Simulator
+    /// strategy.enable_blob("CCD Simulator", None, BlobTransferMode::Also).await?;
+    ///
+    /// // Disable BLOB transfer for a specific property
+    /// strategy.enable_blob("CCD Simulator", Some("CCD_IMAGE"), BlobTransferMode::Never).await?;
+    /// ```
+    async fn enable_blob(
+        &mut self,
+        device: &str,
+        name: Option<&str>,
+        mode: BlobTransferMode,
+    ) -> Result<()> {
+        let mut state = self.state.lock().await;
+
+        if !state.connected {
+            return Err(IndigoError::InvalidState("Not connected".to_string()));
+        }
+
+        // Convert BlobTransferMode to protocol BLOBEnable
+        let blob_enable = match mode {
+            BlobTransferMode::Never => BLOBEnable::Never,
+            BlobTransferMode::Also => BLOBEnable::Also,
+            BlobTransferMode::Only => BLOBEnable::Only,
+        };
+
+        // Create enableBLOB message
+        let msg = ProtocolMessage::EnableBLOB(EnableBLOB {
+            device: device.to_string(),
+            name: name.map(|s| s.to_string()),
+            value: blob_enable,
+        });
 
         // Send via transport
         if let Some(ref mut transport) = state.transport {

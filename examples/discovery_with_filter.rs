@@ -5,17 +5,17 @@
 //!
 //! Run with:
 //! ```bash
-//! cargo run --example discovery_with_filter --features auto
+//! cargo run --example discovery_with_filter --features discovery
 //! ```
 
-#[cfg(feature = "auto")]
-use libindigo::discovery::{DiscoveryConfig, ServerDiscoveryApi};
-#[cfg(feature = "auto")]
+#[cfg(feature = "discovery")]
+use libindigo_rs::discovery::{DiscoveryConfig, ServerDiscoveryApi};
+#[cfg(feature = "discovery")]
 use std::time::Duration;
 
-#[cfg(feature = "auto")]
+#[cfg(feature = "discovery")]
 #[tokio::main]
-async fn main() -> libindigo::error::Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Discovering INDIGO servers with filters...\n");
 
     // Example 1: Filter by name pattern
@@ -106,9 +106,9 @@ async fn main() -> libindigo::error::Result<()> {
     Ok(())
 }
 
-#[cfg(not(feature = "auto"))]
+#[cfg(not(feature = "discovery"))]
 fn main() {
-    eprintln!("This example requires the 'auto' feature.");
-    eprintln!("Run with: cargo run --example discovery_with_filter --features auto");
+    eprintln!("This example requires the 'discovery' feature.");
+    eprintln!("Run with: cargo run --example discovery_with_filter --features discovery");
     std::process::exit(1);
 }
