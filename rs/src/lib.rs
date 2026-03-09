@@ -94,8 +94,8 @@ pub use libindigo::name;
 
 // Internal modules
 mod client;
-mod protocol;
-mod protocol_json;
+pub mod protocol;
+pub mod protocol_json;
 mod protocol_negotiation;
 mod transport;
 

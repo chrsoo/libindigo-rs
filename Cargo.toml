@@ -24,6 +24,9 @@ async-trait = "0.1"
 # Async runtime (required for ClientStrategy trait)
 tokio = { version = "1.35", features = ["sync"] }
 
+# Random number generation for mock server simulations
+rand = "0.8"
+
 [build-dependencies]
 bindgen = "0.71"
 regex = "1.11"
