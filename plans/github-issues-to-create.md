@@ -10,7 +10,7 @@ This document contains a filtered and prioritized list of GitHub issues derived 
 - Prioritizing based on severity and impact
 - Focusing on actionable, implementable work
 
-**Total Issues to Create**: 50 (consolidated from 100 unique items)
+**Total Issues to Create**: 51 (consolidated from 100 unique items)
 
 ---
 
@@ -114,7 +114,7 @@ The relm crate has potential code quality issues beyond the 42 unused code warni
 **Labels**: `enhancement`, `area:core`, `priority:critical`, `device-api`
 
 **Description**:
-The device driver API is a core missing feature required for writing INDIGO device drivers in Rust. This is essential for the project's completeness.
+The device driver API is a core missing feature required for writing INDIGO device drivers in Rust. This is essential for the project\'s completeness.
 
 **Source**: Item #6
 **Files**: Core API, device modules
@@ -634,7 +634,7 @@ Complete implementation of integration test harness for managing INDIGO server d
 **Labels**: `testing`, `area:testing`, `priority:medium`, `mocking`
 
 **Description**:
-Create lightweight mock server for unit tests that don't require full INDIGO server.
+Create lightweight mock server for unit tests that don\'t require full INDIGO server.
 
 **Source**: Item #49
 **Files**: Test utilities
@@ -649,6 +649,29 @@ Create lightweight mock server for unit tests that don't require full INDIGO ser
 - [ ] Documentation
 
 **Related Issues**: TEST-002 (Test Harness)
+
+---
+
+### TEST-004: Create Runnable Example Tests for Test Framework
+
+**Priority**: Medium
+**Labels**: `testing`, `area:examples`, `priority:medium`, `documentation`
+
+**Description**:
+Create runnable example tests that demonstrate the usage of the new test framework, derived from GitHub issue #64. These examples will serve as a guide for users and developers on how to write tests using the `libindigo-test` crate.
+
+**Source**: GitHub Issue #64
+**Files**: `tests/` directory, documentation
+
+**Acceptance Criteria**:
+
+- [ ] Clear, concise, and runnable example tests
+- [ ] Examples cover core functionalities of the test framework
+- [ ] Examples integrated into existing documentation or a new "examples" section
+- [ ] Tests validate the examples themselves
+- [ ] Documentation explains how to extend or adapt examples
+
+**Related Issues**: TEST-002 (Test Harness), DOC-007 (Test Harness Documentation)
 
 ---
 
@@ -815,13 +838,13 @@ Documentation is scattered and incomplete. Organize into clear structure.
 
 ---
 
-### DOC-003: Clarify Rust's Hyphen-to-Underscore Conversion
+### DOC-003: Clarify Rust\'s Hyphen-to-Underscore Conversion
 
 **Priority**: Low
 **Labels**: `documentation`, `area:docs`, `priority:low`, `user-experience`
 
 **Description**:
-Document Rust's automatic hyphen-to-underscore conversion in crate names to prevent user confusion.
+Document Rust\'s automatic hyphen-to-underscore conversion in crate names to prevent user confusion.
 
 **Source**: Item #19
 **Files**: README, crate documentation
@@ -1674,9 +1697,9 @@ Implement service announcement for devices to advertise themselves.
 |----------|-------|------------|
 | Critical | 3 | 6% |
 | High | 16 | 32% |
-| Medium | 19 | 38% |
+| Medium | 20 | 39% |
 | Low | 12 | 24% |
-| **Total** | **50** | **100%** |
+| **Total** | **51** | **100%** |
 
 ### Issues by Category
 
@@ -1686,7 +1709,7 @@ Implement service announcement for devices to advertise themselves.
 | **Critical Features** | 3 | Device API, ZeroConf, FFI integration |
 | **High Priority Features** | 7 | BLOB handling, examples, refactoring, networking |
 | **Medium Priority Features** | 7 | Metadata, discovery, reconnection, security |
-| **Testing & CI/CD** | 8 | Test harness, integration tests, CI infrastructure |
+| **Testing & CI/CD** | 9 | Test harness, integration tests, CI infrastructure |
 | **Documentation** | 8 | API docs, organization, user/dev guides |
 | **Technical Debt** | 8 | Version management, warnings, refactoring |
 | **Automation** | 4 | Constant updates, code generation |
@@ -1725,7 +1748,7 @@ Implement service announcement for devices to advertise themselves.
 
 #### Phase 4: Medium Priority (Week 7-10)
 
-18-37. All Medium priority issues across categories:
+18-38. All Medium priority issues across categories:
     - Features (FEATURE-011 through FEATURE-019)
     - CI/CD (CI-002, CI-003, CI-005)
     - Documentation (DOC-007)
@@ -1733,10 +1756,11 @@ Implement service announcement for devices to advertise themselves.
     - Automation (AUTOMATION-001)
     - Platform (PLATFORM-002)
     - Performance (PERF-001)
+    - **TEST-004**: Create Runnable Example Tests for Test Framework
 
 #### Phase 5: Low Priority & Enhancements (Ongoing)
 
-38-50. All Low priority issues:
+39-51. All Low priority issues:
     - Remaining bugs (BUG-004)
     - Documentation (DOC-003, DOC-008)
     - Technical Debt (DEBT-004, DEBT-008)
@@ -1784,8 +1808,8 @@ Several items were consolidated into single issues:
 ### Milestone Recommendations
 
 - **v0.4.0**: Critical bugs + Core features (Issues 1-17)
-- **v0.5.0**: Medium priority features + Documentation (Issues 18-37)
-- **v1.0.0**: Low priority enhancements + Polish (Issues 38-50)
+- **v0.5.0**: Medium priority features + Documentation (Issues 18-38)
+- **v1.0.0**: Low priority enhancements + Polish (Issues 39-51)
 
 ---
 
@@ -1799,6 +1823,6 @@ Several items were consolidated into single issues:
 
 ---
 
-*Document generated: 2026-03-08*
+*Document generated: 2026-03-09*
 *Source: Comprehensive analysis of libindigo project documentation*
-*Total items analyzed: 103 → Consolidated to: 50 actionable issues*
+*Total items analyzed: 103 → Consolidated to: 51 actionable issues*
