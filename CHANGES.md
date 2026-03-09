@@ -21,6 +21,41 @@ This file tracks user-facing features organized by release version.
 - Replace hardcoded property strings with constants ([#2](https://github.com/chrsoo/libindigo-rs/issues/2))
 - Complete documentation organization ([#3](https://github.com/chrsoo/libindigo-rs/issues/3), [#11](https://github.com/chrsoo/libindigo-rs/issues/11))
 
+## [0.3.2] - 2026-03-09
+
+### Added
+
+- **Device Driver API** ([#17](https://github.com/chrsoo/libindigo-rs/issues/17)): Core SPI for implementing INDIGO device drivers in Rust
+  - `DeviceDriver` trait with lifecycle methods (attach, change_property, detach)
+  - `PropertyManager` for property registration and state management
+  - `DriverRegistry` for driver lifecycle management
+- **Trait-Based Device API** ([#18](https://github.com/chrsoo/libindigo-rs/issues/18)): High-level typed device interfaces
+  - `Camera` trait for CCD/CMOS camera control
+  - `Mount` trait for telescope mount operations
+  - `Focuser` trait for focuser positioning
+  - `FilterWheel` trait for filter wheel management
+  - `Guider` trait for autoguider pulse control
+  - `DeviceProxy` bridge between traits and property-based API
+- **ZeroConf/mDNS Integration** ([#19](https://github.com/chrsoo/libindigo-rs/issues/19)): Server discovery and announcement
+  - `ServiceAnnouncement` for advertising INDIGO services
+  - `AnnouncementHandle` with RAII cleanup
+  - Enhanced discovery error types
+- **FFI Integration** ([#20](https://github.com/chrsoo/libindigo-rs/issues/20)): Complete C library bridge
+  - Type conversion layer (C ↔ Rust)
+  - Callback bridge (C callbacks → Rust async channels)
+  - Device driver bridge for Rust drivers in C server
+- **BLOB Support** ([#21](https://github.com/chrsoo/libindigo-rs/issues/21)): Binary Large Object handling
+  - `BlobTransferMode` (Never, Also, Only)
+  - XML and JSON BLOB parsing and sending
+  - `enable_blob()` API on client strategy
+
+### Statistics
+
+- 5 issues closed (#17, #18, #19, #20, #21)
+- 43 files changed (9,029 insertions)
+- 110+ new tests (183 total passing)
+- Full CI/CD pipeline green
+
 ## [0.3.1] - 2026-03-08
 
 ### Fixed

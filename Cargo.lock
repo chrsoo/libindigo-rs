@@ -421,7 +421,7 @@ checksum = "c19937216e9d3aa9956d9bb8dfc0b0c8beb6058fc4f7a4dc4d850edf86a237d6"
 
 [[package]]
 name = "libindigo"
-version = "0.3.1+INDIGO.2.0.300"
+version = "0.3.2+INDIGO.2.0.300"
 dependencies = [
  "async-trait",
  "bindgen",
@@ -439,7 +439,7 @@ dependencies = [
 
 [[package]]
 name = "libindigo-ffi"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "async-trait",
  "futures",
@@ -452,7 +452,7 @@ dependencies = [
 
 [[package]]
 name = "libindigo-rs"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "async-trait",
  "base64",
@@ -469,7 +469,7 @@ dependencies = [
 
 [[package]]
 name = "libindigo-sys"
-version = "0.3.1+INDIGO.2.0.300"
+version = "0.3.2+INDIGO.2.0.300"
 dependencies = [
  "bindgen",
  "regex",
