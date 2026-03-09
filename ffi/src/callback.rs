@@ -19,10 +19,12 @@ use crate::conversion::property_from_c;
 use libindigo::types::Property;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
-#[cfg(not(feature = "sys-available"))]
-use tracing::{debug, error};
+#[cfg(any(test, feature = "async"))]
+use tracing::debug;
+#[cfg(any(test, feature = "sys-available"))]
+use tracing::error;
 #[cfg(feature = "sys-available")]
-use tracing::{debug, error, warn};
+use tracing::warn;
 
 #[cfg(feature = "async")]
 use tokio::sync::broadcast;

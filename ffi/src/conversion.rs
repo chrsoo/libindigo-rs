@@ -10,12 +10,14 @@
 //! for ensuring pointer validity and proper memory management.
 
 use libindigo::error::{IndigoError, Result};
+use libindigo::types::{BlobTransferMode, Property};
+#[cfg(feature = "sys-available")]
 use libindigo::types::{
-    BlobTransferMode, LightState, Property, PropertyItem, PropertyPerm, PropertyState,
-    PropertyType, PropertyValue, SwitchState,
+    LightState, PropertyItem, PropertyPerm, PropertyState, PropertyType, PropertyValue, SwitchState,
 };
 #[cfg(feature = "sys-available")]
 use std::collections::HashMap;
+#[cfg(feature = "sys-available")]
 use std::ffi::{CStr, CString};
 #[cfg(feature = "sys-available")]
 use std::os::raw::c_char;
