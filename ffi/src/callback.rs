@@ -85,9 +85,11 @@ pub enum FfiEvent {
 /// ```
 pub struct CallbackHandler {
     /// Sender for the sync mpsc channel (used by C callbacks).
+    #[cfg_attr(not(any(test, feature = "async")), allow(dead_code))]
     sync_tx: Arc<Mutex<Option<mpsc::Sender<FfiEvent>>>>,
 
     /// Receiver for the sync mpsc channel (consumed by bridge task).
+    #[cfg_attr(not(any(test, feature = "async")), allow(dead_code))]
     sync_rx: Arc<Mutex<Option<mpsc::Receiver<FfiEvent>>>>,
 
     /// Broadcast channel for async consumers (only with async feature).
@@ -152,6 +154,7 @@ impl CallbackHandler {
 
     /// Gets the sync sender for use by C callbacks (internal only).
     #[cfg(not(any(test, feature = "async")))]
+    #[allow(dead_code)]
     pub(crate) fn sync_sender(&self) -> Option<mpsc::Sender<FfiEvent>> {
         self.sync_tx.lock().unwrap().clone()
     }
@@ -218,11 +221,13 @@ impl Default for CallbackHandler {
 ///
 /// This struct is passed as a void pointer to C callbacks and must be
 /// reconstructed to access the sender.
+#[cfg(any(test, feature = "sys-available"))]
 #[repr(C)]
 pub(crate) struct CallbackContext {
     sender: mpsc::Sender<FfiEvent>,
 }
 
+#[cfg(any(test, feature = "sys-available"))]
 impl CallbackContext {
     /// Creates a new callback context.
     pub(crate) fn new(sender: mpsc::Sender<FfiEvent>) -> Self {
