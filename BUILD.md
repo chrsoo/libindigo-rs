@@ -1,65 +1,174 @@
-# Building and releasing libindigo
+# Building libindigo
 
-## Build
+This document provides quick-start build instructions. For detailed information, see [`docs/build-system.md`](docs/build-system.md).
 
-To build libindigo for the fist time:
+## Quick Start
 
-1. Setup your environment to build INDIGO, cf [sys/NOTES.md](sys/NOTES.md)
-1. Run...
+### Prerequisites
 
-   ```shell
-   cargo build --workspace
-   ```
+- Rust 1.70+ (install from [rustup.rs](https://rustup.rs))
+- Git with submodules support
+- For FFI builds: C compiler, make, INDIGO dependencies
 
-   > [!NOTE]
-   > The [build.rs](sys/build.rs) script should automatically checout the source code in the [sys/externals/indigo/](sys/externals/indigo/) git submodule. For more information, please refer to [sys/README.md](sys/README.md)
+### Clone and Build
 
-## Versioning
+```bash
+# Clone repository with submodules
+git clone --recursive https://github.com/chrsoo/libindigo-rs
+cd libindigo-rs
 
-Versioning follows the general [SemVer 2.0.0](https://semver.org/) rules:
+# Build pure Rust (fast, ~3 seconds)
+cargo build --features rs-strategy
 
-> - MAJOR version when you make incompatible API changes
-> - MINOR version when you add functionality in a backward compatible manner
-> - PATCH version when you make backward compatible bug fixes
+# Build with FFI support (slower, ~30 seconds first time)
+cargo build --features ffi-strategy
 
-The [sys](sys) adds build info for the specific upstream INDIGO version that was used to produce the build, e.g.
-
-```text
-0.1.1+INDIGO.2.0.301
+# Build entire workspace
+cargo build --workspace --exclude relm
 ```
 
-Increasing the version can be done through [cargo bump](https://crates.io/crates/cargo-bump):
+## Build Strategies
 
-```text
-USAGE:
-    cargo bump [FLAGS] [<version> | major | minor | patch]
+### Pure Rust Strategy (Recommended for Development)
 
-FLAGS:
-    -h, --help       Prints help information
-    -v, --version    Prints version information
+Fast builds without C compilation:
 
-ARGS:
-    <version>    Version should be a semver (https://semver.org/) string or the
-                 position of the current version to increment: major, minor or patch.
+```bash
+cargo build -p libindigo --features rs-strategy
+cargo build -p libindigo-rs
 ```
 
-To install bump:
+**Benefits:**
 
-```shell
-cargo install cargo-bump
+- ⚡ Fast builds (~3 seconds)
+- ✅ No C compiler required
+- ✅ Cross-platform
+- ✅ Easy to debug
+
+### FFI Strategy (For Production)
+
+Uses C INDIGO library:
+
+```bash
+cargo build -p libindigo-sys
+cargo build -p libindigo-ffi --features async
 ```
 
-When creating a new version, the `cargo bump` command has to be applied once for each module of the cargo workspace:
+**Benefits:**
 
-```shell
-cargo bump patch
-cd sys
-cargo bump patch
-cd ../relm
-cargo bump patch
-cd ..
+- ✅ Full INDIGO compatibility
+- ✅ Access to all INDIGO features
+- ✅ Battle-tested C implementation
+
+## INDIGO Source
+
+The build system supports multiple INDIGO source locations:
+
+### 1. Git Submodule (Default)
+
+```bash
+git submodule update --init --recursive
+cargo build
 ```
 
-## Release
+### 2. Custom Location
 
-Install [cargo-release](https://github.com/crate-ci/cargo-release), follow the instructions.
+```bash
+export INDIGO_SOURCE=/path/to/indigo
+cargo build -p libindigo-sys
+```
+
+### 3. System Libraries (Linux)
+
+If `/usr/include/indigo/indigo_version.h` exists, system libraries are used automatically.
+
+## Version Management
+
+### Check INDIGO Version
+
+The build system extracts the INDIGO version at build time:
+
+```rust
+use libindigo::version;
+println!("INDIGO version: {}", version::INDIGO_VERSION);
+// Output: INDIGO version: 2.0.358
+```
+
+### Update Versions
+
+When updating the INDIGO submodule:
+
+```bash
+# Update INDIGO submodule
+git submodule update --remote sys/externals/indigo
+
+# Update workspace versions
+./scripts/update_version.sh
+
+# Rebuild
+cargo clean && cargo build
+```
+
+## Common Issues
+
+### Submodule Not Initialized
+
+```bash
+git submodule update --init --recursive --depth 1
+```
+
+### Build Fails on macOS
+
+Install Xcode Command Line Tools:
+
+```bash
+xcode-select --install
+```
+
+### Build Fails on Linux
+
+Install INDIGO dependencies:
+
+```bash
+sudo apt-get install build-essential libudev-dev libusb-1.0-0-dev
+```
+
+## Testing
+
+```bash
+# Run all tests
+cargo test --workspace --exclude relm
+
+# Run specific crate tests
+cargo test -p libindigo
+cargo test -p libindigo-rs
+cargo test -p libindigo-sys
+```
+
+## Documentation
+
+```bash
+# Build and open documentation
+cargo doc --open --no-deps
+```
+
+## CI/CD
+
+For CI/CD pipelines, use shallow clones:
+
+```bash
+git submodule update --init --recursive --depth 1
+cargo build --workspace --exclude relm
+```
+
+## More Information
+
+- **Build System**: [`docs/build-system.md`](docs/build-system.md)
+- **Architecture**: [`docs/architecture/`](docs/architecture/)
+- **Examples**: [`examples/`](examples/)
+- **Issues**: [`plans/issues.md`](plans/issues.md)
+
+## Getting Help
+
+- GitHub Issues: <https://github.com/chrsoo/libindigo-rs/issues>
+- INDIGO Documentation: <https://www.indigo-astronomy.org/>

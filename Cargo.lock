@@ -421,11 +421,12 @@ checksum = "c19937216e9d3aa9956d9bb8dfc0b0c8beb6058fc4f7a4dc4d850edf86a237d6"
 
 [[package]]
 name = "libindigo"
-version = "0.3.2+INDIGO.2.0.300"
+version = "0.3.2+INDIGO.2.0.358"
 dependencies = [
  "async-trait",
  "bindgen",
  "env_logger",
+ "libindigo-build-utils",
  "libindigo-ffi",
  "libindigo-rs",
  "once_cell",
@@ -435,6 +436,14 @@ dependencies = [
  "test-log",
  "thiserror 1.0.65",
  "tokio",
+]
+
+[[package]]
+name = "libindigo-build-utils"
+version = "0.1.0"
+dependencies = [
+ "regex",
+ "semver",
 ]
 
 [[package]]
@@ -469,9 +478,10 @@ dependencies = [
 
 [[package]]
 name = "libindigo-sys"
-version = "0.3.2+INDIGO.2.0.300"
+version = "0.3.2+INDIGO.2.0.358"
 dependencies = [
  "bindgen",
+ "libindigo-build-utils",
  "regex",
  "rev_buf_reader",
  "semver",

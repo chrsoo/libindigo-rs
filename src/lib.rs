@@ -104,6 +104,27 @@ pub mod name {
     }
 }
 
+/// INDIGO library version information.
+///
+/// This module contains version constants extracted from the INDIGO source code
+/// at build time. These constants reflect the version of the INDIGO library
+/// that was used to generate the bindings.
+///
+/// # Example
+///
+/// ```ignore
+/// use libindigo::version;
+///
+/// println!("INDIGO version: {}", version::INDIGO_VERSION);
+/// println!("Major: {}, Minor: {}, Build: {}",
+///     version::INDIGO_VERSION_MAJOR,
+///     version::INDIGO_VERSION_MINOR,
+///     version::INDIGO_BUILD);
+/// ```
+pub mod version {
+    include!(concat!(env!("OUT_DIR"), "/version.rs"));
+}
+
 #[cfg(test)]
 mod tests {
     // Core API tests

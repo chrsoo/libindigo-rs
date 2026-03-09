@@ -8,8 +8,8 @@ use std::{env, io};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-// TODO source INDIGO version and build information from INDIGO source code
-// NOTE create aux crate for build related functionality shared with the sys crate
+// Shared build utilities for version extraction
+use libindigo_build_utils::{generate_version_constants, parse_indigo_version};
 
 /// used for cloning the INDIGO git repository when source is retrieved from a crate
 const INDIGO_GIT_REPOSITORY: &str = "https://github.com/indigo-astronomy/indigo";
@@ -30,8 +30,24 @@ static RE: Lazy<Regex> =
 fn main() -> std::io::Result<()> {
     let submodule = Path::new(INDIGO_GIT_SUBMODULE);
 
-    // Always try to extract constants if the submodule exists
+    // Always try to extract constants and version if the submodule exists
     if submodule.exists() {
+        // Extract INDIGO version and generate version constants
+        if let Ok(version) = parse_indigo_version(&submodule) {
+            println!(
+                "cargo:rustc-env=INDIGO_VERSION={}.{}.{}",
+                version.major, version.minor, version.patch
+            );
+
+            // Generate version constants file
+            let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+            let version_path = out_dir.join("version.rs");
+            std::fs::write(version_path, generate_version_constants(&version))?;
+        } else {
+            eprintln!("Warning: Could not extract INDIGO version");
+        }
+
+        // Extract property/item name constants
         if let Err(e) = extract_indigo_constants(&submodule) {
             eprintln!("Warning: Could not extract INDIGO constants: {}", e);
             eprintln!("Continuing with existing constants.rs");
@@ -40,6 +56,11 @@ fn main() -> std::io::Result<()> {
         eprintln!("INDIGO submodule not found at {}", INDIGO_GIT_SUBMODULE);
         eprintln!("Run: git submodule update --init --recursive");
         eprintln!("Continuing with existing constants.rs");
+
+        // Create empty version file for builds without submodule
+        let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+        let version_path = out_dir.join("version.rs");
+        std::fs::write(version_path, "// INDIGO version unavailable\n")?;
     }
 
     // Only generate FFI bindings when building with FFI features

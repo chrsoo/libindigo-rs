@@ -6,3 +6,11 @@
 
 // Raw bindgen-generated FFI bindings to the INDIGO C library
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+
+/// INDIGO library version information.
+///
+/// This module contains version constants extracted from the INDIGO source code
+/// at build time.
+pub mod version {
+    include!(concat!(env!("OUT_DIR"), "/version.rs"));
+}

@@ -1,15 +1,15 @@
 use bindgen::callbacks::ParseCallbacks;
 use core::str;
-use regex::Regex;
 use rev_buf_reader::RevBufReader;
-use semver::Version;
 use std::env;
 use std::ffi::OsString;
 use std::fmt::{Debug, Display};
 use std::fs::{self, File};
-use std::io::BufReader;
 use std::io::{self, prelude::*, Result};
 use std::path::{Path, PathBuf};
+
+// Shared build utilities for version extraction
+use libindigo_build_utils::{generate_version_constants, parse_indigo_version};
 
 /// used for cloning the INDIGO git repository when source is retrieved from a crate
 const INDIGO_GIT_REPOSITORY: &str = "https://github.com/indigo-astronomy/indigo";
@@ -60,7 +60,7 @@ impl ParseCallbacks for IndigoCallbacks {
 }
 
 fn main() -> std::io::Result<()> {
-    let include = if let Ok(envar) = env::var(INDIGO_SOURCE_ENVAR) {
+    let (include, indigo_root) = if let Ok(envar) = env::var(INDIGO_SOURCE_ENVAR) {
         eprintln!(
             "building INDIGO from source dir {:?} found in {:?}",
             envar, INDIGO_SOURCE_ENVAR
@@ -69,10 +69,12 @@ fn main() -> std::io::Result<()> {
         let indigo_source = indigo_source
             .canonicalize()
             .expect("cannot canonicalize path");
-        make_indigo(&indigo_source)?
+        let include = make_indigo(&indigo_source)?;
+        (include, Some(indigo_source))
     } else if let Ok(submodule) = Path::new(GIT_SUBMODULE).canonicalize() {
         eprintln!("building INDIGO from submodule {:?}", GIT_SUBMODULE);
-        make_indigo(&submodule)?
+        let include = make_indigo(&submodule)?;
+        (include, Some(submodule))
     } else if Path::new(LINUX_INDIGO_VERSION_HEADER).is_file() {
         eprintln!("using system libraries");
         let lib_dir = Path::new(LINUX_LIB)
@@ -80,7 +82,7 @@ fn main() -> std::io::Result<()> {
             .expect("could not find /usr/lib");
         println!("cargo:rustc-link-search=native={}", lib_dir);
         println!("cargo:rustc-link-lib=libindigo");
-        PathBuf::from(LINUX_INCLUDE)
+        (PathBuf::from(LINUX_INCLUDE), None)
     } else {
         // last ditch effort
         eprintln!("checking out git submodule");
@@ -89,8 +91,31 @@ fn main() -> std::io::Result<()> {
             "building INDIGO from submodule {}",
             submodule.to_str().expect("expected git submodule")
         );
-        make_indigo(&submodule)?
+        let include = make_indigo(&submodule)?;
+        (include, Some(submodule.clone()))
     };
+
+    // Extract and export INDIGO version if we have the source
+    if let Some(root) = indigo_root {
+        if let Ok(version) = parse_indigo_version(&root) {
+            println!(
+                "cargo:rustc-env=INDIGO_VERSION={}.{}.{}",
+                version.major, version.minor, version.patch
+            );
+
+            // Generate version constants file
+            let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+            let version_path = out_dir.join("version.rs");
+            std::fs::write(version_path, generate_version_constants(&version))?;
+
+            eprintln!(
+                "Extracted INDIGO version: {}.{}.{}",
+                version.major, version.minor, version.patch
+            );
+        } else {
+            eprintln!("Warning: Could not extract INDIGO version from source");
+        }
+    }
 
     // The bindgen::Builder is the main entry point
     // to bindgen, and lets you build up options for
@@ -172,47 +197,8 @@ fn join_paths(base: &Path, path: &str) -> String {
     String::from(s)
 }
 
-/// Parse the INDIGO Makefile and extract version and build numbers.
-fn _parse_indigo_version(indigo_root: &Path) -> std::io::Result<Version> {
-    // TODO extract build from indigo_config.h - what about version?
-    // let m = indigo_root.join("indigo_libs/indigo/indigo_config.h");
-    let m = indigo_root.join("Makefile");
-
-    let mut version = Version::new(0, 0, 0);
-    let re_version = Regex::new(r"^INDIGO_VERSION *= *(\d+)\.(\d+) *$").unwrap();
-    let re_build = Regex::new(r"^INDIGO_BUILD *= *(\d+) *$").unwrap();
-
-    if let Ok(file) = File::open(m) {
-        let buf = BufReader::new(file);
-        for l in buf.lines() {
-            let s = l.unwrap();
-            if let Some(v) = re_version.captures(&s) {
-                version.major = v[1].parse::<u64>().unwrap();
-                version.minor = v[2].parse::<u64>().unwrap();
-            } else if let Some(v) = re_build.captures(&s) {
-                version.patch = v[1].parse::<u64>().unwrap();
-            }
-        }
-    } else {
-        panic!("could not open INDIGO Makefile");
-    }
-    Ok(version)
-}
-
-/// Ensure that the Cargo package version string includes the correct INDIGO build number.
-fn _ensure_build_version(indigo_root: &Path) -> std::io::Result<()> {
-    let indigo_version = _parse_indigo_version(indigo_root)?;
-
-    if let Ok(v) = env::var("CARGO_PKG_VERSION") {
-        if let Ok(pkg_version) = Version::parse(&v) {
-            assert_eq!(indigo_version, pkg_version,
-                "the Makefile INDIGO_VERSION and INDIGO_BUILD (left) does not match the cargo package version (right)")
-        } else {
-            panic!("could not parse package version `{}`", v);
-        }
-    }
-    Ok(())
-}
+// Version parsing moved to libindigo-build-utils crate
+// These functions are kept for reference but are no longer used
 
 fn taillog(file: &str, limit: usize, err: bool) {
     // let file = root.join(file);

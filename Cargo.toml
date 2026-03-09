@@ -1,13 +1,13 @@
 [workspace]
 # Note: relm is excluded because it requires GTK4 system libraries and needs refactoring
 # to use the new API. See relm/README.md for details.
-members = [".", "sys", "rs", "ffi"]
+members = [".", "sys", "rs", "ffi", "build_utils"]
 exclude = ["relm"]
 
 [package]
 name = "libindigo"
 description = "Core API for developing INDIGO astronomy clients and devices."
-version = "0.3.2+INDIGO.2.0.300"
+version = "0.3.2+INDIGO.2.0.358"
 license = "MIT"
 homepage = "https://github.com/chrsoo/libindigo-rs"
 repository = "https://github.com/chrsoo/libindigo-rs"
@@ -44,6 +44,7 @@ rand = "0.8"
 bindgen = "0.71"
 regex = "1.11"
 once_cell = "1.21"
+libindigo-build-utils = { path = "build_utils" }
 
 [dev-dependencies]
 test-log = "0.2.16"
