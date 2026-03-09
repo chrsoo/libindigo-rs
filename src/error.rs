@@ -50,6 +50,29 @@ pub enum IndigoError {
     /// Operation not supported by current strategy or configuration.
     #[error("Not supported: {0}")]
     NotSupported(String),
+
+    /// Property builder error occurred.
+    #[error("Property builder error: {0}")]
+    PropertyBuilderError(#[from] PropertyBuilderError),
+}
+
+/// Error type for property builder operations.
+///
+/// This error type is returned when required fields are missing during
+/// property construction.
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum PropertyBuilderError {
+    /// Device name is required but was not set.
+    #[error("Device name is required")]
+    MissingDevice,
+
+    /// Property name is required but was not set.
+    #[error("Property name is required")]
+    MissingName,
+
+    /// Property type is required but was not set.
+    #[error("Property type is required")]
+    MissingPropertyType,
 }
 
 /// A specialized `Result` type for libindigo operations.

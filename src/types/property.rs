@@ -4,6 +4,7 @@
 //! along with builder patterns for ergonomic construction.
 
 use super::value::PropertyValue;
+use crate::error::PropertyBuilderError;
 use std::collections::HashMap;
 
 /// Represents an INDIGO property with its metadata and items.
@@ -184,7 +185,8 @@ impl Property {
     /// let property = Property::builder()
     ///     .device("CCD Simulator")
     ///     .name("CCD_EXPOSURE")
-    ///     .build();
+    ///     .property_type(PropertyType::Number)
+    ///     .build()?;
     /// ```
     pub fn builder() -> PropertyBuilder {
         PropertyBuilder::default()
@@ -281,24 +283,44 @@ impl PropertyBuilder {
 
     /// Builds the property.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if required fields (device, name, property_type) are not set.
-    /// TODO: Return Result instead of panicking in future phases.
-    pub fn build(self) -> Property {
-        Property {
-            device: self.device.expect("device is required"),
-            name: self.name.expect("name is required"),
+    /// Returns an error if required fields are not set:
+    /// - [`PropertyBuilderError::MissingDevice`] if device is not set
+    /// - [`PropertyBuilderError::MissingName`] if name is not set
+    /// - [`PropertyBuilderError::MissingPropertyType`] if property_type is not set
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use libindigo::types::{Property, PropertyType};
+    ///
+    /// let property = Property::builder()
+    ///     .device("CCD Simulator")
+    ///     .name("CCD_EXPOSURE")
+    ///     .property_type(PropertyType::Number)
+    ///     .build()?;
+    /// ```
+    pub fn build(self) -> Result<Property, PropertyBuilderError> {
+        let device = self.device.ok_or(PropertyBuilderError::MissingDevice)?;
+        let name = self.name.ok_or(PropertyBuilderError::MissingName)?;
+        let property_type = self
+            .property_type
+            .ok_or(PropertyBuilderError::MissingPropertyType)?;
+
+        Ok(Property {
+            device,
+            name,
             group: self.group.unwrap_or_default(),
             label: self.label.unwrap_or_default(),
             state: self.state,
             perm: self.perm,
-            property_type: self.property_type.expect("property_type is required"),
+            property_type,
             items: self.items,
             timeout: self.timeout,
             timestamp: self.timestamp,
             message: self.message,
-        }
+        })
     }
 }
 

@@ -909,7 +909,7 @@ impl ClientStrategy for RsClientStrategy {
     ///     .name("CONNECTION")
     ///     .property_type(PropertyType::Switch)
     ///     .item(PropertyItem::new("CONNECT", "Connect", PropertyValue::switch(SwitchState::On)))
-    ///     .build();
+    ///     .build()?;
     ///
     /// strategy.send_property(property).await?;
     /// ```

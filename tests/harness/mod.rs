@@ -26,7 +26,8 @@
 //! #[tokio::test]
 //! async fn test_something() {
 //!     // Initialize harness (idempotent - safe to call multiple times)
-//!     TestHarness::initialize().unwrap();
+//!     // Note: initialize() is async and must be awaited
+//!     TestHarness::initialize().await.unwrap();
 //!
 //!     // Reset state before test
 //!     TestHarness::reset_for_test().await.unwrap();
@@ -50,6 +51,7 @@
 //! - `INDIGO_TEST_SKIP_SERVER`: Skip server startup (use existing)
 //! - `INDIGO_TEST_SERVER_HOST`: Server host (default: localhost)
 //! - `INDIGO_TEST_LOG_LEVEL`: Logging level
+//! - `INDIGO_TEST_STATE_RESET_TIMEOUT`: State reset timeout in seconds
 //!
 //! ## Graceful Degradation
 //!
@@ -69,6 +71,30 @@
 //!     // Test continues...
 //! }
 //! ```
+//!
+//! ## Advanced Features
+//!
+//! The harness provides additional functionality for complex test scenarios:
+//!
+//! ```rust,no_run
+//! use tests::harness::TestHarness;
+//!
+//! #[tokio::test]
+//! async fn test_with_diagnostics() {
+//!     TestHarness::initialize().await.unwrap();
+//!
+//!     // Check server health
+//!     let status = TestHarness::get_server_status().await.unwrap();
+//!     assert!(status.reachable);
+//!
+//!     // Get state statistics
+//!     let stats = TestHarness::get_state_statistics().unwrap();
+//!     println!("Resets performed: {}", stats.total_resets);
+//!
+//!     // Print full diagnostics
+//!     TestHarness::print_diagnostics();
+//! }
+//! ```
 
 pub mod config;
 pub mod harness;
@@ -79,6 +105,6 @@ pub mod state;
 // Re-export main types for convenience
 pub use config::TestConfig;
 pub use harness::TestHarness;
-pub use health::{HealthMonitor, ServerStatus};
+pub use health::{HealthMonitor, RetryConfig, ServerStatus};
 pub use server::{ServerConfig, ServerManager, ServerState};
-pub use state::StateManager;
+pub use state::{StateInfo, StateManager, StateStatistics};

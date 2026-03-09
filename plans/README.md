@@ -16,11 +16,20 @@ Currently, all active work is tracked in the root-level plans. Move plans to `ac
 
 ### Phase-Based Implementation
 
-- [`phase1-complete.md`](archive/phase1-complete.md) - Foundation & Core Types
+- [`phase1-complete.md`](archive/phase1-complete.md) - Foundation & Core Types (Original)
 - [`phase2-complete.md`](archive/phase2-complete.md) - FFI Strategy Implementation
 - [`phase3-client-implementation.md`](archive/phase3-client-implementation.md) - Client Implementation Details
 - [`phase3-complete.md`](archive/phase3-complete.md) - Pure Rust Strategy Implementation
 - [`phase3-json-complete.md`](archive/phase3-json-complete.md) - JSON Protocol Implementation
+
+### Current Phase Completion
+
+- [`PHASE1_COMPLETE.md`](PHASE1_COMPLETE.md) - **Phase 1: Critical Bugs & Infrastructure** ✅ (2026-03-09)
+  - Issue #14: Property Conversions Return Result
+  - Issue #15: Fix Tokio Runtime Nesting
+  - Issue #16: Ensure Test Isolation
+  - Issue #28: Comprehensive Integration Test Harness
+  - Issue #39: Integration Tests Migration
 
 ## Current Plans
 

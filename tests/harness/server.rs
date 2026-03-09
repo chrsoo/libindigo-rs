@@ -39,6 +39,7 @@ pub struct ServerManager {
     config: ServerConfig,
     state: ServerState,
     output_lines: Arc<Mutex<Vec<String>>>,
+    start_time: Option<Instant>,
 }
 
 impl ServerManager {
@@ -49,6 +50,7 @@ impl ServerManager {
             config,
             state: ServerState::NotStarted,
             output_lines: Arc::new(Mutex::new(Vec::new())),
+            start_time: None,
         }
     }
 
@@ -187,6 +189,12 @@ impl ServerManager {
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
 
+        eprintln!(
+            "[INDIGO] Starting server on port {} with drivers: {}",
+            self.config.port,
+            self.config.drivers.join(", ")
+        );
+
         // Spawn process
         let mut child = cmd
             .spawn()
@@ -231,7 +239,24 @@ impl ServerManager {
 
         self.process = Some(child);
         self.state = ServerState::Running;
+        self.start_time = Some(Instant::now());
 
+        eprintln!("[INDIGO] Server process started successfully");
+
+        Ok(())
+    }
+
+    /// Restart the server
+    ///
+    /// This stops the current server and starts a new one with the same configuration.
+    pub fn restart(&mut self) -> Result<(), String> {
+        eprintln!("[INDIGO] Restarting server...");
+        self.stop()?;
+
+        // Wait a moment for port to be released
+        thread::sleep(Duration::from_millis(500));
+
+        self.start()?;
         Ok(())
     }
 
@@ -239,8 +264,9 @@ impl ServerManager {
     pub fn is_running(&mut self) -> bool {
         if let Some(ref mut child) = self.process {
             match child.try_wait() {
-                Ok(Some(_status)) => {
+                Ok(Some(status)) => {
                     // Process has exited
+                    eprintln!("[INDIGO] Server process exited with status: {:?}", status);
                     self.state = ServerState::Stopped;
                     false
                 }
@@ -248,8 +274,9 @@ impl ServerManager {
                     // Process is still running
                     true
                 }
-                Err(_) => {
+                Err(e) => {
                     // Error checking status
+                    eprintln!("[INDIGO] Error checking server status: {}", e);
                     false
                 }
             }
@@ -268,6 +295,11 @@ impl ServerManager {
         self.state
     }
 
+    /// Get server uptime
+    pub fn uptime(&self) -> Option<Duration> {
+        self.start_time.map(|start| start.elapsed())
+    }
+
     /// Get captured server output
     pub fn get_output(&self) -> Vec<String> {
         self.output_lines.lock().unwrap().clone()
@@ -284,40 +316,56 @@ impl ServerManager {
         output[start..].to_vec()
     }
 
+    /// Clear captured output
+    pub fn clear_output(&self) {
+        self.output_lines.lock().unwrap().clear();
+    }
+
     /// Stop the server gracefully
     pub fn stop(&mut self) -> Result<(), String> {
         if self.state == ServerState::Stopped || self.state == ServerState::NotStarted {
             return Ok(());
         }
 
+        eprintln!("[INDIGO] Stopping server...");
         self.state = ServerState::ShuttingDown;
 
         if let Some(mut child) = self.process.take() {
             // Try graceful shutdown first (SIGTERM on Unix)
             #[cfg(unix)]
             {
-                use std::os::unix::process::CommandExt;
                 let pid = child.id();
+                eprintln!("[INDIGO] Sending SIGTERM to process {}", pid);
                 let _ = Command::new("kill")
                     .arg("-TERM")
                     .arg(pid.to_string())
                     .status();
             }
 
+            #[cfg(windows)]
+            {
+                // On Windows, try to kill gracefully
+                let _ = child.kill();
+            }
+
             // Wait for process to exit with timeout
             let start = Instant::now();
             loop {
                 match child.try_wait() {
-                    Ok(Some(_status)) => {
+                    Ok(Some(status)) => {
+                        eprintln!("[INDIGO] Server stopped with status: {:?}", status);
                         self.state = ServerState::Stopped;
+                        self.start_time = None;
                         return Ok(());
                     }
                     Ok(None) => {
                         if start.elapsed() > self.config.shutdown_timeout {
                             // Timeout - force kill
+                            eprintln!("[INDIGO] Shutdown timeout - forcing kill");
                             let _ = child.kill();
                             let _ = child.wait();
                             self.state = ServerState::Stopped;
+                            self.start_time = None;
                             return Err("Server shutdown timeout - forced kill".to_string());
                         }
                         thread::sleep(Duration::from_millis(100));
@@ -330,11 +378,14 @@ impl ServerManager {
         }
 
         self.state = ServerState::Stopped;
+        self.start_time = None;
         Ok(())
     }
 
     /// Force kill the server (fallback)
     pub fn kill(&mut self) -> Result<(), String> {
+        eprintln!("[INDIGO] Force killing server...");
+
         if let Some(mut child) = self.process.take() {
             child
                 .kill()
@@ -342,17 +393,27 @@ impl ServerManager {
             child
                 .wait()
                 .map_err(|e| format!("Failed to wait for killed process: {}", e))?;
+            eprintln!("[INDIGO] Server killed");
         }
 
         self.state = ServerState::Stopped;
+        self.start_time = None;
         Ok(())
+    }
+
+    /// Get process ID if running
+    pub fn pid(&self) -> Option<u32> {
+        self.process.as_ref().map(|child| child.id())
     }
 }
 
 impl Drop for ServerManager {
     fn drop(&mut self) {
         // Ensure server is stopped when manager is dropped
-        let _ = self.stop();
+        if self.state == ServerState::Running {
+            eprintln!("[INDIGO] ServerManager dropped - stopping server");
+            let _ = self.stop();
+        }
     }
 }
 
@@ -372,6 +433,7 @@ mod tests {
 
         let manager = ServerManager::new(config);
         assert_eq!(manager.state(), ServerState::NotStarted);
+        assert_eq!(manager.uptime(), None);
     }
 
     #[test]
@@ -386,5 +448,20 @@ mod tests {
 
         let manager = ServerManager::new(config);
         assert_eq!(manager.address(), "localhost:7625");
+    }
+
+    #[test]
+    fn test_output_management() {
+        let config = ServerConfig {
+            binary_path: PathBuf::from("/usr/local/bin/indigo_server"),
+            port: 7624,
+            drivers: vec![],
+            startup_timeout: Duration::from_secs(10),
+            shutdown_timeout: Duration::from_secs(5),
+        };
+
+        let manager = ServerManager::new(config);
+        assert_eq!(manager.get_output().len(), 0);
+        assert_eq!(manager.tail_output(10).len(), 0);
     }
 }
