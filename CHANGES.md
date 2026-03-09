@@ -7,6 +7,52 @@ This file tracks user-facing features organized by release version.
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-03-09
+
+### Added
+
+- **Build System Simplification** - Major improvements to build process
+  - Created `libindigo-build-utils` crate for shared build functionality
+  - Automated INDIGO version extraction from Makefile
+  - Runtime version information via `libindigo::version` module
+  - SemVer build metadata tracking INDIGO version (e.g., `0.3.3+INDIGO.2.0.358`)
+  - Automated constant extraction from `indigo_names.h` (1,281 constants)
+  - Version update automation script (`scripts/update_version.sh`)
+  - Comprehensive build system documentation (`docs/build-system.md`)
+
+### Changed
+
+- **10x Faster Pure Rust Builds** - Reduced from ~30s to ~3s
+  - Refactored `build.rs` to extract constants without compiling INDIGO
+  - FFI compilation only when needed (libindigo-sys, libindigo-ffi)
+  - Constants extracted via regex parsing instead of compilation
+- **Improved Build Architecture**
+  - Clear separation: constant extraction vs FFI compilation
+  - Support for multiple INDIGO source locations
+  - Better CI/CD integration with fast pure Rust builds
+
+### Fixed
+
+- **Issue #39**: Integration tests no longer require running INDIGO server
+- **Issue #40**: Simplified FFI build strategy in CI/CD
+- **Issue #44**: Device metadata fields now populated with INDIGO version
+- **Issue #51**: Automated version bumping across workspace modules
+- **Issue #55**: Automated maintenance of `src/constants.rs`
+
+### Documentation
+
+- Added `docs/build-system.md` - Complete build system guide
+- Updated `BUILD.md` - Quick-start build instructions
+- Added `plans/PHASE3_BUILD_SIMPLIFICATION.md` - Implementation details
+
+### Performance
+
+- Pure Rust builds: ~3 seconds (10x improvement)
+- FFI builds: ~16 seconds (first time), ~3 seconds (cached)
+- Full workspace: ~55 seconds
+
+See [`plans/PHASE3_BUILD_SIMPLIFICATION.md`](plans/PHASE3_BUILD_SIMPLIFICATION.md) for complete details.
+
 ### Planned for 0.3.0
 
 #### Features
