@@ -1,8 +1,31 @@
 # Git Workflow Rules
 
+## MCP Git Tools
+
+**Use MCP Git tools as primary interface.** Fall back to CLI only for unsupported operations.
+
+| Operation | MCP Tool | CLI Fallback |
+| --- | --- | --- |
+| Status | `mcp--git--git_status` | - |
+| Log | `mcp--git--git_log` | - |
+| Diff | `mcp--git--git_diff_*` | - |
+| Commit | `mcp--git--git_commit` | - |
+| Add | `mcp--git--git_add` | - |
+| Reset | `mcp--git--git_reset` | - |
+| Checkout | `mcp--git--git_checkout` | - |
+| Create branch | `mcp--git--git_create_branch` | - |
+| List branches | `mcp--git--git_list_branches` | - |
+| Show | `mcp--git--git_show` | - |
+| Push | - | `git push` |
+| Pull | - | `git pull` |
+| Merge | - | `git merge` |
+| Tag | - | `git tag` |
+| Delete branch | - | `git branch -d` |
+| Delete remote | - | `git push origin --delete` |
+
 ## Gitflow Branches
 
-- `master` - Production releases only, tagged with semantic versions
+- `master` - Production releases, tagged with semantic versions
 - `develop` - Integration branch for features
 - `feature/*` - New features, branch from `develop`
 - `release/*` - Release preparation, branch from `develop`
@@ -12,7 +35,7 @@
 
 - **Never commit directly to `master` or `develop`**
 - Always work on `feature/*` branches
-- Branch from `develop` for new work: `feature/issue-123-description`
+- Branch from `develop`: `feature/issue-123-description`
 - Merge to `develop` via PR after tests pass
 - After release/hotfix, merge to BOTH `master` and `develop`
 
@@ -20,21 +43,18 @@
 
 ### 1. Start Work
 
-```bash
-git checkout develop
-git pull origin develop
-git checkout -b feature/issue-123-short-name
-```
+1. Checkout develop: `mcp--git--git_checkout` (branch: `develop`)
+2. Pull latest: `git pull origin develop`
+3. Create feature branch: `mcp--git--git_create_branch` (branch: `feature/issue-123-short-name`)
 
 ### 2. Implement & Commit
 
-- Make changes incrementally
-- Commit with clear messages (see format below)
-- Push branch: `git push -u origin feature/issue-123-short-name`
+1. Make changes incrementally
+2. Stage files: `mcp--git--git_add`
+3. Commit: `mcp--git--git_commit` (message parameter handles multi-line)
+4. Push: `git push -u origin feature/issue-123-short-name`
 
 ### 3. Pre-Merge Checklist
-
-Before creating PR:
 
 - [ ] All changes committed
 - [ ] Branch pushed to origin
@@ -44,6 +64,7 @@ Before creating PR:
 
 ### 4. Create PR
 
+Use MCP GitHub tools (see [`.roorules/issues.md`](.roorules/issues.md)):
 - Link to tracking issue: `Closes #123` or `Related to #123`
 - Describe what changed and why
 - Request review if needed
@@ -61,27 +82,16 @@ Before creating PR:
 <optional body>
 ```
 
-### Types
+**Types**: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `chore`, `ci`
 
-- `feat` - New feature
-- `fix` - Bug fix
-- `docs` - Documentation only
-- `test` - Tests only
-- `refactor` - Code refactoring
-- `perf` - Performance improvement
-- `chore` - Maintenance (dependencies, build, etc.)
-- `ci` - CI/CD changes
+**Rules**:
+- Summary: Max 72 chars, imperative mood, no period
+- Body: Wrap at 72 chars, explain what/why not how
+- References: Include issue numbers (`#123`)
 
-### Rules
+**Examples**:
 
-- **Summary**: Max 72 chars, imperative mood, no period
-- **Body**: Wrap at 72 chars, explain what/why not how
-- **References**: Include issue numbers (`#123`)
-
-### Examples
-
-Good:
-
+✅ Good:
 ```text
 feat: Add timeout handling to integration tests
 
@@ -91,13 +101,12 @@ feat: Add timeout handling to integration tests
 Closes #145
 ```
 
-Bad:
-
+❌ Bad:
 ```text
-❌ Update CI/CD pipeline for pure Rust and FFI strategies...
+Update CI/CD pipeline for pure Rust and FFI strategies...
 (Too long - exceeds 72 characters)
 
-❌ Fixed stuff
+Fixed stuff
 (Too vague)
 ```
 
@@ -105,54 +114,34 @@ Bad:
 
 ### Creating a Release
 
-```bash
-git checkout develop
-git checkout -b release/v0.3.0
-# Update version numbers, CHANGES.md
-git commit -m "chore: Prepare v0.3.0 release"
-git push origin release/v0.3.0
-```
+1. Checkout develop: `mcp--git--git_checkout` (branch: `develop`)
+2. Create release branch: `mcp--git--git_create_branch` (branch: `release/v0.3.0`)
+3. Update version numbers, CHANGES.md
+4. Commit: `mcp--git--git_commit` (message: `chore: Prepare v0.3.0 release`)
+5. Push: `git push origin release/v0.3.0`
 
 ### Finishing a Release
 
-```bash
-# Merge to master
-git checkout master
-git merge --no-ff release/v0.3.0
-git tag -a v0.3.0 -m "Release v0.3.0"
-git push origin master --tags
-
-# Merge back to develop
-git checkout develop
-git merge --no-ff release/v0.3.0
-git push origin develop
-
-# Delete release branch
-git branch -d release/v0.3.0
-git push origin --delete release/v0.3.0
-```
+1. Checkout master: `mcp--git--git_checkout` (branch: `master`)
+2. Merge: `git merge --no-ff release/v0.3.0`
+3. Tag: `git tag -a v0.3.0 -m "Release v0.3.0"`
+4. Push: `git push origin master --tags`
+5. Checkout develop: `mcp--git--git_checkout` (branch: `develop`)
+6. Merge back: `git merge --no-ff release/v0.3.0`
+7. Push: `git push origin develop`
+8. Delete local: `git branch -d release/v0.3.0`
+9. Delete remote: `git push origin --delete release/v0.3.0`
 
 ## Hotfix Workflow
 
-```bash
-# Create hotfix from master
-git checkout master
-git checkout -b hotfix/v0.2.1
-
-# Fix and commit
-git commit -m "fix: Critical bug in discovery module"
-
-# Merge to master
-git checkout master
-git merge --no-ff hotfix/v0.2.1
-git tag -a v0.2.1 -m "Hotfix v0.2.1"
-git push origin master --tags
-
-# Merge to develop
-git checkout develop
-git merge --no-ff hotfix/v0.2.1
-git push origin develop
-
-# Delete hotfix branch
-git branch -d hotfix/v0.2.1
-```
+1. Checkout master: `mcp--git--git_checkout` (branch: `master`)
+2. Create hotfix: `mcp--git--git_create_branch` (branch: `hotfix/v0.2.1`)
+3. Fix and commit: `mcp--git--git_commit`
+4. Checkout master: `mcp--git--git_checkout` (branch: `master`)
+5. Merge: `git merge --no-ff hotfix/v0.2.1`
+6. Tag: `git tag -a v0.2.1 -m "Hotfix v0.2.1"`
+7. Push: `git push origin master --tags`
+8. Checkout develop: `mcp--git--git_checkout` (branch: `develop`)
+9. Merge: `git merge --no-ff hotfix/v0.2.1`
+10. Push: `git push origin develop`
+11. Delete: `git branch -d hotfix/v0.2.1`

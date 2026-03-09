@@ -4,19 +4,29 @@
 
 **GitHub Issues are the single source of truth for all actionable work items.**
 
-Use for:
-- All actionable tasks
-- Bug reports
-- Feature requests
-- Work tracking
+Use for: All actionable tasks, bug reports, feature requests, work tracking
 
 **NOT for**: Project documentation (use `docs/` instead)
+
+## MCP GitHub Tools
+
+**Always use MCP GitHub tools.** Never use `gh` CLI.
+
+| Operation | MCP Tool |
+| --- | --- |
+| List issues | `mcp--github--list_issues` |
+| Search issues | `mcp--github--search_issues` |
+| Create issue | `mcp--github--create_issue` |
+| View details | `mcp--github--get_issue` |
+| Update issue | `mcp--github--update_issue` |
+| Add comment | `mcp--github--add_issue_comment` |
+| Create PR | `mcp--github--create_pull_request` |
 
 ## Workflow
 
 ### 1. Creating Work Items
 
-**Always create a GitHub Issue first** using the **GitHub MCP tool**.
+**Always create a GitHub Issue first** using `mcp--github--create_issue`.
 
 **Never** create tasks in:
 - ❌ `docs/*.md` files
@@ -25,22 +35,7 @@ Use for:
 - ❌ Local TODO files
 - ❌ Code comments with TODO/FIXME
 
-### 2. Referencing Plans
-
-Issues reference plans for implementation details:
-
-```markdown
-## Overview
-Brief description
-
-## Implementation Plan
-See [`plans/feature-name.md`](plans/feature-name.md)
-
-## Acceptance Criteria
-- [ ] Specific, testable criteria
-```
-
-### 3. Issue Types
+### 2. Issue Types
 
 | Icon | Name | Use |
 | --- | --- | --- |
@@ -50,7 +45,7 @@ See [`plans/feature-name.md`](plans/feature-name.md)
 | 🐛 | **Bug** | Functional defects or regressions |
 | 🔍 | **Discussion** | Architectural proposals or RFCs |
 
-### 4. Labels
+### 3. Labels
 
 > [!NOTE] Use label names without emojis (e.g., "chore" not "🛠️ chore")
 
@@ -62,14 +57,14 @@ See [`plans/feature-name.md`](plans/feature-name.md)
 
 **Area**: `area:core`, `area:docs`, `area:protocol`, `area:build`, `area:tests`, `area:rs`, `area:ffi`
 
-### 5. Issue Lifecycle
+### 4. Issue Lifecycle
 
 1. **Open** - Created, not started
 2. **In Progress** - Actively worked on (assign to yourself)
 3. **Review** - PR created, awaiting review
 4. **Closed** - Work completed and merged
 
-### 6. Linking Issues and PRs
+### 5. Linking Issues and PRs
 
 ```markdown
 Closes #123
@@ -81,13 +76,13 @@ Related to #789
 
 ### ✅ DO
 
-1. **Use GitHub MCP tools** for all GitHub operations
-2. **Check issues first** before creating tasks
-3. **Create issue** for any new work
+1. **Use MCP GitHub tools** for all GitHub operations
+2. **Check issues first** before creating tasks (`mcp--github--search_issues`)
+3. **Create issue** for any new work (`mcp--github--create_issue`)
 4. **Reference issues** in commits and PRs
-5. **Update status** as work progresses
+5. **Update status** as work progresses (`mcp--github--update_issue`)
 6. **Work on feature branches** (never directly on `develop` or `master`)
-7. **Document completion** in issue comments
+7. **Document completion** in issue comments (`mcp--github--add_issue_comment`)
 8. **Close issues** when work is complete
 
 ### ❌ DON'T
@@ -97,28 +92,10 @@ Related to #789
 3. Create local TODO lists
 4. Start work without a GitHub Issue
 5. Duplicate work that has an issue
-6. Use `gh` CLI when MCP tools work
+6. Use `gh` CLI (MCP tools only)
 7. Commit directly to `master` or `develop`
 
-## GitHub MCP Tools
-
-**Always use MCP tools first.** Use `gh` CLI only for:
-- Advanced queries with complex filters
-- Bulk operations not supported by MCP
-
-### Common Operations
-
-**Check existing issues**: `mcp--github--list_issues` or `mcp--github--search_issues`
-
-**Create issue**: `mcp--github--create_issue`
-
-**View details**: `mcp--github--get_issue`
-
-**Update issue**: `mcp--github--update_issue`
-
-**Add comment**: `mcp--github--add_issue_comment`
-
-## Example Issue Template
+## Issue Template
 
 ```markdown
 ## Overview
