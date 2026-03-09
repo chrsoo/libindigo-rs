@@ -16,6 +16,16 @@ keywords = ["astronomy", "astrophotography", "indigo", "indi"]
 categories = ["api-bindings", "asynchronous", "hardware-support"]
 edition = "2021"
 
+[features]
+default = ["ffi-strategy"]
+
+# Strategy selection (mutually exclusive)
+rs-strategy = []
+ffi-strategy = []
+
+# Test support
+test-server = []
+
 [dependencies]
 # Core dependencies for types and error handling
 thiserror = "1.0"
