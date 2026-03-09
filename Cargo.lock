@@ -426,12 +426,12 @@ dependencies = [
  "async-trait",
  "bindgen",
  "env_logger",
- "libindigo-build-utils",
  "libindigo-ffi",
  "libindigo-rs",
  "once_cell",
  "rand",
  "regex",
+ "semver",
  "serial_test",
  "test-log",
  "thiserror 1.0.65",
@@ -481,7 +481,6 @@ name = "libindigo-sys"
 version = "0.3.3+INDIGO.2.0.358"
 dependencies = [
  "bindgen",
- "libindigo-build-utils",
  "regex",
  "rev_buf_reader",
  "semver",

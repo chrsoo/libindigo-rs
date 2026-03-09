@@ -1,15 +1,13 @@
 use core::str;
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::{BufRead, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::{env, io};
 
 use once_cell::sync::Lazy;
 use regex::Regex;
-
-// Shared build utilities for version extraction
-use libindigo_build_utils::{generate_version_constants, parse_indigo_version};
+use semver::Version;
 
 /// used for cloning the INDIGO git repository when source is retrieved from a crate
 const INDIGO_GIT_REPOSITORY: &str = "https://github.com/indigo-astronomy/indigo";
@@ -222,4 +220,54 @@ fn init_indigo_submodule() -> std::io::Result<PathBuf> {
         panic!("could not clone or checkout git submodule externals/indigo");
     }
     Path::new(INDIGO_GIT_SUBMODULE).canonicalize()
+}
+
+/// Extract INDIGO version from Makefile (inlined from build_utils)
+fn parse_indigo_version(indigo_root: &Path) -> io::Result<Version> {
+    let makefile = indigo_root.join("Makefile");
+
+    let mut version = Version::new(0, 0, 0);
+    let re_version = Regex::new(r"^INDIGO_VERSION\s*=\s*(\d+)\.(\d+)\s*$").unwrap();
+    let re_build = Regex::new(r"^INDIGO_BUILD\s*=\s*(\d+)\s*$").unwrap();
+
+    let file = File::open(&makefile)?;
+    let buf = BufReader::new(file);
+
+    for line in buf.lines() {
+        let s = line?;
+        if let Some(v) = re_version.captures(&s) {
+            version.major = v[1].parse::<u64>().unwrap();
+            version.minor = v[2].parse::<u64>().unwrap();
+        } else if let Some(v) = re_build.captures(&s) {
+            version.patch = v[1].parse::<u64>().unwrap();
+        }
+    }
+
+    if version.major == 0 && version.minor == 0 && version.patch == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Could not parse INDIGO version from {}", makefile.display()),
+        ));
+    }
+
+    Ok(version)
+}
+
+/// Generate version constants (inlined from build_utils)
+fn generate_version_constants(version: &Version) -> String {
+    format!(
+        r#"/// INDIGO library version (major component)
+pub const INDIGO_VERSION_MAJOR: u32 = {};
+
+/// INDIGO library version (minor component)
+pub const INDIGO_VERSION_MINOR: u32 = {};
+
+/// INDIGO library build number
+pub const INDIGO_BUILD: u32 = {};
+
+/// INDIGO library version string (e.g., "2.0.300")
+pub const INDIGO_VERSION: &str = "{}.{}.{}";
+"#,
+        version.major, version.minor, version.patch, version.major, version.minor, version.patch
+    )
 }
