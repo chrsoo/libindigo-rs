@@ -14,10 +14,14 @@
 //! 3. **Bridge task** → Forwards from sync mpsc to `tokio::sync::broadcast`
 //! 4. **Consumers** → Subscribe to broadcast channel for property updates
 
+#[cfg(feature = "sys-available")]
 use crate::conversion::property_from_c;
 use libindigo::types::Property;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
+#[cfg(not(feature = "sys-available"))]
+use tracing::{debug, error};
+#[cfg(feature = "sys-available")]
 use tracing::{debug, error, warn};
 
 #[cfg(feature = "async")]

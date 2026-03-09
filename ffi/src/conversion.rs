@@ -14,8 +14,10 @@ use libindigo::types::{
     BlobTransferMode, LightState, Property, PropertyItem, PropertyPerm, PropertyState,
     PropertyType, PropertyValue, SwitchState,
 };
+#[cfg(feature = "sys-available")]
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
+#[cfg(feature = "sys-available")]
 use std::os::raw::c_char;
 
 // Conditional compilation based on whether sys crate types are available
@@ -371,6 +373,7 @@ unsafe fn c_str_to_string(c_str: *const c_char) -> Result<String> {
 /// # Errors
 ///
 /// Returns an error if the string contains null bytes.
+#[cfg(feature = "sys-available")]
 pub fn string_to_c_string(s: &str) -> Result<CString> {
     CString::new(s)
         .map_err(|e| IndigoError::InvalidParameter(format!("String contains null byte: {}", e)))
@@ -415,6 +418,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "sys-available")]
     #[test]
     fn test_string_to_c_string() {
         let s = "test string";
@@ -422,6 +426,7 @@ mod tests {
         assert_eq!(c_str.to_str().unwrap(), s);
     }
 
+    #[cfg(feature = "sys-available")]
     #[test]
     fn test_string_with_null_byte_fails() {
         let s = "test\0string";
