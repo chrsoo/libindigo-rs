@@ -38,7 +38,7 @@ use crate::protocol_json::{JsonProtocolParser, JsonProtocolSerializer};
 use crate::protocol_negotiation::ProtocolType;
 use libindigo::error::{IndigoError, Result};
 use std::time::Duration as StdDuration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
 use tokio::time::{timeout, Duration};
 
@@ -103,6 +103,31 @@ pub struct Transport {
     connect_timeout: Duration,
     /// Read timeout.
     read_timeout: Duration,
+    /// Active protocol type (JSON or XML).
+    protocol: ProtocolType,
+}
+
+/// Read half of a split transport.
+///
+/// This allows the read and write operations to be performed independently,
+/// which is essential for the background receiver task pattern.
+pub struct ReadTransport {
+    /// Read half of the TCP stream.
+    reader: ReadHalf<TcpStream>,
+    /// Read buffer for accumulating partial messages.
+    read_buffer: Vec<u8>,
+    /// Read timeout.
+    read_timeout: Duration,
+    /// Active protocol type (JSON or XML).
+    protocol: ProtocolType,
+}
+
+/// Write half of a split transport.
+///
+/// This allows the write operations to be performed independently from reads.
+pub struct WriteTransport {
+    /// Write half of the TCP stream.
+    writer: WriteHalf<TcpStream>,
     /// Active protocol type (JSON or XML).
     protocol: ProtocolType,
 }
@@ -283,6 +308,63 @@ impl Transport {
     /// ```
     pub fn set_protocol(&mut self, protocol: ProtocolType) {
         self.protocol = protocol;
+    }
+
+    /// Splits the transport into separate read and write halves.
+    ///
+    /// This allows independent read and write operations, which is essential
+    /// for the background receiver task pattern where one task continuously
+    /// reads while another task sends messages.
+    ///
+    /// # Returns
+    ///
+    /// A tuple of `(ReadTransport, WriteTransport)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if not connected.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let mut transport = Transport::connect("localhost:7624").await?;
+    /// let (read_transport, write_transport) = transport.split()?;
+    ///
+    /// // Use read_transport in background task
+    /// tokio::spawn(async move {
+    ///     while let Ok(msg) = read_transport.receive_message().await {
+    ///         // Process message
+    ///     }
+    /// });
+    ///
+    /// // Use write_transport for sending
+    /// write_transport.send_message(&msg).await?;
+    /// ```
+    pub fn split(mut self) -> Result<(ReadTransport, WriteTransport)> {
+        if self.state != ConnectionState::Connected {
+            return Err(IndigoError::InvalidState("Not connected".to_string()));
+        }
+
+        let stream = self
+            .stream
+            .take()
+            .ok_or_else(|| IndigoError::InvalidState("Stream not available".to_string()))?;
+
+        let (reader, writer) = tokio::io::split(stream);
+
+        let read_transport = ReadTransport {
+            reader,
+            read_buffer: self.read_buffer,
+            read_timeout: self.read_timeout,
+            protocol: self.protocol,
+        };
+
+        let write_transport = WriteTransport {
+            writer,
+            protocol: self.protocol,
+        };
+
+        Ok((read_transport, write_transport))
     }
 
     /// Detects protocol type from data buffer.
@@ -655,6 +737,288 @@ impl<'a> MessageStream<'a> {
                 }
             }
         }
+    }
+}
+
+// ============================================================================
+// ReadTransport Implementation
+// ============================================================================
+
+impl ReadTransport {
+    /// Gets the current protocol type.
+    pub fn protocol(&self) -> ProtocolType {
+        self.protocol
+    }
+
+    /// Sets the protocol type.
+    pub fn set_protocol(&mut self, protocol: ProtocolType) {
+        self.protocol = protocol;
+    }
+
+    /// Receives a single protocol message from the TCP connection.
+    ///
+    /// This method reads from the TCP stream, accumulates data in a buffer,
+    /// and parses complete messages. It handles partial messages and
+    /// multiple messages in a single read.
+    ///
+    /// # Returns
+    ///
+    /// The next complete protocol message.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Read operation fails
+    /// - Connection is closed by peer
+    /// - Message parsing fails
+    /// - Read times out
+    pub async fn receive_message(&mut self) -> Result<ProtocolMessage> {
+        loop {
+            // Try to parse a complete message from the buffer
+            if let Some(message) = self.try_parse_message()? {
+                return Ok(message);
+            }
+
+            // Need more data - read from stream
+            self.read_more_data().await?;
+        }
+    }
+
+    /// Attempts to parse a complete message from the read buffer.
+    fn try_parse_message(&mut self) -> Result<Option<ProtocolMessage>> {
+        if self.read_buffer.is_empty() {
+            return Ok(None);
+        }
+
+        // Auto-detect protocol from buffer if we see data
+        if let Some(detected_protocol) = Transport::detect_protocol(&self.read_buffer) {
+            // If detected protocol differs from current, switch to it
+            if detected_protocol != self.protocol {
+                tracing::info!(
+                    "Protocol auto-detected and switched from {:?} to {:?}",
+                    self.protocol,
+                    detected_protocol
+                );
+                self.protocol = detected_protocol;
+            }
+        }
+
+        // Find the end of the first complete message
+        if let Some(end_pos) = self.find_message_boundary()? {
+            // Extract the message bytes
+            let message_bytes = self.read_buffer[..=end_pos].to_vec();
+
+            // Remove the message from the buffer
+            self.read_buffer.drain(..=end_pos);
+
+            // Parse the message based on active protocol
+            let message = match self.protocol {
+                ProtocolType::Json => {
+                    let json_str = std::str::from_utf8(&message_bytes)
+                        .map_err(|e| IndigoError::ParseError(format!("Invalid UTF-8: {}", e)))?;
+                    JsonProtocolParser::parse_message(json_str)?
+                }
+                ProtocolType::Xml => ProtocolParser::parse_message(&message_bytes)?,
+            };
+
+            return Ok(Some(message));
+        }
+
+        Ok(None)
+    }
+
+    /// Finds the boundary of the first complete message in the buffer.
+    fn find_message_boundary(&self) -> Result<Option<usize>> {
+        match self.protocol {
+            ProtocolType::Xml => self.find_xml_boundary(),
+            ProtocolType::Json => self.find_json_boundary(),
+        }
+    }
+
+    /// Finds the boundary of a complete XML message.
+    fn find_xml_boundary(&self) -> Result<Option<usize>> {
+        let mut depth = 0;
+        let mut in_tag = false;
+        let mut in_string = false;
+        let mut is_closing_tag = false;
+        let mut is_self_closing = false;
+        let mut i = 0;
+
+        while i < self.read_buffer.len() {
+            let byte = self.read_buffer[i];
+
+            match byte {
+                b'"' if in_tag && !in_string => {
+                    in_string = true;
+                }
+                b'"' if in_tag && in_string => {
+                    in_string = false;
+                }
+                b'<' if !in_string => {
+                    in_tag = true;
+                    is_closing_tag = false;
+                    is_self_closing = false;
+
+                    // Check if this is a closing tag
+                    if i + 1 < self.read_buffer.len() && self.read_buffer[i + 1] == b'/' {
+                        is_closing_tag = true;
+                    }
+                }
+                b'/' if in_tag && !in_string => {
+                    // Check if this is a self-closing tag
+                    if i + 1 < self.read_buffer.len() && self.read_buffer[i + 1] == b'>' {
+                        is_self_closing = true;
+                    }
+                }
+                b'>' if in_tag && !in_string => {
+                    in_tag = false;
+
+                    if is_closing_tag {
+                        depth -= 1;
+                    } else if !is_self_closing {
+                        depth += 1;
+                    }
+
+                    // If we've closed all tags, we have a complete message
+                    if depth == 0 && i > 0 {
+                        return Ok(Some(i));
+                    }
+                }
+                _ => {}
+            }
+
+            i += 1;
+        }
+
+        Ok(None)
+    }
+
+    /// Finds the boundary of a complete JSON message.
+    fn find_json_boundary(&self) -> Result<Option<usize>> {
+        let mut depth = 0;
+        let mut in_string = false;
+        let mut escape_next = false;
+        let mut started = false;
+
+        for (i, &byte) in self.read_buffer.iter().enumerate() {
+            if escape_next {
+                escape_next = false;
+                continue;
+            }
+
+            match byte {
+                b'\\' if in_string => {
+                    escape_next = true;
+                }
+                b'"' if !in_string => {
+                    in_string = true;
+                }
+                b'"' if in_string => {
+                    in_string = false;
+                }
+                b'{' if !in_string => {
+                    depth += 1;
+                    started = true;
+                }
+                b'}' if !in_string => {
+                    depth -= 1;
+                    // If we've closed all braces, we have a complete message
+                    if depth == 0 && started {
+                        return Ok(Some(i));
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Reads more data from the TCP stream into the read buffer.
+    async fn read_more_data(&mut self) -> Result<()> {
+        // Check buffer size to prevent unbounded growth
+        if self.read_buffer.len() >= MAX_BUFFER_SIZE {
+            return Err(IndigoError::ProtocolError(
+                "Read buffer exceeded maximum size".to_string(),
+            ));
+        }
+
+        // Create a temporary buffer for reading
+        let mut temp_buffer = vec![0u8; 4096];
+
+        // Read with timeout
+        let bytes_read = timeout(self.read_timeout, self.reader.read(&mut temp_buffer))
+            .await
+            .map_err(|_| {
+                IndigoError::Timeout(format!("Read timed out after {:?}", self.read_timeout))
+            })?
+            .map_err(|e| {
+                IndigoError::ConnectionError(format!("Failed to read from stream: {}", e))
+            })?;
+
+        if bytes_read == 0 {
+            // Connection closed by peer
+            return Err(IndigoError::ConnectionError(
+                "Connection closed by peer".to_string(),
+            ));
+        }
+
+        // Append the read data to our buffer
+        self.read_buffer
+            .extend_from_slice(&temp_buffer[..bytes_read]);
+
+        Ok(())
+    }
+}
+
+// ============================================================================
+// WriteTransport Implementation
+// ============================================================================
+
+impl WriteTransport {
+    /// Gets the current protocol type.
+    pub fn protocol(&self) -> ProtocolType {
+        self.protocol
+    }
+
+    /// Sets the protocol type.
+    pub fn set_protocol(&mut self, protocol: ProtocolType) {
+        self.protocol = protocol;
+    }
+
+    /// Sends a protocol message over the TCP connection.
+    ///
+    /// The message is serialized according to the active protocol and written to the TCP stream.
+    ///
+    /// # Arguments
+    ///
+    /// * `message` - The protocol message to send
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Serialization fails
+    /// - Write operation fails
+    pub async fn send_message(&mut self, message: &ProtocolMessage) -> Result<()> {
+        // Serialize the message based on active protocol
+        let message_bytes: Vec<u8> = match self.protocol {
+            ProtocolType::Json => JsonProtocolSerializer::serialize(message)?.into_bytes(),
+            ProtocolType::Xml => ProtocolSerializer::serialize(message)?,
+        };
+
+        // Write the message bytes to the stream
+        self.writer
+            .write_all(&message_bytes)
+            .await
+            .map_err(|e| IndigoError::ConnectionError(format!("Failed to write message: {}", e)))?;
+
+        // Flush to ensure data is sent
+        self.writer
+            .flush()
+            .await
+            .map_err(|e| IndigoError::ConnectionError(format!("Failed to flush stream: {}", e)))?;
+
+        Ok(())
     }
 }
 

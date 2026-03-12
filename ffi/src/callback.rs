@@ -59,6 +59,17 @@ pub enum FfiEvent {
         /// Message text.
         message: String,
     },
+
+    /// Server monitoring status changed.
+    #[cfg(feature = "monitoring")]
+    ServerStatusChanged {
+        /// Server address string.
+        server: String,
+        /// Previous status (0=Available, 1=Degraded, 2=Unavailable).
+        previous_status: u8,
+        /// New status (0=Available, 1=Degraded, 2=Unavailable).
+        current_status: u8,
+    },
 }
 
 /// Manages the callback bridge between C INDIGO and Rust.

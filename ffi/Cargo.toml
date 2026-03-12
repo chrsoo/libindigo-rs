@@ -14,9 +14,10 @@ categories = ["api-bindings", "asynchronous", "hardware-support"]
 [features]
 default = ["client"]
 client = []
-device = []                  # Device driver support
+device = []                           # Device driver support
 async = ["tokio", "futures"]
-sys-available = []           # Automatically enabled when sys crate builds successfully
+monitoring = ["libindigo/monitoring"] # Server monitoring support
+sys-available = []                    # Automatically enabled when sys crate builds successfully
 
 [dependencies]
 # Core API from libindigo crate

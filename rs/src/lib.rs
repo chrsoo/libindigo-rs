@@ -79,7 +79,9 @@
 // Re-export core API from libindigo
 pub use libindigo::{
     // Client types
-    client::{Client, ClientBuilder},
+    client::{
+        AvailabilityStatus, Client, ClientBuilder, ClientEvent, MonitoringConfig, MonitoringEvent,
+    },
     // Error handling
     error::{IndigoError, Result},
     // Core types
@@ -96,12 +98,16 @@ pub use libindigo::name;
 mod client;
 pub mod protocol;
 pub mod protocol_json;
-mod protocol_negotiation;
+pub mod protocol_negotiation;
 mod transport;
 
 // Optional discovery module (pure Rust mDNS)
 #[cfg(feature = "discovery")]
 pub mod discovery;
+
+// Optional monitoring module (pure Rust ICMP/TCP)
+#[cfg(feature = "monitoring")]
+pub mod monitoring;
 
 // Export the RS strategy implementation
 pub use client::RsClientStrategy;

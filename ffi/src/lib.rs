@@ -103,6 +103,10 @@ pub mod callback;
 #[cfg(feature = "device")]
 pub mod device_bridge;
 
+/// Server monitoring FFI support.
+#[cfg(feature = "monitoring")]
+pub mod monitoring;
+
 // Export the FFI strategy implementation
 pub use ffi::FfiClientStrategy;
 

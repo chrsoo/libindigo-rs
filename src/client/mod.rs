@@ -31,7 +31,9 @@
 //! ```
 
 pub mod builder;
+pub mod monitoring;
 pub mod strategy;
 
 pub use builder::{Client, ClientBuilder};
+pub use monitoring::{AvailabilityStatus, ClientEvent, MonitoringConfig, MonitoringEvent};
 pub use strategy::ClientStrategy;

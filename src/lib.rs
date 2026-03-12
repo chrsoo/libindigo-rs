@@ -51,9 +51,13 @@ pub mod client;
 /// Device Driver SPI for implementing INDIGO devices in Rust.
 pub mod device;
 
+/// Logging configuration for libindigo.
+pub mod logging;
+
 // Re-export commonly used types
-pub use client::ClientStrategy;
+pub use client::{AvailabilityStatus, ClientStrategy, MonitoringConfig, MonitoringEvent};
 pub use error::{IndigoError, Result};
+pub use logging::{init_logging, LogConfig, LogLevel};
 pub use types::{Device, DeviceInfo};
 
 /// Prelude module for convenient imports.
@@ -67,6 +71,7 @@ pub mod prelude {
     pub use crate::client::{Client, ClientBuilder, ClientStrategy};
     pub use crate::device::{DeviceDriver, DeviceInterface, DriverInfo};
     pub use crate::error::{IndigoError, Result};
+    pub use crate::logging::{init_logging, LogConfig, LogLevel};
     pub use crate::types::{
         Device, DeviceInfo, Property, PropertyPerm, PropertyState, PropertyType, PropertyValue,
         SwitchRule, SwitchState,

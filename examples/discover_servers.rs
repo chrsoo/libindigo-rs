@@ -14,7 +14,7 @@ use libindigo_rs::{ClientBuilder, RsClientStrategy};
 
 #[cfg(feature = "discovery")]
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Simple discovery with default settings (5 second timeout)
     println!("Discovering INDIGO servers...");
 
@@ -47,16 +47,16 @@ async fn main() -> Result<()> {
     if let Some(server) = servers.first() {
         println!("\n\nConnecting to {}...", server.name);
 
-        let strategy = RsClientStrategy::new();
-        let mut client = ClientBuilder::new().with_strategy(strategy).build();
+        let strategy = Box::new(RsClientStrategy::new());
+        let mut client = ClientBuilder::new().with_strategy(strategy).build()?;
 
-        client.connect(&server.url()).await?;
+        client.strategy_mut().connect(&server.url()).await?;
         println!("Connected successfully!");
 
-        client.enumerate_properties(None).await?;
+        client.strategy_mut().enumerate_properties(None).await?;
         println!("Enumerated properties");
 
-        client.disconnect().await?;
+        client.strategy_mut().disconnect().await?;
         println!("Disconnected");
     } else {
         println!("\nNo servers found. Make sure an INDIGO server is running on your network.");

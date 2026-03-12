@@ -11,6 +11,13 @@ Welcome to the libindigo documentation. This directory contains comprehensive do
 
 ## Documentation Structure
 
+### User Guides
+
+Essential guides for using libindigo:
+
+- [Logging Configuration](logging.md) - Configure logging and tracing
+- [Server Monitoring](monitoring.md) - Monitor INDIGO server availability
+
 ### Architecture
 
 Technical architecture and design documents:

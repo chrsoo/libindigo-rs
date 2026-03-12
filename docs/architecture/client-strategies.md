@@ -15,6 +15,13 @@ pub trait ClientStrategy: Send + Sync {
     async fn disconnect(&mut self) -> Result<()>;
     async fn enumerate_properties(&mut self, device: Option<&str>) -> Result<()>;
     async fn send_property(&mut self, property: Property) -> Result<()>;
+
+    // Optional monitoring support
+    #[cfg(feature = "monitoring")]
+    fn set_monitoring_config(&mut self, config: MonitoringConfig);
+
+    #[cfg(feature = "monitoring")]
+    fn subscribe_status(&self) -> Option<mpsc::UnboundedReceiver<ClientEvent>>;
 }
 ```
 
@@ -131,6 +138,7 @@ let client = ClientBuilder::new()
 | Async API | ✅ Native | ✅ Wrapped |
 | Property Streaming | ✅ Complete | ✅ Complete |
 | BLOB Support | ✅ Complete | ✅ Complete |
+| Server Monitoring | ✅ Complete | 🚧 Partial (FFI types only) |
 | Hardware Drivers | ❌ N/A | ✅ Complete |
 
 ## Performance Considerations
@@ -174,15 +182,44 @@ Both strategies have comprehensive test coverage:
 
 See `tests/` directory for test implementations.
 
+## Monitoring Integration
+
+Both strategies support optional server monitoring through the `monitoring` feature flag.
+
+### Pure Rust Strategy
+
+The RS strategy has full monitoring support:
+
+- Two-level monitoring (host + server)
+- ICMP ping with TCP fallback
+- INDIGO protocol handshake verification
+- Rolling window status tracking
+- Event-based status reporting
+
+See [Server Monitoring](../monitoring.md) for details.
+
+### FFI Strategy
+
+The FFI strategy provides monitoring types for C/C++ consumers:
+
+- C-compatible configuration types
+- Status callback mechanism
+- Integration with existing FFI event system
+
+Full monitoring implementation for FFI strategy is planned for a future release.
+
 ## Future Enhancements
 
 1. **WebSocket Transport** - Add WebSocket support for web clients
 2. **Protocol Extensions** - Support for custom protocol extensions
 3. **Connection Pooling** - Reuse connections across clients
 4. **Automatic Failover** - Switch strategies on connection failure
+5. **FFI Monitoring** - Complete monitoring implementation for FFI strategy
 
 ## References
 
 - [INDIGO Protocol Documentation](../INDIGO.pdf)
 - [Transport Implementation](../transport_implementation.md)
 - [Code Review and Architecture](../../plans/code-review-and-architecture.md)
+- [Server Monitoring](../monitoring.md) - Server availability monitoring
+- [Logging Configuration](../logging.md) - Logging and tracing setup

@@ -14,7 +14,7 @@ use std::time::Duration;
 
 #[cfg(feature = "discovery")]
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     println!("Starting continuous INDIGO server discovery...");
     println!("Press Ctrl+C to stop\n");
 

@@ -143,8 +143,8 @@ pub(crate) async fn start_continuous_discovery(
 
 /// Converts mdns-sd ServiceInfo to DiscoveredServer.
 fn convert_service_info(info: mdns_sd::ServiceInfo) -> Option<DiscoveredServer> {
-    // Get the primary hostname
-    let host = info.get_hostname().to_string();
+    // Get the primary hostname and strip trailing dot (mDNS FQDN format)
+    let host = info.get_hostname().trim_end_matches('.').to_string();
 
     // Get port
     let port = info.get_port();

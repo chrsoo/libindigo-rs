@@ -8,7 +8,9 @@
 				"."
 			],
 			"disabled": false,
-			"alwaysAllow": []
+			"alwaysAllow": [
+				"git_status"
+			]
 		}
 	}
 }

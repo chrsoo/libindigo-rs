@@ -45,13 +45,18 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
 
+#[cfg(feature = "monitoring")]
+use crate::monitoring::ServerMonitor;
+#[cfg(feature = "monitoring")]
+use libindigo::client::monitoring::{ClientEvent, MonitoringConfig, MonitoringEvent};
+
 use crate::protocol::{
     decode_blob, encode_blob, BLOBEnable, EnableBLOB, GetProperties, NewBLOBVector,
     NewNumberVector, NewSwitchVector, NewTextVector, NewVectorAttributes, OneBLOB, OneNumber,
     OneSwitch, OneText, ProtocolMessage, SwitchState as ProtocolSwitchState,
 };
 use crate::protocol_negotiation::{ProtocolNegotiator, ProtocolType};
-use crate::transport::Transport;
+use crate::transport::{Transport, WriteTransport};
 
 /// Rust client strategy implementation.
 ///
@@ -70,8 +75,8 @@ pub struct RsClientStrategy {
 
 /// Internal client state.
 struct ClientState {
-    /// TCP transport layer.
-    transport: Option<Transport>,
+    /// Write half of TCP transport (for sending messages).
+    write_transport: Option<WriteTransport>,
     /// Channel sender for property updates.
     property_tx: Option<mpsc::UnboundedSender<Property>>,
     /// Channel receiver for property updates (moved to stream).
@@ -87,6 +92,15 @@ struct ClientState {
     protocol: ProtocolType,
     /// Protocol negotiator for establishing protocol.
     negotiator: ProtocolNegotiator,
+    /// Monitoring configuration (when monitoring feature is enabled).
+    #[cfg(feature = "monitoring")]
+    monitoring_config: Option<MonitoringConfig>,
+    /// Server monitor instance (when monitoring is active).
+    #[cfg(feature = "monitoring")]
+    monitoring_handle: Option<ServerMonitor>,
+    /// List of monitoring event subscribers.
+    #[cfg(feature = "monitoring")]
+    monitoring_subscribers: Vec<mpsc::UnboundedSender<ClientEvent>>,
 }
 
 impl RsClientStrategy {
@@ -118,7 +132,7 @@ impl RsClientStrategy {
     pub fn with_protocol_negotiator(negotiator: ProtocolNegotiator) -> Self {
         RsClientStrategy {
             state: Arc::new(Mutex::new(ClientState {
-                transport: None,
+                write_transport: None,
                 property_tx: None,
                 property_rx: None,
                 property_subscribers: Vec::new(),
@@ -126,6 +140,12 @@ impl RsClientStrategy {
                 connected: false,
                 protocol: ProtocolType::default(),
                 negotiator,
+                #[cfg(feature = "monitoring")]
+                monitoring_config: None,
+                #[cfg(feature = "monitoring")]
+                monitoring_handle: None,
+                #[cfg(feature = "monitoring")]
+                monitoring_subscribers: Vec::new(),
             })),
         }
     }
@@ -222,7 +242,15 @@ impl RsClientStrategy {
     ///
     /// This task continuously reads messages from the transport, converts them
     /// to domain `Property` types, and broadcasts them to all subscribers.
-    async fn start_receiver_task(state: Arc<Mutex<ClientState>>) -> Result<()> {
+    ///
+    /// # Arguments
+    ///
+    /// * `read_transport` - The read half of the transport (owned by this task)
+    /// * `state` - Shared client state for broadcasting properties
+    async fn start_receiver_task(
+        mut read_transport: crate::transport::ReadTransport,
+        state: Arc<Mutex<ClientState>>,
+    ) -> Result<()> {
         // Create channel for property updates (for backward compatibility)
         let (tx, rx) = mpsc::unbounded_channel();
 
@@ -231,60 +259,77 @@ impl RsClientStrategy {
 
         // Spawn background task
         let handle = tokio::spawn(async move {
-            loop {
-                // Get transport from state
-                let mut transport = {
-                    let mut state = task_state.lock().await;
-                    match state.transport.take() {
-                        Some(t) => t,
-                        None => break, // No transport, exit task
-                    }
-                };
+            tracing::info!("Background receiver task started");
+            let mut message_count = 0;
 
-                // Receive message from transport
-                match transport.receive_message().await {
+            loop {
+                // Receive message from transport (no need to take/put back!)
+                match read_transport.receive_message().await {
                     Ok(msg) => {
-                        // Put transport back
-                        {
-                            let mut state = task_state.lock().await;
-                            state.transport = Some(transport);
-                        }
+                        message_count += 1;
+                        tracing::debug!("Received message #{}: {:?}", message_count, msg);
 
                         // Convert protocol message to property
-                        if let Some(property) = Self::convert_to_property(msg) {
-                            // Broadcast property update to all subscribers
-                            let mut state = task_state.lock().await;
+                        match Self::convert_to_property(msg) {
+                            Some(property) => {
+                                tracing::debug!(
+                                    "Converted to property: device={}, name={}, items={}",
+                                    property.device,
+                                    property.name,
+                                    property.items.len()
+                                );
 
-                            // Send to legacy channel (backward compatibility)
-                            if let Some(ref tx) = state.property_tx {
-                                let _ = tx.send(property.clone());
+                                // Broadcast property update to all subscribers
+                                let mut state = task_state.lock().await;
+
+                                // Send to legacy channel (backward compatibility)
+                                if let Some(ref tx) = state.property_tx {
+                                    let _ = tx.send(property.clone());
+                                }
+
+                                // Broadcast to all subscribers
+                                // Remove disconnected subscribers while iterating
+                                let subscriber_count = state.property_subscribers.len();
+                                state
+                                    .property_subscribers
+                                    .retain(|subscriber| subscriber.send(property.clone()).is_ok());
+
+                                let retained_count = state.property_subscribers.len();
+                                if retained_count < subscriber_count {
+                                    tracing::debug!(
+                                        "Removed {} disconnected subscribers",
+                                        subscriber_count - retained_count
+                                    );
+                                }
                             }
-
-                            // Broadcast to all subscribers
-                            // Remove disconnected subscribers while iterating
-                            state
-                                .property_subscribers
-                                .retain(|subscriber| subscriber.send(property.clone()).is_ok());
+                            None => {
+                                tracing::trace!(
+                                    "Message did not convert to property (control message)"
+                                );
+                            }
                         }
                     }
                     Err(e) => {
-                        // Put transport back even on error
-                        {
-                            let mut state = task_state.lock().await;
-                            state.transport = Some(transport);
-                        }
+                        tracing::warn!("Error receiving message: {}", e);
 
                         // Check if this is a connection error
                         if matches!(e, IndigoError::ConnectionError(_)) {
                             // Connection closed, exit task
+                            tracing::info!("Connection closed, exiting receiver task");
                             let mut state = task_state.lock().await;
                             state.connected = false;
                             break;
                         }
                         // For other errors, continue trying
+                        tracing::debug!("Non-fatal error, continuing to receive");
                     }
                 }
             }
+
+            tracing::info!(
+                "Background receiver task exited after {} messages",
+                message_count
+            );
         });
 
         // Store channel and task handle in state
@@ -767,6 +812,58 @@ impl RsClientStrategy {
         // Use the negotiator to establish protocol
         negotiator.negotiate(transport).await
     }
+
+    /// Starts monitoring with the given configuration.
+    ///
+    /// This spawns a background task that monitors server availability and
+    /// forwards status change events to all subscribers.
+    #[cfg(feature = "monitoring")]
+    async fn start_monitoring(&self, config: MonitoringConfig) -> Result<()> {
+        let monitor = ServerMonitor::new(config.clone());
+        let mut event_rx = monitor.start().await;
+
+        // Store the monitor handle
+        let mut state = self.state.lock().await;
+        state.monitoring_handle = Some(monitor);
+        drop(state);
+
+        // Spawn a task to forward monitoring events to subscribers
+        let state_clone = Arc::clone(&self.state);
+        tokio::spawn(async move {
+            while let Some(event) = event_rx.recv().await {
+                // Only forward StatusChanged events, filter out low-level events
+                if let MonitoringEvent::StatusChanged {
+                    previous: _,
+                    current,
+                } = event
+                {
+                    let client_event = ClientEvent::from_status(current);
+
+                    // Broadcast to all subscribers
+                    let state = state_clone.lock().await;
+                    let mut dead_subscribers = Vec::new();
+
+                    for (idx, subscriber) in state.monitoring_subscribers.iter().enumerate() {
+                        if subscriber.send(client_event.clone()).is_err() {
+                            dead_subscribers.push(idx);
+                        }
+                    }
+
+                    // Clean up dead subscribers
+                    drop(state);
+                    if !dead_subscribers.is_empty() {
+                        let mut state = state_clone.lock().await;
+                        for idx in dead_subscribers.iter().rev() {
+                            state.monitoring_subscribers.remove(*idx);
+                        }
+                    }
+                }
+            }
+        });
+
+        tracing::info!("Started server monitoring for {}", config.server_addr);
+        Ok(())
+    }
 }
 
 impl Default for RsClientStrategy {
@@ -807,25 +904,42 @@ impl ClientStrategy for RsClientStrategy {
 
         // Negotiate protocol with server
         let negotiator = state.negotiator.clone();
+
+        #[cfg(feature = "monitoring")]
+        let monitoring_config = state.monitoring_config.clone();
+
         drop(state); // Drop lock before async negotiation
 
         let protocol = self.negotiate_protocol(&mut transport, &negotiator).await?;
 
-        // Store transport and protocol
-        let mut state = self.state.lock().await;
+        // Set protocol on transport
         transport.set_protocol(protocol);
-        state.transport = Some(transport);
+
+        tracing::info!("Connected to {} using protocol {:?}", url, protocol);
+
+        // Split transport into read and write halves
+        let (read_transport, write_transport) = transport.split()?;
+
+        // Store write transport and protocol in state
+        let mut state = self.state.lock().await;
+        state.write_transport = Some(write_transport);
         state.protocol = protocol;
         state.connected = true;
 
         // Drop the lock before starting the receiver task
         drop(state);
 
-        // Start background receiver task
-        Self::start_receiver_task(Arc::clone(&self.state)).await?;
+        // Start background receiver task with read transport
+        Self::start_receiver_task(read_transport, Arc::clone(&self.state)).await?;
 
         // Send initial getProperties to enumerate all devices
         self.enumerate_properties(None).await?;
+
+        // Start monitoring if configured
+        #[cfg(feature = "monitoring")]
+        if let Some(config) = monitoring_config {
+            self.start_monitoring(config).await?;
+        }
 
         Ok(())
     }
@@ -844,20 +958,29 @@ impl ClientStrategy for RsClientStrategy {
             return Err(IndigoError::InvalidState("Not connected".to_string()));
         }
 
+        // Stop monitoring if active
+        #[cfg(feature = "monitoring")]
+        if let Some(monitor) = state.monitoring_handle.take() {
+            monitor.stop().await;
+            state.monitoring_subscribers.clear();
+            tracing::info!("Stopped server monitoring");
+        }
+
         // Stop background task
         if let Some(handle) = state.background_task.take() {
             handle.abort();
         }
 
-        // Disconnect transport
-        if let Some(mut transport) = state.transport.take() {
-            transport.disconnect().await?;
-        }
+        // Drop write transport (this will close the connection)
+        state.write_transport = None;
 
         // Clear channels
         state.property_tx = None;
         state.property_rx = None;
+        state.property_subscribers.clear();
         state.connected = false;
+
+        tracing::info!("Disconnected from server");
 
         Ok(())
     }
@@ -896,9 +1019,10 @@ impl ClientStrategy for RsClientStrategy {
             name: None,
         });
 
-        // Send via transport
-        if let Some(ref mut transport) = state.transport {
-            transport.send_message(&msg).await?;
+        // Send via write transport
+        if let Some(ref mut write_transport) = state.write_transport {
+            tracing::debug!("Sending getProperties for device: {:?}", device);
+            write_transport.send_message(&msg).await?;
         } else {
             return Err(IndigoError::InvalidState(
                 "Transport not available".to_string(),
@@ -943,9 +1067,9 @@ impl ClientStrategy for RsClientStrategy {
         // Convert property to protocol message
         let msg = Self::convert_from_property(property)?;
 
-        // Send via transport
-        if let Some(ref mut transport) = state.transport {
-            transport.send_message(&msg).await?;
+        // Send via write transport
+        if let Some(ref mut write_transport) = state.write_transport {
+            write_transport.send_message(&msg).await?;
         } else {
             return Err(IndigoError::InvalidState(
                 "Transport not available".to_string(),
@@ -1007,9 +1131,9 @@ impl ClientStrategy for RsClientStrategy {
             value: blob_enable,
         });
 
-        // Send via transport
-        if let Some(ref mut transport) = state.transport {
-            transport.send_message(&msg).await?;
+        // Send via write transport
+        if let Some(ref mut write_transport) = state.write_transport {
+            write_transport.send_message(&msg).await?;
         } else {
             return Err(IndigoError::InvalidState(
                 "Transport not available".to_string(),
@@ -1017,6 +1141,25 @@ impl ClientStrategy for RsClientStrategy {
         }
 
         Ok(())
+    }
+
+    #[cfg(feature = "monitoring")]
+    fn set_monitoring_config(&mut self, config: MonitoringConfig) {
+        // Store the config in state - it will be used when connect() is called
+        if let Ok(mut state) = self.state.try_lock() {
+            state.monitoring_config = Some(config);
+        }
+    }
+
+    #[cfg(feature = "monitoring")]
+    fn subscribe_status(&self) -> Option<mpsc::UnboundedReceiver<ClientEvent>> {
+        if let Ok(mut state) = self.state.try_lock() {
+            let (tx, rx) = mpsc::unbounded_channel();
+            state.monitoring_subscribers.push(tx);
+            Some(rx)
+        } else {
+            None
+        }
     }
 }
 
@@ -1304,7 +1447,7 @@ mod tests {
         let strategy = RsClientStrategy::new();
         let state = strategy.state.lock().await;
         assert!(!state.connected);
-        assert!(state.transport.is_none());
+        assert!(state.write_transport.is_none());
         assert!(state.property_tx.is_none());
     }
 

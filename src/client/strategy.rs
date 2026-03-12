@@ -7,6 +7,11 @@ use crate::error::Result;
 use crate::types::{BlobTransferMode, Property};
 use async_trait::async_trait;
 
+#[cfg(feature = "monitoring")]
+use crate::client::monitoring::{ClientEvent, MonitoringConfig};
+#[cfg(feature = "monitoring")]
+use tokio::sync::mpsc;
+
 /// Strategy trait for INDIGO client implementations.
 ///
 /// This trait defines the interface that all client strategies must implement,
@@ -116,6 +121,45 @@ pub trait ClientStrategy: Send + Sync {
         name: Option<&str>,
         mode: BlobTransferMode,
     ) -> Result<()>;
+
+    /// Sets the monitoring configuration for the strategy.
+    ///
+    /// This method is called by the ClientBuilder when monitoring is enabled.
+    /// Strategies that support monitoring should store the configuration and
+    /// start monitoring when `connect()` is called.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The monitoring configuration to use
+    ///
+    /// # Default Implementation
+    ///
+    /// The default implementation does nothing, allowing strategies that don't
+    /// support monitoring to ignore this call.
+    #[cfg(feature = "monitoring")]
+    fn set_monitoring_config(&mut self, _config: MonitoringConfig) {
+        // Default: no-op for strategies that don't support monitoring
+    }
+
+    /// Subscribes to server status events.
+    ///
+    /// Returns a receiver for monitoring status change events. Each event indicates
+    /// a change in server availability (Available, Degraded, or Unavailable).
+    ///
+    /// # Returns
+    ///
+    /// An `UnboundedReceiver` that will receive `ClientEvent` notifications when
+    /// the server status changes. Returns `None` if monitoring is not enabled or
+    /// not supported by the strategy.
+    ///
+    /// # Default Implementation
+    ///
+    /// The default implementation returns `None`, indicating that monitoring is
+    /// not supported by this strategy.
+    #[cfg(feature = "monitoring")]
+    fn subscribe_status(&self) -> Option<mpsc::UnboundedReceiver<ClientEvent>> {
+        None
+    }
 
     // TODO: Phase 2 - Add property stream methods
     // fn property_stream(&self) -> PropertyStream;
