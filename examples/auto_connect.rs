@@ -5,19 +5,19 @@
 //!
 //! Run with:
 //! ```bash
-//! cargo run --example auto_connect
+//! cargo run --example auto_connect --features discovery
 //! ```
 //!
 //! Note: This example requires libindigo-rs for the pure Rust client implementation.
 
-#[cfg(feature = "auto")]
+#[cfg(feature = "discovery")]
 use libindigo::discovery::DiscoveryConfig;
-#[cfg(feature = "auto")]
+#[cfg(feature = "discovery")]
 use libindigo::prelude::*;
-#[cfg(feature = "auto")]
+#[cfg(feature = "discovery")]
 use std::time::Duration;
 
-#[cfg(feature = "auto")]
+#[cfg(feature = "discovery")]
 #[tokio::main]
 async fn main() -> Result<()> {
     println!("Auto-connecting to INDIGO server...\n");
@@ -60,9 +60,9 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(feature = "auto"))]
+#[cfg(not(feature = "discovery"))]
 fn main() {
-    eprintln!("This example requires the 'auto' feature.");
-    eprintln!("Run with: cargo run --example auto_connect --features auto");
+    eprintln!("This example requires the 'discovery' feature.");
+    eprintln!("Run with: cargo run --example auto_connect --features discovery");
     std::process::exit(1);
 }

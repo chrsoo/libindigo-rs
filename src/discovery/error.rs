@@ -6,11 +6,7 @@ use thiserror::Error;
 /// Errors that can occur during server discovery.
 #[derive(Debug, Clone, Error)]
 pub enum DiscoveryError {
-    /// mDNS daemon error occurred.
-    #[error("mDNS daemon error: {0}")]
-    MdnsError(String),
-
-    /// Failed to initialize mDNS browser.
+    /// Failed to initialize discovery.
     #[error("Failed to initialize discovery: {0}")]
     InitializationFailed(String),
 
@@ -41,6 +37,10 @@ pub enum DiscoveryError {
     /// IO error occurred.
     #[error("IO error: {0}")]
     Io(String),
+
+    /// Operation not supported.
+    #[error("Not supported: {0}")]
+    NotSupported(String),
 }
 
 impl From<std::io::Error> for DiscoveryError {

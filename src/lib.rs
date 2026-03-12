@@ -54,8 +54,17 @@ pub mod device;
 /// Logging configuration for libindigo.
 pub mod logging;
 
+/// Server discovery types and configuration.
+#[cfg(feature = "discovery")]
+pub mod discovery;
+
 // Re-export commonly used types
 pub use client::{AvailabilityStatus, ClientStrategy, MonitoringConfig, MonitoringEvent};
+#[cfg(feature = "discovery")]
+pub use discovery::{
+    DiscoveredServer, DiscoveryConfig, DiscoveryError, DiscoveryEvent, DiscoveryMode,
+    ServiceAnnouncement,
+};
 pub use error::{IndigoError, Result};
 pub use logging::{init_logging, LogConfig, LogLevel};
 pub use types::{Device, DeviceInfo};
@@ -75,6 +84,12 @@ pub mod prelude {
     pub use crate::types::{
         Device, DeviceInfo, Property, PropertyPerm, PropertyState, PropertyType, PropertyValue,
         SwitchRule, SwitchState,
+    };
+
+    #[cfg(feature = "discovery")]
+    pub use crate::discovery::{
+        DiscoveredServer, DiscoveryConfig, DiscoveryError, DiscoveryEvent, DiscoveryMode,
+        ServiceAnnouncement,
     };
 }
 

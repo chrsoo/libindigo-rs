@@ -16,6 +16,7 @@ default = ["client"]
 client = []
 device = []                           # Device driver support
 async = ["tokio", "futures"]
+discovery = ["libindigo/discovery"]   # Server discovery support
 monitoring = ["libindigo/monitoring"] # Server monitoring support
 sys-available = []                    # Automatically enabled when sys crate builds successfully
 

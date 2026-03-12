@@ -17,11 +17,11 @@ categories = ["api-bindings", "asynchronous", "hardware-support"]
 edition = "2021"
 
 [features]
-# Discovery support (pass-through to libindigo-rs)
-discovery = ["libindigo-rs/discovery"]
+# Discovery support - enables src/discovery/ module with shared types
+discovery = []
 
-# Monitoring support (pass-through to libindigo-rs)
-monitoring = ["libindigo-rs/monitoring"]
+# Monitoring support - enables src/client/monitoring.rs types
+monitoring = []
 
 # Test support
 test-server = []

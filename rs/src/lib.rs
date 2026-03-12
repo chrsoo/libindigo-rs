@@ -94,6 +94,13 @@ pub use libindigo::{
 // Re-export the name module (INDIGO constants)
 pub use libindigo::name;
 
+// Re-export discovery types from core when feature is enabled
+#[cfg(feature = "discovery")]
+pub use libindigo::discovery::{
+    DiscoveredServer, DiscoveryConfig, DiscoveryError, DiscoveryEvent, DiscoveryMode,
+    ServiceAnnouncement,
+};
+
 // Internal modules
 mod client;
 pub mod protocol;
@@ -104,6 +111,10 @@ mod transport;
 // Optional discovery module (pure Rust mDNS)
 #[cfg(feature = "discovery")]
 pub mod discovery;
+
+// Re-export RS-specific discovery types
+#[cfg(feature = "discovery")]
+pub use discovery::{announce_service, AnnouncementHandle, ServerDiscovery, ServerDiscoveryApi};
 
 // Optional monitoring module (pure Rust ICMP/TCP)
 #[cfg(feature = "monitoring")]

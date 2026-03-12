@@ -59,8 +59,14 @@ jobs:
       - name: Build pure Rust client
         run: cargo build -p libindigo-rs --verbose
 
+      - name: Build pure Rust client with discovery and monitoring
+        run: cargo build -p libindigo-rs --features discovery,monitoring --verbose
+
       - name: Run unit tests (pure Rust client)
         run: cargo test -p libindigo-rs --lib --verbose
+
+      - name: Run unit tests with discovery and monitoring
+        run: cargo test -p libindigo-rs --lib --features discovery,monitoring --verbose
 
   # Build FFI client (requires C library)
   build-ffi-client:
@@ -148,6 +154,10 @@ jobs:
 
       - name: Run unit tests (FFI crate)
         run: cargo test -p libindigo-ffi --lib --verbose
+        continue-on-error: true
+
+      - name: Build FFI crate with discovery and monitoring
+        run: cargo build -p libindigo-ffi --features discovery,monitoring --verbose
         continue-on-error: true
 
   # Minimal build check (no optional features)

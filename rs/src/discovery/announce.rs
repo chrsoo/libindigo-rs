@@ -3,70 +3,9 @@
 //! This module provides functionality for announcing INDIGO services on the local
 //! network via mDNS, allowing clients to discover them automatically.
 
-use super::DiscoveryError;
-use std::collections::HashMap;
+use super::{DiscoveryError, ServiceAnnouncement};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-
-/// Configuration for announcing an INDIGO service.
-///
-/// # Example
-///
-/// ```ignore
-/// use libindigo_rs::discovery::ServiceAnnouncement;
-/// use std::collections::HashMap;
-///
-/// let mut properties = HashMap::new();
-/// properties.insert("version".to_string(), "2.0".to_string());
-///
-/// let announcement = ServiceAnnouncement {
-///     name: "My INDIGO Server".to_string(),
-///     port: 7624,
-///     properties,
-/// };
-/// ```
-#[derive(Debug, Clone)]
-pub struct ServiceAnnouncement {
-    /// Service name (will be advertised as "{name}._indigo._tcp.local.")
-    pub name: String,
-
-    /// TCP port number where the INDIGO server is listening
-    pub port: u16,
-
-    /// TXT record properties (e.g., version, capabilities)
-    pub properties: HashMap<String, String>,
-}
-
-impl ServiceAnnouncement {
-    /// Creates a new service announcement with the given name and port.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// let announcement = ServiceAnnouncement::new("My Server", 7624);
-    /// ```
-    pub fn new(name: impl Into<String>, port: u16) -> Self {
-        Self {
-            name: name.into(),
-            port,
-            properties: HashMap::new(),
-        }
-    }
-
-    /// Adds a TXT record property to the announcement.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// let announcement = ServiceAnnouncement::new("My Server", 7624)
-    ///     .with_property("version", "2.0")
-    ///     .with_property("devices", "3");
-    /// ```
-    pub fn with_property(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        self.properties.insert(key.into(), value.into());
-        self
-    }
-}
 
 /// Handle for an active service announcement.
 ///
@@ -199,25 +138,6 @@ pub async fn announce_service(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_service_announcement_builder() {
-        let announcement = ServiceAnnouncement::new("Test Server", 7624)
-            .with_property("version", "2.0")
-            .with_property("devices", "3");
-
-        assert_eq!(announcement.name, "Test Server");
-        assert_eq!(announcement.port, 7624);
-        assert_eq!(announcement.properties.len(), 2);
-        assert_eq!(
-            announcement.properties.get("version"),
-            Some(&"2.0".to_string())
-        );
-        assert_eq!(
-            announcement.properties.get("devices"),
-            Some(&"3".to_string())
-        );
-    }
 
     #[tokio::test]
     async fn test_announce_service_compiles() {

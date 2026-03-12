@@ -15,7 +15,10 @@ categories = ["api-bindings", "asynchronous", "hardware-support"]
 default = ["client"]
 client = []
 device = [] # Stub for future device driver support
-discovery = ["mdns-sd"] # Optional server discovery via mDNS
+discovery = [
+    "libindigo/discovery",
+    "mdns-sd",
+] # Optional server discovery via mDNS
 monitoring = [
     "libindigo/monitoring",
     "surge-ping",
@@ -24,7 +27,10 @@ monitoring = [
 
 [dependencies]
 # Core API from libindigo crate
-libindigo = { path = "..", version = "0.3.3", default-features = false }
+libindigo = { path = "..", version = "0.3.3", default-features = false, features = [
+    "discovery",
+    "monitoring",
+] }
 
 # Async runtime
 tokio = { version = "1.35", features = [
