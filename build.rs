@@ -27,6 +27,8 @@ static RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r#"^#define\s+(?<name>\w+)_NAME\s+"(?<value>.+)"\s*$"#).unwrap());
 fn main() -> std::io::Result<()> {
     let submodule = Path::new(INDIGO_GIT_SUBMODULE);
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let version_path = out_dir.join("version.rs");
 
     // Always try to extract constants and version if the submodule exists
     if submodule.exists() {
@@ -38,11 +40,11 @@ fn main() -> std::io::Result<()> {
             );
 
             // Generate version constants file
-            let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-            let version_path = out_dir.join("version.rs");
-            std::fs::write(version_path, generate_version_constants(&version))?;
+            std::fs::write(&version_path, generate_version_constants(&version))?;
         } else {
             eprintln!("Warning: Could not extract INDIGO version");
+            // Create empty version file as fallback
+            std::fs::write(&version_path, "// INDIGO version unavailable\n")?;
         }
 
         // Extract property/item name constants
@@ -56,9 +58,7 @@ fn main() -> std::io::Result<()> {
         eprintln!("Continuing with existing constants.rs");
 
         // Create empty version file for builds without submodule
-        let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-        let version_path = out_dir.join("version.rs");
-        std::fs::write(version_path, "// INDIGO version unavailable\n")?;
+        std::fs::write(&version_path, "// INDIGO version unavailable\n")?;
     }
 
     // Only generate FFI bindings when building with FFI features
