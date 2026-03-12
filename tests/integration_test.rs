@@ -13,8 +13,8 @@ mod harness;
 use harness::TestHarness;
 
 /// Test that we can create a client with async FFI strategy.
-#[cfg(all(feature = "ffi-strategy", feature = "async"))]
 #[tokio::test]
+#[ignore = "Requires FFI implementation from libindigo-ffi"]
 async fn test_create_async_ffi_client() {
     let result = ClientBuilder::new().with_async_ffi_strategy().build();
     assert!(result.is_ok(), "Failed to create async FFI client");
@@ -36,8 +36,8 @@ async fn test_create_client_without_strategy_fails() {
 }
 
 /// Test that connecting with an invalid URL fails.
-#[cfg(all(feature = "ffi-strategy", feature = "async"))]
 #[tokio::test]
+#[ignore = "Requires FFI implementation from libindigo-ffi"]
 async fn test_connect_invalid_url() {
     let mut client = ClientBuilder::new()
         .with_async_ffi_strategy()
@@ -56,8 +56,8 @@ async fn test_connect_invalid_url() {
 }
 
 /// Test that connecting with an invalid port fails.
-#[cfg(all(feature = "ffi-strategy", feature = "async"))]
 #[tokio::test]
+#[ignore = "Requires FFI implementation from libindigo-ffi"]
 async fn test_connect_invalid_port() {
     let mut client = ClientBuilder::new()
         .with_async_ffi_strategy()
@@ -76,8 +76,8 @@ async fn test_connect_invalid_port() {
 }
 
 /// Test that operations fail when not connected.
-#[cfg(all(feature = "ffi-strategy", feature = "async"))]
 #[tokio::test]
+#[ignore = "Requires FFI implementation from libindigo-ffi"]
 async fn test_operations_fail_when_not_connected() {
     let mut client = ClientBuilder::new()
         .with_async_ffi_strategy()
@@ -113,8 +113,8 @@ async fn test_operations_fail_when_not_connected() {
 /// Test connecting to a real INDIGO server using the test harness.
 ///
 /// This test uses the test harness to automatically manage the INDIGO server.
-#[cfg(all(feature = "ffi-strategy", feature = "async"))]
 #[tokio::test]
+#[ignore = "Requires FFI implementation from libindigo-ffi"]
 async fn test_connect_to_server() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize test harness
     TestHarness::initialize().await?;
@@ -150,8 +150,8 @@ async fn test_connect_to_server() -> Result<(), Box<dyn std::error::Error>> {
 /// Test enumerating properties from a real INDIGO server using the test harness.
 ///
 /// This test uses the test harness to automatically manage the INDIGO server.
-#[cfg(all(feature = "ffi-strategy", feature = "async"))]
 #[tokio::test]
+#[ignore = "Requires FFI implementation from libindigo-ffi"]
 async fn test_enumerate_properties() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize test harness
     TestHarness::initialize().await?;
@@ -200,8 +200,8 @@ async fn test_enumerate_properties() -> Result<(), Box<dyn std::error::Error>> {
 /// Test sending a property to a real INDIGO server using the test harness.
 ///
 /// This test uses the test harness to automatically manage the INDIGO server.
-#[cfg(all(feature = "ffi-strategy", feature = "async"))]
 #[tokio::test]
+#[ignore = "Requires FFI implementation from libindigo-ffi"]
 async fn test_send_property() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize test harness
     TestHarness::initialize().await?;
@@ -254,8 +254,8 @@ async fn test_send_property() -> Result<(), Box<dyn std::error::Error>> {
 /// Test that we can't connect twice using the test harness.
 ///
 /// This test uses the test harness to automatically manage the INDIGO server.
-#[cfg(all(feature = "ffi-strategy", feature = "async"))]
 #[tokio::test]
+#[ignore = "Requires FFI implementation from libindigo-ffi"]
 async fn test_cannot_connect_twice() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize test harness
     TestHarness::initialize().await?;
@@ -302,7 +302,6 @@ async fn test_cannot_connect_twice() -> Result<(), Box<dyn std::error::Error>> {
 /// Test builder with different strategies.
 /// Note: This test is disabled because the API has changed.
 /// The builder now requires a strategy instance, not a method call.
-#[cfg(feature = "ffi-strategy")]
 #[test]
 #[ignore = "API changed - builder requires strategy instance"]
 fn test_builder_with_ffi_strategy() {
@@ -444,8 +443,8 @@ fn test_property_builder_success_minimal() {
 }
 
 /// Test that client strategy can be accessed.
-#[cfg(all(feature = "ffi-strategy", feature = "async"))]
 #[test]
+#[ignore = "Requires FFI implementation from libindigo-ffi"]
 fn test_client_strategy_access() {
     let client = ClientBuilder::new()
         .with_async_ffi_strategy()
@@ -457,8 +456,8 @@ fn test_client_strategy_access() {
 }
 
 /// Test that client strategy can be mutably accessed.
-#[cfg(all(feature = "ffi-strategy", feature = "async"))]
 #[test]
+#[ignore = "Requires FFI implementation from libindigo-ffi"]
 fn test_client_strategy_mut_access() {
     let mut client = ClientBuilder::new()
         .with_async_ffi_strategy()

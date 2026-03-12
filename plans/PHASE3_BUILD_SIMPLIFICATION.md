@@ -224,12 +224,16 @@ pub const CONNECTED_ITEM: &str = "CONNECTED";
 ### Build Tests
 
 ```bash
-# Pure Rust build (fast)
-cargo build -p libindigo --features rs-strategy
+# Core crate build (strategy-agnostic)
+cargo build -p libindigo --no-default-features
 # ✅ Success: 2.94s
 
-# FFI build
-cargo build -p libindigo-sys
+# Pure Rust client build
+cargo build -p libindigo-rs
+# ✅ Success: 3.5s
+
+# FFI client build
+cargo build -p libindigo-ffi
 # ✅ Success: 16.10s
 
 # Full workspace

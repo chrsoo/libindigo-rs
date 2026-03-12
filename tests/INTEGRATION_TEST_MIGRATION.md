@@ -55,8 +55,8 @@ All 4 previously ignored integration tests have been migrated:
 All tests follow this consistent pattern:
 
 ```rust
-#[cfg(all(feature = "ffi-strategy", feature = "async"))]
 #[tokio::test]
+#[ignore = "Requires FFI implementation from libindigo-ffi"]
 async fn test_name() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize test harness
     TestHarness::initialize().await?;

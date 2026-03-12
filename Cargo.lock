@@ -442,7 +442,6 @@ name = "libindigo"
 version = "0.3.3+INDIGO.2.0.358"
 dependencies = [
  "async-trait",
- "bindgen",
  "env_logger",
  "libindigo-ffi",
  "libindigo-rs",

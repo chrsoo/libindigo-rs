@@ -9,10 +9,6 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use semver::Version;
 
-/// used for cloning the INDIGO git repository when source is retrieved from a crate
-#[cfg(feature = "ffi-strategy")]
-const INDIGO_GIT_REPOSITORY: &str = "https://github.com/indigo-astronomy/indigo";
-
 /// used for building INDIGO from source when checked out
 const INDIGO_GIT_SUBMODULE: &str = "sys/externals/indigo";
 
@@ -56,47 +52,6 @@ fn main() -> std::io::Result<()> {
 
         // Create empty version file for builds without submodule
         std::fs::write(&version_path, "// INDIGO version unavailable\n")?;
-    }
-
-    // Only generate FFI bindings when building with FFI features
-    #[cfg(feature = "ffi-strategy")]
-    {
-        let has_ffi = env::var("CARGO_FEATURE_FFI_STRATEGY").is_ok()
-            || env::var("CARGO_FEATURE_SYS").is_ok()
-            || env::var("CARGO_FEATURE_AUTO").is_ok();
-
-        if has_ffi {
-            let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-
-            if !submodule.exists() {
-                init_indigo_submodule()?;
-            }
-
-            // Generate FFI bindings
-            generate_ffi_bindings(&submodule, &out_dir)?;
-        } else {
-            let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-            let names_path = out_dir.join("name.rs");
-            let interface_path = out_dir.join("interface.rs");
-            std::fs::write(names_path, "// No INDIGO names for pure Rust build\n")?;
-            std::fs::write(
-                interface_path,
-                "// No INDIGO interface for pure Rust build\n",
-            )?;
-        }
-    }
-
-    #[cfg(not(feature = "ffi-strategy"))]
-    {
-        // For pure Rust builds, just create empty output files
-        let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-        let names_path = out_dir.join("name.rs");
-        let interface_path = out_dir.join("interface.rs");
-        std::fs::write(names_path, "// No INDIGO names for pure Rust build\n")?;
-        std::fs::write(
-            interface_path,
-            "// No INDIGO interface for pure Rust build\n",
-        )?;
     }
 
     Ok(())
@@ -167,73 +122,12 @@ fn extract_indigo_constants(submodule: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Generate FFI bindings for INDIGO device interfaces.
-#[cfg(feature = "ffi-strategy")]
-fn generate_ffi_bindings(submodule: &Path, out_dir: &Path) -> std::io::Result<()> {
-    let include = submodule.join("indigo_libs").canonicalize()?;
-    let bindings = bindgen::Builder::default()
-        .clang_arg(format!("-I{}", include.to_str().expect("path not found")))
-        .header(join_paths(&include, "indigo/indigo_bus.h"))
-        .derive_debug(true)
-        .allowlist_item("indigo_device_interface")
-        .bitfield_enum("indigo_device_interface")
-        .prepend_enum_name(false)
-        .translate_enum_integer_types(true)
-        .generate_cstr(true)
-        // Tell cargo to invalidate the built crate whenever any of the
-        // included header files changed.
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
-        // Finish the builder and generate the bindings.
-        .generate()
-        // Unwrap the Result and panic on failure.
-        .expect("Unable to generate bindings");
-
-    bindings
-        .write_to_file(out_dir.join("interface.rs"))
-        .expect("Couldn't write bindings!");
-
-    Ok(())
-}
-
-#[cfg(feature = "ffi-strategy")]
-fn join_paths(base: &Path, path: &str) -> String {
-    let p = base.join(path);
-    let s = p.to_str().expect("path not found");
-    String::from(s)
-}
-
 fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
 where
     P: AsRef<Path>,
 {
     let file = File::open(filename)?;
     Ok(io::BufReader::new(file).lines())
-}
-
-#[cfg(feature = "ffi-strategy")]
-fn init_indigo_submodule() -> std::io::Result<PathBuf> {
-    // check if we are in a crate package or if this a git repository
-    let outcome = if PathBuf::from(".git").exists() {
-        std::process::Command::new("git")
-            .arg("submodule")
-            .arg("update")
-            .arg("--init")
-            .arg("--recursive")
-            .status()
-            .expect("could not spawn `git`")
-    } else {
-        std::process::Command::new("git")
-            .arg("clone")
-            .arg(INDIGO_GIT_REPOSITORY)
-            .arg("externals/indigo")
-            .status()
-            .expect("could not spawn `git`")
-    };
-
-    if !outcome.success() {
-        panic!("could not clone or checkout git submodule externals/indigo");
-    }
-    Path::new(INDIGO_GIT_SUBMODULE).canonicalize()
 }
 
 /// Extract INDIGO version from Makefile (inlined from build_utils)

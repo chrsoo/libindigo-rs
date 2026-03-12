@@ -10,9 +10,9 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Test pure Rust strategy (no C dependencies, no C compilation)
-  test-rs-strategy:
-    name: Test Pure Rust Strategy
+  # Test pure Rust client (no C dependencies, no C compilation)
+  test-rs-client:
+    name: Test Pure Rust Client
     runs-on: ubuntu-latest
 
     steps:
@@ -49,16 +49,12 @@ jobs:
         run: cargo fmt --all -- --check
         continue-on-error: true
 
-      - name: Run clippy (rs-strategy)
-        run: cargo clippy -p libindigo --no-default-features --features rs-strategy -- -D warnings
-        continue-on-error: true
-
       - name: Run clippy (libindigo-rs)
         run: cargo clippy -p libindigo-rs -- -D warnings
         continue-on-error: true
 
-      - name: Build core crate with rs-strategy
-        run: cargo build -p libindigo --no-default-features --features rs-strategy --verbose
+      - name: Build core crate (strategy-agnostic)
+        run: cargo build -p libindigo --no-default-features --verbose
 
       - name: Build pure Rust client
         run: cargo build -p libindigo-rs --verbose
@@ -66,9 +62,9 @@ jobs:
       - name: Run unit tests (pure Rust client)
         run: cargo test -p libindigo-rs --lib --verbose
 
-  # Build with FFI strategy (requires C library)
-  build-ffi-strategy:
-    name: Build FFI Strategy
+  # Build FFI client (requires C library)
+  build-ffi-client:
+    name: Build FFI Client
     runs-on: ubuntu-latest
 
     steps:
@@ -138,9 +134,6 @@ jobs:
       - name: Build FFI crate (compiles INDIGO C library via libindigo-sys)
         run: cargo build -p libindigo-ffi --verbose
 
-      - name: Build core crate with ffi-strategy
-        run: cargo build -p libindigo --features ffi-strategy --verbose
-
       - name: Verify INDIGO server was built
         run: |
           echo "Checking for INDIGO server binary..."
@@ -155,10 +148,6 @@ jobs:
 
       - name: Run unit tests (FFI crate)
         run: cargo test -p libindigo-ffi --lib --verbose
-        continue-on-error: true
-
-      - name: Run unit tests (core crate, ffi-strategy)
-        run: cargo test -p libindigo --features ffi-strategy --lib --verbose
         continue-on-error: true
 
   # Minimal build check (no optional features)
@@ -205,7 +194,7 @@ jobs:
           toolchain: stable
 
       - name: Build documentation
-        run: cargo doc --no-deps -p libindigo --no-default-features --features rs-strategy --verbose
+        run: cargo doc --no-deps -p libindigo --no-default-features --verbose
         env:
           RUSTDOCFLAGS: "-D warnings"
         continue-on-error: true
@@ -233,6 +222,6 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
 
-      - name: Check with rs-strategy
-        run: cargo check -p libindigo --no-default-features --features rs-strategy --verbose
+      - name: Check core crate (strategy-agnostic)
+        run: cargo check -p libindigo --no-default-features --verbose
         continue-on-error: ${{ matrix.rust != 'stable' }}

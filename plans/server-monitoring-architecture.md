@@ -558,9 +558,8 @@ In [`Cargo.toml`](Cargo.toml):
 
 ```toml
 [features]
-default = ["ffi-strategy"]
-rs-strategy = []
-ffi-strategy = []
+# Note: rs-strategy and ffi-strategy have been removed
+# The core crate is now strategy-agnostic
 discovery = ["libindigo-rs/discovery"]
 monitoring = ["libindigo-rs/monitoring"]  # NEW — passthrough
 test-server = []

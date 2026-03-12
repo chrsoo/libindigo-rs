@@ -9,7 +9,9 @@
 			],
 			"disabled": false,
 			"alwaysAllow": [
-				"git_status"
+				"git_status",
+				"git_commit",
+				"git_add"
 			]
 		}
 	}

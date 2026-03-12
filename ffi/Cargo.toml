@@ -21,7 +21,7 @@ sys-available = []                    # Automatically enabled when sys crate bui
 
 [dependencies]
 # Core API from libindigo crate
-libindigo = { path = "..", version = "0.3.3" }
+libindigo = { path = "..", version = "0.3.3", default-features = false }
 
 # FFI bindings to C INDIGO library
 libindigo-sys = { path = "../sys", version = "0.3.3" }

@@ -151,10 +151,10 @@ Use the provided script to update versions:
 
 ## Build Strategies
 
-### Pure Rust Build (Fast)
+### Core Crate Build (Strategy-Agnostic)
 
 ```bash
-cargo build -p libindigo --features rs-strategy
+cargo build -p libindigo --no-default-features
 ```
 
 **What happens**:
@@ -165,7 +165,19 @@ cargo build -p libindigo --features rs-strategy
 - ✅ No FFI bindings generation
 - ⚡ Build time: ~3 seconds
 
-### FFI Build (Slower)
+### Pure Rust Client Build (Fast)
+
+```bash
+cargo build -p libindigo-rs
+```
+
+**What happens**:
+
+- ✅ Builds pure Rust INDIGO protocol implementation
+- ✅ No C dependencies
+- ⚡ Build time: ~3 seconds
+
+### FFI Client Build (Slower)
 
 ```bash
 cargo build -p libindigo-sys
@@ -306,11 +318,14 @@ cd sys/externals/indigo && make clean && make
 - name: Initialize INDIGO submodule
   run: git submodule update --init --recursive --depth 1
 
-- name: Build pure Rust
-  run: cargo build -p libindigo --features rs-strategy
+- name: Build core crate
+  run: cargo build -p libindigo --no-default-features
 
-- name: Build FFI
-  run: cargo build -p libindigo-sys
+- name: Build pure Rust client
+  run: cargo build -p libindigo-rs
+
+- name: Build FFI client
+  run: cargo build -p libindigo-ffi
 ```
 
 ### Caching

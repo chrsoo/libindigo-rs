@@ -17,11 +17,14 @@ This document provides quick-start build instructions. For detailed information,
 git clone --recursive https://github.com/chrsoo/libindigo-rs
 cd libindigo-rs
 
-# Build pure Rust (fast, ~3 seconds)
-cargo build --features rs-strategy
+# Build core crate (strategy-agnostic)
+cargo build -p libindigo
 
-# Build with FFI support (slower, ~30 seconds first time)
-cargo build --features ffi-strategy
+# Build pure Rust client (fast, ~3 seconds)
+cargo build -p libindigo-rs
+
+# Build FFI client (slower, ~30 seconds first time)
+cargo build -p libindigo-ffi
 
 # Build entire workspace
 cargo build --workspace --exclude relm
@@ -29,12 +32,11 @@ cargo build --workspace --exclude relm
 
 ## Build Strategies
 
-### Pure Rust Strategy (Recommended for Development)
+### Pure Rust Client (Recommended for Development)
 
 Fast builds without C compilation:
 
 ```bash
-cargo build -p libindigo --features rs-strategy
 cargo build -p libindigo-rs
 ```
 
@@ -45,7 +47,7 @@ cargo build -p libindigo-rs
 - ✅ Cross-platform
 - ✅ Easy to debug
 
-### FFI Strategy (For Production)
+### FFI Client (For Production)
 
 Uses C INDIGO library:
 

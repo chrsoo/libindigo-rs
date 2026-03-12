@@ -145,21 +145,24 @@ See [CHANGES.md](../CHANGES.md) for complete roadmap.
 ### Unit Tests
 
 ```bash
-# Pure Rust strategy
-cargo test --features rs --lib
+# Core crate (strategy-agnostic)
+cargo test -p libindigo --lib
 
-# FFI strategy
-cargo test --features ffi-strategy --lib
+# Pure Rust client
+cargo test -p libindigo-rs --lib
+
+# FFI client
+cargo test -p libindigo-ffi --lib
 ```
 
 ### Integration Tests
 
 ```bash
-# Pure Rust strategy (requires INDIGO server)
-cargo test --features rs --test '*'
+# Pure Rust client (requires INDIGO server)
+cargo test -p libindigo-rs --test '*'
 
-# FFI strategy (requires INDIGO server)
-cargo test --features ffi-strategy --test '*'
+# FFI client (requires INDIGO server)
+cargo test -p libindigo-ffi --test '*'
 ```
 
 See [Testing Guide](../tests/README.md) for details.
