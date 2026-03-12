@@ -76,38 +76,48 @@ Use MCP GitHub tools (see [`.roorules/issues.md`](.roorules/issues.md)):
 
 ## Commit Message Format
 
-```text
-<type>: <summary (max 72 characters)>
+Use conventional commit format with issue references:
 
-<optional body>
+```text
+<type>: <short description> #<issue-id>
+
+<optional body lines>
 ```
 
 **Types**: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `chore`, `ci`
 
 **Rules**:
-- Summary: Max 72 chars, imperative mood, no period
-- Body: Wrap at 72 chars, explain what/why not how
-- References: Include issue numbers (`#123`)
+- Use conventional commit format: `type: short description #issue-id`
+- Reference related GitHub issues by their ID (e.g., `#42`)
+- Keep the subject line concise (under 72 characters)
+- The optional body lines are used only exceptionally for information critical to the commit
+- There are never more than five optional body lines for any commit
+- Summary: Imperative mood, no period
+- Body: Explain what/why not how
 
 **Examples**:
 
 ✅ Good:
 ```text
-feat: Add timeout handling to integration tests
+refactor: remove strategy features from core crate #42
 
-- Add 5-second timeout wrappers around connection attempts
-- Tests now skip gracefully when server unavailable
+Move shared discovery types to core for strategy independence.
+```
 
-Closes #145
+```text
+feat: add timeout handling to integration tests #145
+
+Add 5-second timeout wrappers around connection attempts.
+Tests now skip gracefully when server unavailable.
 ```
 
 ❌ Bad:
 ```text
 Update CI/CD pipeline for pure Rust and FFI strategies...
-(Too long - exceeds 72 characters)
+(Too long - exceeds 72 characters, no issue reference)
 
 Fixed stuff
-(Too vague)
+(Too vague, no issue reference)
 ```
 
 ## Release Workflow
