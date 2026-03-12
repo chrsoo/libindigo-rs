@@ -153,7 +153,6 @@ impl ServerMonitor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::SocketAddr;
     use std::time::Duration;
 
     #[tokio::test]
