@@ -10,21 +10,18 @@ use regex::Regex;
 use semver::Version;
 
 /// used for cloning the INDIGO git repository when source is retrieved from a crate
+#[cfg(feature = "ffi-strategy")]
 const INDIGO_GIT_REPOSITORY: &str = "https://github.com/indigo-astronomy/indigo";
 
 /// used for building INDIGO from source when checked out
 const INDIGO_GIT_SUBMODULE: &str = "sys/externals/indigo";
-
-// used to detect Linux system libraries
-// const LINUX_INDIGO_VERSION_HEADER: &str = "/usr/include/indigo/indigo_version.h";
-// const LINUX_INCLUDE: &str = "/usr/include";
-// const LINUX_LIB: &str = "/usr/lib";
 
 // Regex to extract INDIGO constant definitions from headers
 // Matches: #define CONSTANT_NAME "value"
 // Example: #define INFO_PROPERTY_NAME "INFO"
 static RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r#"^#define\s+(?<name>\w+)_NAME\s+"(?<value>.+)"\s*$"#).unwrap());
+
 fn main() -> std::io::Result<()> {
     let submodule = Path::new(INDIGO_GIT_SUBMODULE);
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
@@ -62,11 +59,35 @@ fn main() -> std::io::Result<()> {
     }
 
     // Only generate FFI bindings when building with FFI features
-    let has_ffi = env::var("CARGO_FEATURE_FFI_STRATEGY").is_ok()
-        || env::var("CARGO_FEATURE_SYS").is_ok()
-        || env::var("CARGO_FEATURE_AUTO").is_ok();
+    #[cfg(feature = "ffi-strategy")]
+    {
+        let has_ffi = env::var("CARGO_FEATURE_FFI_STRATEGY").is_ok()
+            || env::var("CARGO_FEATURE_SYS").is_ok()
+            || env::var("CARGO_FEATURE_AUTO").is_ok();
 
-    if !has_ffi {
+        if has_ffi {
+            let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+
+            if !submodule.exists() {
+                init_indigo_submodule()?;
+            }
+
+            // Generate FFI bindings
+            generate_ffi_bindings(&submodule, &out_dir)?;
+        } else {
+            let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+            let names_path = out_dir.join("name.rs");
+            let interface_path = out_dir.join("interface.rs");
+            std::fs::write(names_path, "// No INDIGO names for pure Rust build\n")?;
+            std::fs::write(
+                interface_path,
+                "// No INDIGO interface for pure Rust build\n",
+            )?;
+        }
+    }
+
+    #[cfg(not(feature = "ffi-strategy"))]
+    {
         // For pure Rust builds, just create empty output files
         let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
         let names_path = out_dir.join("name.rs");
@@ -76,17 +97,7 @@ fn main() -> std::io::Result<()> {
             interface_path,
             "// No INDIGO interface for pure Rust build\n",
         )?;
-        return Ok(());
     }
-
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-
-    if !submodule.exists() {
-        init_indigo_submodule()?;
-    }
-
-    // Generate FFI bindings
-    generate_ffi_bindings(&submodule, &out_dir)?;
 
     Ok(())
 }
@@ -157,6 +168,7 @@ fn extract_indigo_constants(submodule: &Path) -> std::io::Result<()> {
 }
 
 /// Generate FFI bindings for INDIGO device interfaces.
+#[cfg(feature = "ffi-strategy")]
 fn generate_ffi_bindings(submodule: &Path, out_dir: &Path) -> std::io::Result<()> {
     let include = submodule.join("indigo_libs").canonicalize()?;
     let bindings = bindgen::Builder::default()
@@ -183,6 +195,7 @@ fn generate_ffi_bindings(submodule: &Path, out_dir: &Path) -> std::io::Result<()
     Ok(())
 }
 
+#[cfg(feature = "ffi-strategy")]
 fn join_paths(base: &Path, path: &str) -> String {
     let p = base.join(path);
     let s = p.to_str().expect("path not found");
@@ -197,6 +210,7 @@ where
     Ok(io::BufReader::new(file).lines())
 }
 
+#[cfg(feature = "ffi-strategy")]
 fn init_indigo_submodule() -> std::io::Result<PathBuf> {
     // check if we are in a crate package or if this a git repository
     let outcome = if PathBuf::from(".git").exists() {

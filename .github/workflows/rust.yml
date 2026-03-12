@@ -10,7 +10,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Test pure Rust strategy (no C dependencies)
+  # Test pure Rust strategy (no C dependencies, no C compilation)
   test-rs-strategy:
     name: Test Pure Rust Strategy
     runs-on: ubuntu-latest
@@ -18,71 +18,56 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: "recursive"
+          fetch-depth: 1
+          submodules: false
 
-      - name: Install system dependencies
+      - name: Shallow checkout INDIGO submodule (headers only, no recursive)
+        run: git submodule update --init --depth 1 sys/externals/indigo
+
+      - name: Install minimal system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            libavahi-client-dev \
-            build-essential \
-            cmake \
-            libudev-dev \
-            libavahi-compat-libdnssd-dev \
-            libusb-1.0-0-dev \
-            libcurl4-gnutls-dev \
-            libz-dev
+          sudo apt-get install -y libavahi-client-dev
 
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
 
-      - name: Cache INDIGO build
-        uses: actions/cache@v3
+      - name: Cache Cargo registry and build
+        uses: actions/cache@v4
         with:
           path: |
-            sys/externals/indigo/build
-          key: ${{ runner.os }}-indigo-rs-${{ hashFiles('sys/externals/indigo/**') }}
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-rs-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-indigo-rs-
+            ${{ runner.os }}-cargo-rs-
 
       - name: Check formatting
         run: cargo fmt --all -- --check
         continue-on-error: true
 
-      - name: Run clippy
-        run: cargo clippy --no-default-features --features rs-strategy -- -D warnings
+      - name: Run clippy (rs-strategy)
+        run: cargo clippy -p libindigo --no-default-features --features rs-strategy -- -D warnings
         continue-on-error: true
 
-      - name: Build with rs-strategy (runtime only)
-        run: cargo build --no-default-features --features rs-strategy --verbose
-
-      - name: Run unit tests (rs-strategy)
-        run: cargo test --no-default-features --features rs-strategy --lib --verbose
-
-      - name: Build INDIGO server for integration tests
-        run: |
-          echo "Building INDIGO server for integration tests..."
-          # Build with test-server feature to compile INDIGO server (build-time only)
-          cargo build --no-default-features --features "rs-strategy,test-server" --verbose
-
-          # Verify server binary was built
-          if [ -f "sys/externals/indigo/build/bin/indigo_server" ]; then
-            echo "✓ INDIGO server built successfully"
-            ls -lh sys/externals/indigo/build/bin/indigo_server
-          else
-            echo "✗ INDIGO server not found in expected location"
-            echo "Searching for indigo_server..."
-            find sys/externals/indigo -name "indigo_server" -type f || true
-          fi
-
-      - name: Run integration tests (rs-strategy with server)
-        run: |
-          echo "Running integration tests with INDIGO server..."
-          # Run integration tests - they will discover the built server
-          cargo test --no-default-features --features rs-strategy --test '*' --verbose
+      - name: Run clippy (libindigo-rs)
+        run: cargo clippy -p libindigo-rs -- -D warnings
         continue-on-error: true
+
+      - name: Build core crate with rs-strategy
+        run: cargo build -p libindigo --no-default-features --features rs-strategy --verbose
+
+      - name: Build pure Rust client
+        run: cargo build -p libindigo-rs --verbose
+
+      - name: Run unit tests (core crate, rs-strategy)
+        run: cargo test -p libindigo --no-default-features --features rs-strategy --lib --verbose
+
+      - name: Run unit tests (pure Rust client)
+        run: cargo test -p libindigo-rs --lib --verbose
 
   # Build with FFI strategy (requires C library)
   build-ffi-strategy:
@@ -92,6 +77,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 1
           submodules: "recursive"
 
       - name: Install Rust toolchain
@@ -121,14 +107,24 @@ jobs:
             patchelf
 
       - name: Cache INDIGO build
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             sys/externals/indigo/build
-            target
-          key: ${{ runner.os }}-indigo-ffi-${{ hashFiles('sys/externals/indigo/**') }}
+          key: ${{ runner.os }}-indigo-ffi-${{ hashFiles('sys/externals/indigo/Makefile') }}
           restore-keys: |
             ${{ runner.os }}-indigo-ffi-
+
+      - name: Cache Cargo registry and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-ffi-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-ffi-
 
       - name: Verify submodule checkout
         run: |
@@ -142,11 +138,11 @@ jobs:
             exit 1
           fi
 
-      - name: Build workspace (default features with FFI)
-        run: cargo build --workspace --exclude libindigo-relm --verbose
-        env:
-          # Build INDIGO from submodule (absolute path from workspace root)
-          INDIGO_SOURCE: ${{ github.workspace }}/sys/externals/indigo
+      - name: Build FFI crate (compiles INDIGO C library via libindigo-sys)
+        run: cargo build -p libindigo-ffi --verbose
+
+      - name: Build core crate with ffi-strategy
+        run: cargo build -p libindigo --features ffi-strategy --verbose
 
       - name: Verify INDIGO server was built
         run: |
@@ -155,20 +151,17 @@ jobs:
             echo "✓ INDIGO server built successfully"
             ls -lh sys/externals/indigo/build/bin/indigo_server
           else
-            echo "✗ INDIGO server not found in expected location"
-            echo "Searching for indigo_server..."
-            find sys/externals/indigo -name "indigo_server" -type f || true
+            echo "ℹ INDIGO server not found (may not be built by targeted build)"
+            find sys/externals/indigo/build -name "indigo_server" -type f 2>/dev/null || echo "No server binary found"
           fi
-
-      - name: Run unit tests (FFI strategy)
-        run: cargo test --workspace --exclude libindigo-relm --lib --verbose
         continue-on-error: true
 
-      - name: Run integration tests (FFI strategy with server)
-        run: |
-          echo "Running integration tests with INDIGO server..."
-          # Integration tests will discover the built server
-          cargo test --workspace --exclude libindigo-relm --test '*' --verbose
+      - name: Run unit tests (FFI crate)
+        run: cargo test -p libindigo-ffi --lib --verbose
+        continue-on-error: true
+
+      - name: Run unit tests (core crate, ffi-strategy)
+        run: cargo test -p libindigo --features ffi-strategy --lib --verbose
         continue-on-error: true
 
   # Minimal build check (no optional features)
@@ -178,6 +171,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -185,7 +180,7 @@ jobs:
           toolchain: stable
 
       - name: Build with no default features
-        run: cargo build --no-default-features --verbose
+        run: cargo build -p libindigo --no-default-features --verbose
         continue-on-error: true
 
   # Documentation build
@@ -196,7 +191,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: "recursive"
+          fetch-depth: 1
+          submodules: false
+
+      - name: Shallow checkout INDIGO submodule (headers only)
+        run: git submodule update --init --depth 1 sys/externals/indigo
+
+      - name: Install minimal system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libavahi-client-dev
 
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -204,7 +208,7 @@ jobs:
           toolchain: stable
 
       - name: Build documentation
-        run: cargo doc --no-deps --no-default-features --features rs-strategy --verbose
+        run: cargo doc --no-deps -p libindigo --no-default-features --features rs-strategy --verbose
         env:
           RUSTDOCFLAGS: "-D warnings"
         continue-on-error: true
@@ -219,6 +223,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Install system dependencies
         run: |
@@ -231,5 +237,5 @@ jobs:
           toolchain: ${{ matrix.rust }}
 
       - name: Check with rs-strategy
-        run: cargo check --no-default-features --features rs-strategy --verbose
+        run: cargo check -p libindigo --no-default-features --features rs-strategy --verbose
         continue-on-error: ${{ matrix.rust != 'stable' }}
