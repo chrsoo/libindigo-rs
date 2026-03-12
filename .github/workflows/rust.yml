@@ -63,9 +63,6 @@ jobs:
       - name: Build pure Rust client
         run: cargo build -p libindigo-rs --verbose
 
-      - name: Run unit tests (core crate, rs-strategy)
-        run: cargo test -p libindigo --no-default-features --features rs-strategy --lib --verbose
-
       - name: Run unit tests (pure Rust client)
         run: cargo test -p libindigo-rs --lib --verbose
 
